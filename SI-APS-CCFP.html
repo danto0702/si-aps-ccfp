@@ -678,9 +678,12 @@ async function pullFromCloud() {
         STATE.profile?.rol==='admin' ? '' : 'none';
     }
   } catch(e){}
-  // Familias
+  // Familias — no sobreescribir registros marcados como eliminados localmente
   const fams = await sbFetch('/rest/v1/familias?deleted_at=is.null&select=*');
-  for (const f of (fams||[])) await idb.put('familias', f);
+  for (const f of (fams||[])) {
+    const existing = await idb.get('familias', f.id);
+    if (!existing?.deleted_at) await idb.put('familias', f);
+  }
   // Personas
   const pers = await sbFetch('/rest/v1/personas?deleted_at=is.null&select=*');
   for (const p of (pers||[])) await idb.put('personas', p);
@@ -723,6 +726,9 @@ async function rebuildAppState() {
     }
   }
   fams = fams.filter(f=>!f.deleted_at);
+  // Deduplicar por id (protección contra doble escritura en IDB o Supabase)
+  const _seenFam = new Set();
+  fams = fams.filter(f=>{ if(_seenFam.has(f.id))return false; _seenFam.add(f.id); return true; });
   // Attach personas
   for (const f of fams) {
     const ps = await idb.getAllByIndex('personas','familia_id',f.id);
@@ -920,9 +926,50 @@ function render() {
 // ============================================================
 // SCREEN: LOGIN
 // ============================================================
-let _loginMode = 'login'; // 'login' | 'signup'
+let _loginMode = 'login'; // 'login' | 'signup' | 'forgot' | 'reset'
+let _resetToken = ''; // access_token from password-recovery email link
 
 function renderLogin() {
+  // ── Restablecer contraseña (desde enlace de correo) ──────
+  if (_loginMode === 'reset') {
+    return `<div class="login-wrap">
+    <div class="login-logo">🔑</div>
+    <div class="login-title">Nueva contraseña</div>
+    <div class="login-sub">Crea tu nueva contraseña de acceso</div>
+    <div class="login-card">
+      <div class="field"><div class="field-label">Nueva contraseña <span class="req">*</span></div>
+        <input class="field-input" id="li-newpass" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>
+      <div class="field"><div class="field-label">Confirmar contraseña <span class="req">*</span></div>
+        <input class="field-input" id="li-newpass2" type="password" autocomplete="new-password" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter')submitResetPassword()"></div>
+      <div id="li-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none"></div>
+      <button class="btn btn-primary btn-block" id="li-btn" onclick="submitResetPassword()">💾 Guardar nueva contraseña</button>
+      <div style="text-align:center;margin-top:14px">
+        <button class="btn btn-secondary btn-sm" onclick="_loginMode='login';_resetToken='';render()">← Volver al inicio de sesión</button>
+      </div>
+    </div></div>`;
+  }
+
+  // ── Olvidé mi contraseña ──────────────────────────────────
+  if (_loginMode === 'forgot') {
+    return `<div class="login-wrap">
+    <div class="login-logo">📧</div>
+    <div class="login-title">Recuperar acceso</div>
+    <div class="login-sub">Recibirás un enlace en tu correo para restablecer tu contraseña</div>
+    <div class="login-card">
+      <div class="field"><div class="field-label">Correo electrónico <span class="req">*</span></div>
+        <input class="field-input" id="li-email" type="email" inputmode="email" autocomplete="email" placeholder="usuario@ejemplo.com"
+          onkeydown="if(event.key==='Enter')forgotPassword()"></div>
+      <div id="li-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none"></div>
+      <div id="li-ok" style="color:var(--green);font-size:13px;margin-bottom:10px;display:none;background:#0d2318;border:1px solid var(--green);border-radius:8px;padding:10px 12px"></div>
+      <button class="btn btn-primary btn-block" id="li-btn" onclick="forgotPassword()">📧 Enviar enlace de recuperación</button>
+      <div style="text-align:center;margin-top:14px">
+        <button class="btn btn-secondary btn-sm" onclick="_loginMode='login';render()">← Volver al inicio de sesión</button>
+      </div>
+    </div></div>`;
+  }
+
+  // ── Login / Registro ─────────────────────────────────────
   const isSignup = _loginMode === 'signup';
   return `<div class="login-wrap">
     <div class="login-logo">🏥</div>
@@ -959,8 +1006,11 @@ function renderLogin() {
       <div style="text-align:center;margin-top:14px">
         ${isSignup
           ? `<button class="btn btn-secondary btn-sm" onclick="_loginMode='login';render()">← Volver a iniciar sesión</button>`
-          : `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Si no tienes acceso, contacta al administrador del sistema.</div>
-             <button class="btn btn-secondary btn-sm" onclick="_loginMode='signup';render()">Primera vez — Crear cuenta de administrador</button>`
+          : `<div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+               <button class="btn btn-secondary btn-sm" onclick="_loginMode='forgot';render()">🔑 Olvidé mi contraseña</button>
+               <div style="font-size:11px;color:var(--muted)">¿Sin acceso? Contacta al administrador.</div>
+               <button class="btn btn-secondary btn-sm" onclick="_loginMode='signup';render()">Primera vez — Crear cuenta de administrador</button>
+             </div>`
         }
       </div>
     </div>
@@ -1007,6 +1057,124 @@ async function loginSubmit() {
 }
 function showErr(el, msg) { el.textContent=msg; el.style.display=''; }
 
+// ── Olvidé mi contraseña ──────────────────────────────────────
+async function forgotPassword() {
+  const email = document.getElementById('li-email')?.value?.trim();
+  const err   = document.getElementById('li-err');
+  const okEl  = document.getElementById('li-ok');
+  const btn   = document.getElementById('li-btn');
+  err.style.display='none'; okEl.style.display='none';
+  if (!email) { showErr(err,'Ingresa tu correo electrónico'); return; }
+  btn.textContent='Enviando…'; btn.disabled=true;
+  try {
+    // Supabase sends a magic link / recovery email; redirectTo must match app URL
+    const redirectTo = location.href.split('#')[0];
+    const res = await fetch(`${SB_URL}/auth/v1/recover`, {
+      method:'POST',
+      headers:{'apikey':SB_ANON,'Content-Type':'application/json'},
+      body: JSON.stringify({email, redirectTo})
+    });
+    if (!res.ok) {
+      const t=await res.text();
+      throw new Error(JSON.parse(t)?.msg||'Error al enviar');
+    }
+    okEl.textContent = '✅ Enlace enviado. Revisa tu correo (incluyendo spam). El enlace expira en 1 hora.';
+    okEl.style.display='';
+    btn.textContent='✓ Enviado';
+  } catch(e) {
+    showErr(err,'Error: '+e.message);
+    btn.textContent='📧 Enviar enlace de recuperación'; btn.disabled=false;
+  }
+}
+
+// ── Restablecer contraseña (luego de clic en enlace del correo) ──
+async function submitResetPassword() {
+  const newPass  = document.getElementById('li-newpass')?.value;
+  const confirm  = document.getElementById('li-newpass2')?.value;
+  const err      = document.getElementById('li-err');
+  const btn      = document.getElementById('li-btn');
+  err.style.display='none';
+  if (!newPass||!confirm) { showErr(err,'Completa ambos campos'); return; }
+  if (newPass!==confirm)  { showErr(err,'Las contraseñas no coinciden'); return; }
+  if (newPass.length<8)   { showErr(err,'Mínimo 8 caracteres'); return; }
+  if (!_resetToken) { showErr(err,'Token de recuperación no válido. Solicita un nuevo enlace.'); return; }
+  btn.textContent='Guardando…'; btn.disabled=true;
+  try {
+    const res = await fetch(`${SB_URL}/auth/v1/user`, {
+      method:'PUT',
+      headers:{'apikey':SB_ANON,'Authorization':'Bearer '+_resetToken,'Content-Type':'application/json'},
+      body: JSON.stringify({password:newPass})
+    });
+    if (!res.ok) {
+      const t=await res.text();
+      throw new Error(JSON.parse(t)?.msg||'Error al guardar');
+    }
+    toast('Contraseña actualizada. Ya puedes iniciar sesión.','ok');
+    _loginMode='login'; _resetToken='';
+    // Clear the hash from URL so token is not reused
+    history.replaceState(null,'',location.pathname+location.search);
+    render();
+  } catch(e) {
+    showErr(err,'Error: '+e.message);
+    btn.textContent='💾 Guardar nueva contraseña'; btn.disabled=false;
+  }
+}
+
+// ── Cambiar contraseña (usuario logueado) ──────────────────────
+function openChangePassword() {
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-title">🔑 Cambiar contraseña</div>
+      <div class="field"><div class="field-label">Nueva contraseña <span class="req">*</span></div>
+        <input class="field-input" id="cp-new" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>
+      <div class="field"><div class="field-label">Confirmar contraseña <span class="req">*</span></div>
+        <input class="field-input" id="cp-new2" type="password" autocomplete="new-password" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter')submitChangePassword()"></div>
+      <div id="cp-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" id="cp-btn" onclick="submitChangePassword()">💾 Guardar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitChangePassword() {
+  const newPass = document.getElementById('cp-new')?.value;
+  const confirm = document.getElementById('cp-new2')?.value;
+  const err     = document.getElementById('cp-err');
+  const btn     = document.getElementById('cp-btn');
+  err.style.display='none';
+  if (!newPass||!confirm) { showErr(err,'Completa ambos campos'); return; }
+  if (newPass!==confirm)  { showErr(err,'Las contraseñas no coinciden'); return; }
+  if (newPass.length<8)   { showErr(err,'Mínimo 8 caracteres'); return; }
+  btn.textContent='Guardando…'; btn.disabled=true;
+  try {
+    await sbFetch('/auth/v1/user',{method:'PUT',body:JSON.stringify({password:newPass})});
+    toast('Contraseña actualizada','ok');
+    closeModal();
+  } catch(e) {
+    showErr(err,'Error: '+e.message);
+    btn.textContent='💾 Guardar'; btn.disabled=false;
+  }
+}
+
+// ── Admin: Enviar enlace de recuperación a un usuario ──────────
+async function adminSendRecovery(email) {
+  if (!confirm(`¿Enviar enlace de recuperación de contraseña a ${email}?`)) return;
+  try {
+    const redirectTo = location.href.split('#')[0];
+    const res = await fetch(`${SB_URL}/auth/v1/recover`, {
+      method:'POST',
+      headers:{'apikey':SB_ANON,'Content-Type':'application/json'},
+      body: JSON.stringify({email, redirectTo})
+    });
+    if (!res.ok) throw new Error('Error al enviar');
+    toast('Enlace enviado a '+email,'ok');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
 // ============================================================
 // SCREEN: HOME
 // ============================================================
@@ -1031,7 +1199,10 @@ function renderHome() {
         <div style="font-size:11px;color:var(--muted)">${isAdmin()?'Administrador':'Usuario de campo'}
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
-      ${isAdmin()?`<button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navigate('admin')">⚙ Admin</button>`:''}
+      <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0">
+        <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
+        ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
+      </div>
     </div>
   </div>`;
 
@@ -1166,6 +1337,7 @@ function renderAdminUsers() {
               <div class="user-email">${esc(u.email)}</div>
             </div>
             <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" title="Enviar recuperación de contraseña" onclick="adminSendRecovery('${esc(u.email)}')">🔑</button>
               <button class="btn btn-secondary btn-sm" onclick="openEditUser('${u.id}')">✏</button>
               ${u.activo?`<button class="btn btn-danger btn-sm" onclick="toggleUserActive('${u.id}',false)">✗</button>`
                         :`<button class="btn btn-success btn-sm" onclick="toggleUserActive('${u.id}',true)">✓</button>`}
@@ -1983,12 +2155,16 @@ function renderT2Step1(d){
       ? sel(muniOpts,'5',d['5']||'',true)
       : txt('5',d['5']||'',5,true,'Ej: 54003')}
     <div class="grid-2">
-      ${terrOpts.length
-        ? sel(terrOpts,'6',d['6']||terrOpts[0]?.v||'',true)
-        : txt('6',d['6']||'',3,true,'Ej: T01')}
-      ${microOpts.length
-        ? sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true)
-        : txt('7',d['7']||'',4,true,'Ej: MT01')}
+      ${(STATE.fieldConfig?.t2?.['6']?.options?.length)
+        ? sel(STATE.fieldConfig.t2['6'].options,'6',d['6']||STATE.fieldConfig.t2['6'].defaultVal||STATE.fieldConfig.t2['6'].options[0]?.v||'',true)
+        : terrOpts.length
+          ? sel(terrOpts,'6',d['6']||terrOpts[0]?.v||'',true)
+          : txt('6',d['6']||'',3,true,'Ej: T01')}
+      ${(STATE.fieldConfig?.t2?.['7']?.options?.length)
+        ? sel(STATE.fieldConfig.t2['7'].options,'7',d['7']||STATE.fieldConfig.t2['7'].defaultVal||STATE.fieldConfig.t2['7'].options[0]?.v||'',true)
+        : microOpts.length
+          ? sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true)
+          : txt('7',d['7']||'',4,true,'Ej: MT01')}
     </div>
     ${txt('8',d['8']||'',200,true,'Nombre del corregimiento, vereda, barrio...')}
     ${txt('9',d['9']||'',200,false,'Dirección (opcional)')}
@@ -2115,12 +2291,15 @@ function renderT2Step5(d){
     ${sino('83',d['83']||'',true)}
   </div>`;}
 
+let _savingFam = false;
 async function saveFamilia(){
+  if(_savingFam) return;
+  _savingFam = true;
   const d=STATE.draft2;
-  if(!d['2']||!d['3']||!d['5']||!d['8'])return toast('Complete los campos obligatorios del Paso 1','err');
-  if(!d['25'])return toast('Complete la fecha de diligenciamiento (Paso 2)','err');
-  if(!d['26'])return toast('Seleccione el tipo de vivienda (Paso 3)','err');
-  if(!d['54'])return toast('Seleccione el tipo de familia (Paso 5)','err');
+  if(!d['2']||!d['3']||!d['5']||!d['8']){_savingFam=false;return toast('Complete los campos obligatorios del Paso 1','err');}
+  if(!d['25']){_savingFam=false;return toast('Complete la fecha de diligenciamiento (Paso 2)','err');}
+  if(!d['26']){_savingFam=false;return toast('Seleccione el tipo de vivienda (Paso 3)','err');}
+  if(!d['54']){_savingFam=false;return toast('Seleccione el tipo de familia (Paso 5)','err');}
   // Ensure auto-derived fields are set correctly before saving
   d['15'] = '1'; // Siempre IPS Pública para HRNO
   d['16'] = String(parseInt(d.ebs_num||d['16']||'1')||1);
@@ -2138,6 +2317,7 @@ async function saveFamilia(){
     STATE.familias.push({...rec,personas:[]});
     await writeRecord('familias',rec);
   }
+  _savingFam = false;
   toast('Familia guardada','ok'); navigate('home');
 }
 
@@ -2298,7 +2478,11 @@ async function savePersona(){
 // PANTALLA EXPORT + GENERADOR PISIS
 // ============================================================
 function renderExport(){
-  const c=STATE.config, fams=STATE.familias.filter(f=>!f.deleted_at);
+  const c=STATE.config;
+  // Admin sees all, user sees own
+  const allFams=STATE.familias.filter(f=>!f.deleted_at);
+  const myId=STATE.auth?.user?.id;
+  const fams=isAdmin() ? allFams : allFams.filter(f=>f.created_by===myId);
   const totalT3=fams.reduce((s,f)=>(f.personas||[]).length+s,0);
   const confOk=c.nit&&c.fechaInicio&&c.fechaFin;
   const fechaC=(c.fechaFin||'').replace(/-/g,'');
@@ -2307,18 +2491,26 @@ function renderExport(){
   let preview='';
   try{const lines=buildFile();preview=lines.slice(0,6).join('\n')+(lines.length>6?'\n…':'');}
   catch(e){preview='Error: '+e.message;}
+  const scopeNote=isAdmin()
+    ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:10px">👑 Modo administrador — se incluyen datos de TODOS los usuarios (${allFams.length} familias total).</div>`
+    : `<div style="font-size:11px;color:var(--blue);margin-bottom:10px">👤 Exportando solo tus datos (${fams.length} familias). El administrador puede exportar todo.</div>`;
   return `<div class="card">
-    <div class="card-title">Resumen del archivo</div>
+    <div class="card-title">Resumen del archivo plano PISIS</div>
+    ${scopeNote}
     <div class="config-row"><span>Entidad</span><span class="config-val">${esc(c.tipoEntidad)} — ${esc(c.nit||'—')}</span></div>
     <div class="config-row"><span>Período</span><span class="config-val">${esc(c.fechaInicio||'—')} / ${esc(c.fechaFin||'—')}</span></div>
     <div class="config-row"><span>Familias (Tipo 2)</span><span class="config-val">${fams.length}</span></div>
     <div class="config-row"><span>Personas (Tipo 3)</span><span class="config-val">${totalT3}</span></div>
-    <div class="config-row"><span>Archivo</span><span class="config-val" style="font-size:10px">${esc(fileName)}</span></div>
+    <div class="config-row"><span>Archivo TXT</span><span class="config-val" style="font-size:10px">${esc(fileName)}</span></div>
   </div>
-  ${!confOk?`<div class="card" style="border-color:var(--yellow)"><div style="color:var(--yellow)">⚠ Configure primero el NIT y el período de reporte.</div></div>`:''}
-  <div class="card"><div class="card-title">Vista previa</div>
+  ${!confOk?`<div class="card" style="border-color:var(--yellow)"><div style="color:var(--yellow)">⚠ Configure primero el NIT y el período de reporte para el archivo PISIS.</div></div>`:''}
+  <div class="card"><div class="card-title">Vista previa (archivo plano)</div>
     <div class="preview">${esc(preview||'— sin datos —')}</div></div>
-  <button class="btn btn-success btn-block" onclick="downloadFile()" ${!confOk?'disabled':''}>⬇ Descargar ${esc(fileName)}</button>`;}
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="btn btn-success btn-block" onclick="downloadFile()" ${!confOk?'disabled':''}>⬇ Descargar archivo PISIS (${esc(fileName)})</button>
+    <button class="btn btn-primary btn-block" onclick="downloadExcel()">📊 Exportar Excel (T2 + T3)</button>
+    <button class="btn btn-secondary btn-block" onclick="downloadJSON()">📄 Exportar JSON (backup)</button>
+  </div>`;}
 
 function arrVal(v){if(!v||!Array.isArray(v))return v||'';return v.join(',');}
 
@@ -2427,6 +2619,172 @@ function downloadFile(){
   }catch(e){toast('Error: '+e.message,'err');}
 }
 
+// ── Export: JSON ─────────────────────────────────────────────
+function downloadJSON() {
+  try {
+    const myId = STATE.auth?.user?.id;
+    const fams = STATE.familias.filter(f => !f.deleted_at && (isAdmin() || f.created_by === myId));
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      exportedBy: STATE.profile?.email || myId,
+      scope: isAdmin() ? 'all' : 'own',
+      config: STATE.config,
+      familias: fams.map(f => ({
+        id: f.id,
+        ebs_code: f.ebs_code,
+        created_by: f.created_by,
+        created_at: f.created_at,
+        updated_at: f.updated_at,
+        d2: f.d2||{},
+        personas: (f.personas||[]).map(p => ({
+          id: p.id,
+          created_at: p.created_at,
+          d3: p.d3||{}
+        }))
+      }))
+    };
+    const content = JSON.stringify(payload, null, 2);
+    const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const scope = isAdmin() ? 'TOTAL' : 'PROPIO';
+    const blob = new Blob([content], {type:'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `SI-APS-CCFP-${scope}-${date}.json`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast('JSON exportado','ok');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+// ── Export: Excel (SheetJS) ───────────────────────────────────
+let _xlsxLoaded = false;
+function loadSheetJS() {
+  if (_xlsxLoaded || window.XLSX) { _xlsxLoaded=true; return Promise.resolve(); }
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload = () => { _xlsxLoaded=true; res(); };
+    s.onerror = () => rej(new Error('No se pudo cargar SheetJS. Verifica conexión a internet.'));
+    document.head.appendChild(s);
+  });
+}
+
+// Label maps for human-readable headers
+const T2_LABELS = {
+  '2':'Consentimiento','3':'Cod Departamento','4':'UZPE','5':'Municipio',
+  '6':'Territorio','7':'Microterritorio','8':'Lugar/Vereda','9':'Dirección',
+  '10':'Latitud','11':'Longitud','12':'Cabeza de familia','13':'Servicio telecomunicaciones',
+  '14':'Número vivienda','15':'Número familia','16':'Tipo IPS','17':'Número EBS',
+  '18':'Zona','19':'Código EBS','20':'Número consecutivo','21':'Número de personas',
+  '22':'Número mayores','23':'Número menores','24':'Código ficha','25':'Fecha diligenciamiento',
+  '26':'Tipo vivienda','27':'Desc tipo vivienda','28':'Material pared','29':'Desc material pared',
+  '30':'Material piso','31':'Desc material piso','32':'Material techo','33':'Desc material techo',
+  '34':'Posesión vivienda','35':'Estrato','36':'Fuentes energía','37':'Fuentes agua',
+  '38':'Manejo agua','39':'Disposición basura','40':'Fuentes saneamiento','41':'Animales convivencia',
+  '42':'Animales producción','43':'Riesgos accidente','44':'Acceso trasporte','45':'Acceso salud',
+  '46':'Sitios acceso','47':'Zona rural dispersa','48':'Gestión riesgos','49':'Plan emergencias',
+  '50':'Afectación conflicto','51':'Tipo afectación','52':'Víctima conflicto','53':'Tipo victimización',
+  '54':'Tipo familia','55':'Número integrantes','56':'Familiograma','57':'Discapacidad familia',
+  '58':'Personas discapacidad','59':'Cuidador persona mayor','60':'Número personas mayores',
+  '61':'Cuidador niño menor','62':'Gestante','63':'Número gestantes','64':'Usuario POSS',
+  '65':'Comunidad étnica','66':'Origen étnico','67':'Seguridad alimentaria','68':'Fuentes agua consumo',
+  '69':'Tratamiento agua','70':'Práctica lavado manos','71':'Práctica higiene oral',
+  '72':'Actividad física','73':'Actividad prevención','74':'Hábitos alimentarios',
+  '75':'Consumo cigarrillo','76':'Consumo alcohol','77':'Consumo SPA','78':'Violencia intrafamiliar',
+  '79':'Percepción salud','80':'Necesidades familia','81':'Acción pendiente','82':'Próxima visita',
+  '83':'Observaciones'
+};
+const T3_LABELS = {
+  '3':'Primer apellido','4':'Segundo apellido','5':'Primer nombre','6':'Segundo nombre',
+  '7':'Tipo identificación','8':'Número identificación','9':'Fecha nacimiento','10':'Sexo',
+  '11':'Ciclo vital','12':'Pertenencia étnica','13':'Código ocupación (CIUO)',
+  '14':'Descripción ocupación','15':'Tipo afiliación','16':'Código EAPB','17':'Diagnósticos',
+  '18':'Zona residencia','19':'Escolaridad','20':'Estado civil','21':'Condición especial',
+  '22':'Peso (kg)','23':'Talla (cm)','24':'Diagnóstico nutricional','25':'Hemoglobina',
+  '26':'Tensión arterial sistólica','27':'Tensión arterial diastólica','28':'Intervenciones pendientes',
+  '29':'Vacunas pendientes','30':'Vacunas al día','31':'Anticoncepción','32':'Método anticonceptivo',
+  '33':'Detección temprana','34':'Salud mental','35':'Discapacidad persona','36':'Tipo discapacidad',
+  '37':'Actividades rehabilitación'
+};
+
+async function downloadExcel() {
+  try {
+    toast('Preparando Excel…','ok');
+    await loadSheetJS();
+    const XLSX = window.XLSX;
+    const myId = STATE.auth?.user?.id;
+    const fams = STATE.familias.filter(f => !f.deleted_at && (isAdmin() || f.created_by === myId));
+
+    // ─── Hoja T2 ────────────────────────────────────────────
+    const t2Rows = [];
+    const t2Keys = Object.keys(T2_LABELS);
+    t2Rows.push(['ID Familia','Código EBS','Creado por','Creado el', ...t2Keys.map(k=>T2_LABELS[k])]);
+    fams.forEach((f,fi) => {
+      const d = f.d2||{};
+      const idx = fi;
+      const numViv = calcNumVivienda(d,idx);
+      const numFam = calcNumFamilia(d,idx);
+      const codFicha = calcCodFicha(d,idx);
+      const ebsCode = calcEBS(d);
+      // Helper to resolve array fields
+      const rv = k => {
+        const v = d[k];
+        if (Array.isArray(v)) return v.join(', ');
+        return v||'';
+      };
+      t2Rows.push([
+        f.id, ebsCode, f.created_by||'', f.created_at||'',
+        rv('2'),d['3']||'54',rv('4'),rv('5'),rv('6'),rv('7'),rv('8'),rv('9'),rv('10'),rv('11'),
+        numViv,numFam,rv('15')||'1',calcEBS(d).slice(-3),rv('17')||'',rv('18')||'1',
+        ebsCode,rv('20')||'',rv('21')||'',rv('22')||'',rv('23')||'',codFicha,rv('25'),
+        rv('26'),rv('27'),rv('28'),rv('29'),rv('30'),rv('31'),rv('32'),rv('33'),
+        rv('34'),rv('35'),rv('36'),rv('37'),rv('38'),rv('39'),rv('40'),rv('41'),
+        rv('42'),rv('43'),rv('44'),rv('45'),rv('46'),rv('47'),rv('48'),rv('49'),
+        rv('50'),rv('51'),rv('52'),rv('53'),rv('54'),rv('55'),rv('56'),rv('57'),
+        rv('58'),rv('59'),rv('60'),rv('61'),rv('62'),rv('63'),rv('64'),rv('65'),
+        rv('66'),rv('67'),rv('68'),rv('69'),rv('70'),rv('71'),rv('72'),rv('73'),
+        rv('74'),rv('75'),rv('76'),rv('77'),rv('78'),rv('79'),rv('80'),rv('81'),
+        rv('82'),rv('83')
+      ]);
+    });
+
+    // ─── Hoja T3 ────────────────────────────────────────────
+    const t3Rows = [];
+    const t3Keys = Object.keys(T3_LABELS);
+    t3Rows.push(['ID Persona','ID Familia','Código EBS','Creado el', ...t3Keys.map(k=>T3_LABELS[k])]);
+    fams.forEach(f => {
+      const ebsCode = calcEBS(f.d2||{});
+      (f.personas||[]).forEach(p => {
+        const pd = p.d3||{};
+        const rv3 = k => {
+          const v = pd[k];
+          if (Array.isArray(v)) return v.join(', ');
+          return v||'';
+        };
+        t3Rows.push([
+          p.id, f.id, ebsCode, p.created_at||'',
+          rv3('3'),rv3('4'),rv3('5'),rv3('6'),rv3('7'),rv3('8'),rv3('9'),rv3('10'),
+          rv3('11'),rv3('12'),rv3('13'),rv3('14'),rv3('15'),rv3('16'),rv3('17'),
+          rv3('18'),rv3('19'),rv3('20'),rv3('21'),rv3('22'),rv3('23'),rv3('24'),
+          rv3('25'),rv3('26'),rv3('27'),rv3('28'),rv3('29'),rv3('30'),rv3('31'),
+          rv3('32'),rv3('33'),rv3('34'),rv3('35'),rv3('36'),rv3('37')
+        ]);
+      });
+    });
+
+    // ─── Armar workbook ─────────────────────────────────────
+    const wb = XLSX.utils.book_new();
+    const ws2 = XLSX.utils.aoa_to_sheet(t2Rows);
+    const ws3 = XLSX.utils.aoa_to_sheet(t3Rows);
+    XLSX.utils.book_append_sheet(wb, ws2, 'T2 Familias');
+    XLSX.utils.book_append_sheet(wb, ws3, 'T3 Personas');
+    const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const scope = isAdmin() ? 'TOTAL' : 'PROPIO';
+    XLSX.writeFile(wb, `SI-APS-CCFP-${scope}-${date}.xlsx`);
+    toast('Excel descargado','ok');
+  } catch(e) { toast('Error Excel: '+e.message,'err'); }
+}
+
 // ============================================================
 // TOAST
 // ============================================================
@@ -2441,6 +2799,17 @@ function toast(msg,type='ok'){
 // ============================================================
 async function init() {
   await openDB();
+  // ── Detectar token de recuperación en el hash de la URL ──────
+  // Supabase redirige con #access_token=...&type=recovery
+  const hashParams = new URLSearchParams(location.hash.replace(/^#/,''));
+  if (hashParams.get('type')==='recovery' && hashParams.get('access_token')) {
+    _resetToken = hashParams.get('access_token');
+    _loginMode  = 'reset';
+    // Clear hash so the token is not exposed in browser history on reload
+    history.replaceState(null,'',location.pathname+location.search);
+    render();
+    return; // Don't try to restore session — user needs to set password first
+  }
   // Restore session from IDB
   const sess = await idb.get('auth','session');
   if (sess?.access_token) {

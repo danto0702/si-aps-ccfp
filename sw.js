@@ -1,4 +1,4 @@
-/* Service Worker — SI-APS CCFP v2.0 */
+/* Service Worker — SI-APS CCFP v2.1 */
 const CACHE = 'siaps-ccfp-v2';
 const ASSETS = [
   './SI-APS-CCFP.html',
@@ -6,6 +6,7 @@ const ASSETS = [
   // Leaflet para mapa geopunto (disponible offline después de primera carga)
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  // SheetJS se carga dinámicamente; se cachea en la primera descarga Excel
 ];
 
 self.addEventListener('install', e => {
