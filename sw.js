@@ -1,5 +1,5 @@
-/* Service Worker — SI-APS CCFP v2.1 */
-const CACHE = 'siaps-ccfp-v2';
+/* Service Worker — SI-APS CCFP v2.2 */
+const CACHE = 'siaps-ccfp-v3';
 const ASSETS = [
   './SI-APS-CCFP.html',
   './manifest.json',
@@ -22,6 +22,8 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
+    .then(() => self.clients.matchAll({type: 'window', includeUncontrolled: true}))
+    .then(clients => clients.forEach(c => c.navigate(c.url)))
   );
 });
 
