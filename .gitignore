@@ -5,10 +5,15 @@
 *.pdf
 pdf_content.txt
 
-# Imágenes de trabajo
+# Imágenes de trabajo (excluir capturas y fotos de campo)
 *.jpeg
 *.jpg
 *.png
+
+# Excepciones: íconos de la PWA (sí deben ir al repo)
+!icon-180.png
+!icon-192.png
+!icon-512.png
 
 # Carpeta interna de Claude
 .claude/

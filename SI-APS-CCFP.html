@@ -2,61 +2,137 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
 <meta name="theme-color" content="#7c1d6f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SI-APS">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no,address=no,email=no">
 <title>SI-APS CCFP</title>
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png">
 <style>
+/* ── Variables y reset ─────────────────────────────────────── */
 :root{
   --bg:#0d1117;--card:#161b22;--border:#30363d;
   --purple:#7c1d6f;--purple-l:#a855f7;--red:#e94560;
   --green:#38c793;--yellow:#ffb432;--blue:#4a6fa5;
   --text:#e6edf3;--muted:#8b949e;--input-bg:#0d1117;
+  /* iOS safe areas */
+  --sat:env(safe-area-inset-top,0px);
+  --sar:env(safe-area-inset-right,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:16px}
-button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
-.hdr{position:sticky;top:0;z-index:100;background:#161b22;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:12px 16px}
-.hdr-title{flex:1;font-weight:700;font-size:15px}
-.hdr-sub{font-size:11px;color:var(--muted);font-weight:400}
-.btn-icon{background:transparent;color:var(--muted);padding:6px;border-radius:8px;font-size:18px;line-height:1}
-.btn-icon:hover{background:var(--border);color:var(--text)}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{
+  height:100%;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:16px;
+  -webkit-tap-highlight-color:transparent;
+  overscroll-behavior-y:none;
+}
+/* touch-action: eliminates 300ms tap delay on iOS/Android */
+button,a,[role="button"]{cursor:pointer;border:none;font-family:inherit;font-size:14px;touch-action:manipulation}
+input,select,textarea{touch-action:manipulation}
+
+/* ── Header ── safe-area-top para iPhone con muesca/Dynamic Island */
+.hdr{
+  position:sticky;top:0;z-index:100;
+  background:#161b22cc;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;
+  padding-top:calc(10px + var(--sat));
+  padding-left:calc(14px + var(--sal));
+  padding-right:calc(14px + var(--sar));
+}
+.hdr-title{flex:1;font-weight:700;font-size:15px;min-width:0;overflow:hidden}
+.hdr-sub{font-size:10px;color:var(--muted);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Touch targets mínimos 44×44 pt (Apple HIG) */
+.btn-icon{
+  background:transparent;color:var(--muted);
+  padding:6px;border-radius:8px;font-size:18px;line-height:1;
+  min-width:40px;min-height:40px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+@media(hover:hover){.btn-icon:hover{background:var(--border);color:var(--text)}}
+
 .conn-banner{display:none;text-align:center;padding:6px;font-size:12px;font-weight:600}
 .conn-banner.offline{display:block;background:#7c2d2d;color:#fca5a5}
 .conn-banner.syncing{display:block;background:#1a3a5c;color:#93c5fd}
-#main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:100px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
-.card-title{font-size:13px;font-weight:700;color:var(--purple-l);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
-.card-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+
+/* ── Contenido principal ── */
+#main{
+  padding:14px;
+  padding-left:calc(14px + var(--sal));
+  padding-right:calc(14px + var(--sar));
+  padding-bottom:calc(110px + var(--sab));
+  max-width:680px;margin:0 auto;
+}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.card-title{font-size:12px;font-weight:700;color:var(--purple-l);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.card-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
 .card-row:last-child{border-bottom:none}
-.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
-.stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
-.stat-n{font-size:28px;font-weight:700;color:var(--purple-l)}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center}
+.stat-n{font-size:26px;font-weight:700;color:var(--purple-l)}
 .stat-l{font-size:11px;color:var(--muted);margin-top:2px}
-.familia-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px}
-.familia-item:hover{border-color:var(--purple)}
-.familia-icon{width:40px;height:40px;border-radius:8px;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+
+/* Familia list item */
+.familia-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px}
+@media(hover:hover){.familia-item:hover{border-color:var(--purple)}}
+.familia-icon{width:38px;height:38px;border-radius:8px;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .familia-info{flex:1;min-width:0}
-.familia-nombre{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.familia-meta{font-size:12px;color:var(--muted);margin-top:3px}
-.familia-actions{display:flex;gap:6px;flex-shrink:0}
-.persona-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
-.persona-avatar{width:36px;height:36px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.familia-nombre{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.familia-meta{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}
+.familia-actions{display:flex;gap:4px;flex-shrink:0;align-items:flex-start}
+
+.persona-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.persona-avatar{width:34px;height:34px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .persona-info{flex:1;min-width:0}
-.persona-nombre{font-weight:600;font-size:14px}
-.persona-meta{font-size:12px;color:var(--muted);margin-top:2px}
-.btn{padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;transition:.15s}
-.btn-primary{background:var(--purple);color:#fff}.btn-primary:hover{background:#9b2d8f}
-.btn-secondary{background:var(--border);color:var(--text)}.btn-secondary:hover{background:#3d444d}
+.persona-nombre{font-weight:600;font-size:13px}
+.persona-meta{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── Botones ── min-height 44px para touch targets */
+.btn{
+  padding:11px 16px;border-radius:8px;font-weight:600;font-size:14px;
+  transition:background .15s,opacity .15s;
+  touch-action:manipulation;
+  min-height:44px;
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+}
+.btn-primary{background:var(--purple);color:#fff}
+@media(hover:hover){.btn-primary:hover{background:#9b2d8f}}
+.btn-secondary{background:var(--border);color:var(--text)}
+@media(hover:hover){.btn-secondary:hover{background:#3d444d}}
 .btn-success{background:#1a4731;color:var(--green);border:1px solid var(--green)}
 .btn-danger{background:#3d1a1a;color:var(--red);border:1px solid var(--red)}
 .btn-block{width:100%;margin-bottom:8px}
-.btn-sm{padding:6px 10px;font-size:12px}
-.fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--purple);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(124,29,111,.5);z-index:200}
-.fab:hover{background:#9b2d8f}
-.steps-container{overflow-x:auto;margin-bottom:16px;padding-bottom:4px}
+.btn-sm{padding:8px 10px;font-size:12px;min-height:36px}
+/* Active state feedback (visible on touch) */
+.btn:active{opacity:.75}
+
+/* ── FAB ── safe-area-bottom para barra de gestos iPhone */
+.fab{
+  position:fixed;
+  bottom:calc(22px + var(--sab));
+  right:calc(20px + var(--sar));
+  width:56px;height:56px;border-radius:50%;
+  background:var(--purple);color:#fff;
+  font-size:28px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 20px rgba(124,29,111,.6);
+  z-index:200;touch-action:manipulation;
+}
+.fab:active{transform:scale(.94)}
+@media(hover:hover){.fab:hover{background:#9b2d8f}}
+
+/* ── Steps (wizard) ── */
+.steps-container{overflow-x:auto;margin-bottom:16px;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.steps-container::-webkit-scrollbar{display:none}
 .steps{display:flex;gap:0;min-width:max-content}
-.step{display:flex;flex-direction:column;align-items:center;min-width:80px;cursor:pointer;padding:8px 4px;position:relative}
+.step{display:flex;flex-direction:column;align-items:center;min-width:72px;cursor:pointer;padding:8px 4px;position:relative;touch-action:manipulation}
 .step:not(:last-child)::after{content:'';position:absolute;top:20px;left:calc(50% + 16px);width:calc(100% - 32px);height:2px;background:var(--border)}
 .step.done::after{background:var(--green)}
 .step-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:2px solid var(--border);background:var(--bg);position:relative;z-index:1}
@@ -64,32 +140,78 @@ button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
 .step.done .step-circle{border-color:var(--green);background:var(--green);color:#fff}
 .step-label{font-size:10px;margin-top:4px;color:var(--muted);text-align:center}
 .step.active .step-label{color:var(--purple-l)}
+
+/* ── Campos de formulario ── */
 .field{margin-bottom:14px}
-.field-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:4px}
-.field-num{font-size:11px;color:var(--purple-l);font-weight:700;background:#2d1a3a;padding:1px 5px;border-radius:4px}
+.field-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.field-num{font-size:11px;color:var(--purple-l);font-weight:700;background:#2d1a3a;padding:1px 5px;border-radius:4px;flex-shrink:0}
 .req{color:var(--red)}
-.field-input,.field-select{width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit}
+
+/*
+  font-size:16px es CRÍTICO en iOS:
+  Safari auto-hace-zoom si el input tiene font-size < 16px.
+  -webkit-appearance:none elimina estilos nativos de iOS para consistencia visual.
+*/
+.field-input,.field-select{
+  width:100%;
+  background:var(--input-bg);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:12px 14px;
+  color:var(--text);
+  font-size:16px;
+  font-family:inherit;
+  -webkit-appearance:none;
+  appearance:none;
+  min-height:48px;
+}
 .field-input:focus,.field-select:focus{outline:none;border-color:var(--purple-l)}
+
+/* Select: flecha personalizada (se pierde con -webkit-appearance:none) */
+.field-select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:18px;
+  padding-right:40px;
+  cursor:pointer;
+}
 .field-select option{background:var(--card)}
-.field-note{font-size:11px;color:var(--muted);margin-top:4px}
-.field-ro{background:#1a1f27;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--muted);font-family:monospace;word-break:break-all}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* Date inputs: mantener apariencia nativa de iOS (abre date-picker del sistema) */
+input[type="date"].field-input{-webkit-appearance:textfield;appearance:auto;font-size:15px}
+input[type="number"].field-input{-moz-appearance:textfield}
+input[type="number"].field-input::-webkit-outer-spin-button,
+input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:none}
+
+.field-note{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+.field-ro{background:#1a1f27;border:1px solid var(--border);border-radius:8px;padding:11px 14px;font-size:12px;color:var(--muted);font-family:monospace;word-break:break-all;line-height:1.5}
+
+/* Grid 2 columnas — colapsa en pantallas muy pequeñas */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:360px){.grid-2{grid-template-columns:1fr}}
+
+/* Toggle SI/NO — altura mínima 46px */
 .toggle-group{display:grid;grid-template-columns:1fr 1fr;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
-.toggle-btn{padding:10px;text-align:center;font-weight:700;font-size:14px;background:transparent;color:var(--muted);transition:.15s}
+.toggle-btn{padding:12px;text-align:center;font-weight:700;font-size:14px;background:transparent;color:var(--muted);transition:.15s;touch-action:manipulation;min-height:46px;-webkit-user-select:none;user-select:none}
 .toggle-btn.active-si{background:#1a4731;color:var(--green)}
 .toggle-btn.active-no{background:#3d1a1a;color:var(--red)}
-.toggle-btn:hover{background:var(--border)}
-.mc-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+@media(hover:hover){.toggle-btn:hover{background:var(--border)}}
+.toggle-btn:active{opacity:.75}
+
+/* Multi-select */
+.mc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 @media(max-width:400px){.mc-grid{grid-template-columns:1fr}}
-.mc-item{display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:.1s;font-size:13px}
-.mc-item:hover{border-color:var(--purple)}
+.mc-item{display:flex;align-items:flex-start;gap:8px;padding:10px 8px;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:.1s;font-size:13px;touch-action:manipulation;-webkit-user-select:none;user-select:none;line-height:1.4}
+@media(hover:hover){.mc-item:hover{border-color:var(--purple)}}
+.mc-item:active{opacity:.75}
 .mc-item.selected{border-color:var(--green);background:#0d2318}
 .mc-item.custom-opt{border-color:var(--yellow)}
 .mc-item.custom-opt.selected{border-color:var(--yellow);background:#2d2000}
-.mc-box{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center}
+.mc-box{width:20px;height:20px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center}
 .mc-item.selected .mc-box{background:var(--green);border-color:var(--green);color:#fff;font-size:11px}
 .mc-item.custom-opt.selected .mc-box{background:var(--yellow);border-color:var(--yellow);color:#000}
-.mc-label{flex:1}.mc-code{color:var(--muted);margin-right:4px}
+.mc-label{flex:1;min-width:0}.mc-code{color:var(--muted);margin-right:4px}
+
 .badge{padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700}
 .badge-green{background:#1a4731;color:var(--green)}
 .badge-yellow{background:#3d2a0a;color:var(--yellow)}
@@ -100,67 +222,137 @@ button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
 .empty-icon{font-size:48px;margin-bottom:12px}
 .empty-title{font-size:17px;font-weight:700;margin-bottom:6px}
 .empty-sub{font-size:13px;color:var(--muted)}
-.bottom-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:12px 16px;display:flex;gap:10px;z-index:150}
+
+/* ── Bottom bar ── safe-area-bottom */
+.bottom-bar{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--card);border-top:1px solid var(--border);
+  padding:10px 14px;
+  padding-bottom:calc(10px + var(--sab));
+  padding-left:calc(14px + var(--sal));
+  padding-right:calc(14px + var(--sar));
+  display:flex;gap:10px;z-index:150;
+}
 .bottom-bar .btn{flex:1}
-.preview{background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:12px;font-family:monospace;font-size:11px;word-break:break-all;white-space:pre-wrap;color:#7ee787;max-height:180px;overflow-y:auto}
-.config-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+
+.preview{background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:12px;font-family:monospace;font-size:11px;word-break:break-all;white-space:pre-wrap;color:#7ee787;max-height:180px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.config-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;gap:12px}
 .config-row:last-child{border-bottom:none}
-.config-val{color:var(--purple-l);font-weight:600;text-align:right;max-width:60%}
-.toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;transition:.3s;white-space:nowrap}
+.config-val{color:var(--purple-l);font-weight:600;text-align:right;flex:1;min-width:0;word-break:break-word}
+
+/* Toast — safe-area-top */
+.toast{
+  position:fixed;top:calc(72px + var(--sat));left:50%;
+  transform:translateX(-50%);
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:10px 18px;
+  font-size:13px;font-weight:600;z-index:999;
+  opacity:0;pointer-events:none;transition:.3s;
+  white-space:nowrap;max-width:calc(100vw - 32px);text-align:center;
+}
 .toast.show{opacity:1}
 .toast.ok{border-color:var(--green);color:var(--green)}
 .toast.err{border-color:var(--red);color:var(--red)}
 .toast.info{border-color:var(--blue);color:#93c5fd}
-/* LOGIN */
-.login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+
+/* ── Login ── 100dvh arregla el bug de 100vh en iOS Safari */
+.login-wrap{
+  min-height:100vh;min-height:100dvh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:calc(24px + var(--sat)) 20px calc(24px + var(--sab));
+}
 .login-logo{font-size:48px;margin-bottom:8px}
 .login-title{font-size:22px;font-weight:800;color:var(--purple-l);margin-bottom:4px}
-.login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;text-align:center}
-.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px}
-/* ADMIN */
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:24px;text-align:center}
+.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+
+/* ── Admin ── */
 .admin-tabs{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
-.admin-tab{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:600;background:transparent;color:var(--muted);border:none;cursor:pointer}
+.admin-tab{flex:1;padding:10px 6px;text-align:center;font-size:12px;font-weight:600;background:transparent;color:var(--muted);border:none;cursor:pointer;touch-action:manipulation;min-height:44px}
 .admin-tab.active{background:var(--purple);color:#fff}
 .user-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px}
 .user-card-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
 .user-avatar{width:38px;height:38px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;flex-shrink:0}
 .user-info{flex:1;min-width:0}
 .user-name{font-weight:700;font-size:14px}
-.user-email{font-size:12px;color:var(--muted)}
-/* MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.user-email{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Modal ── bottom-sheet en móvil, centrado en desktop */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.75);
+  z-index:500;display:flex;align-items:flex-end;justify-content:center;padding:0;
+}
+@media(min-width:600px){.modal-overlay{align-items:center;padding:16px}}
+.modal{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px 20px 0 0;
+  padding:20px;
+  padding-bottom:calc(20px + var(--sab));
+  width:100%;max-width:100%;
+  max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+@media(min-width:600px){.modal{border-radius:16px;max-width:440px;padding-bottom:20px}}
+/* Indicador de arrastre (bottom sheet) */
+.modal::before{content:'';display:block;width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+@media(min-width:600px){.modal::before{display:none}}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:16px;color:var(--purple-l)}
-.option-row{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)}
+.option-row{display:flex;align-items:center;gap:6px;padding:10px 0;border-bottom:1px solid var(--border);min-height:44px}
 .option-row:last-of-type{border-bottom:none}
-/* BUSCADOR INLINE */
+
+/* ── Buscador inline (CIUO / EAPB) ── */
 .sf-wrap{position:relative}
-.sf-results{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:300;background:var(--card);border:1px solid var(--purple-l);border-radius:8px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)}
-.sf-item{padding:8px 12px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid var(--border);transition:.1s}
+.sf-results{
+  position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:300;
+  background:var(--card);border:1px solid var(--purple-l);
+  border-radius:10px;max-height:240px;overflow-y:auto;
+  box-shadow:0 8px 24px rgba(0,0,0,.6);
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+}
+.sf-item{padding:11px 12px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid var(--border);min-height:44px;touch-action:manipulation}
 .sf-item:last-child{border-bottom:none}
-.sf-item:hover{background:var(--border)}
-.sf-code{color:var(--purple-l);font-weight:700;font-size:11px;white-space:nowrap;flex-shrink:0;padding-top:1px}
+@media(hover:hover){.sf-item:hover{background:var(--border)}}
+.sf-item:active{background:var(--border)}
+.sf-code{color:var(--purple-l);font-weight:700;font-size:11px;white-space:nowrap;flex-shrink:0;padding-top:2px}
 .sf-label{color:var(--text);font-size:12px;flex:1;line-height:1.4}
 .sf-selected{font-size:11px;color:var(--green);margin-top:4px}
-/* MAPA GEOPUNTO */
-.map-modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:0;width:100%;max-width:500px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── Mapa geopunto ── bottom-sheet en móvil */
+.map-modal{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px 20px 0 0;
+  padding:0;width:100%;max-width:500px;
+  max-height:92vh;overflow:hidden;display:flex;flex-direction:column;
+}
+@media(min-width:600px){.map-modal{border-radius:16px}}
 .map-modal-hdr{padding:14px 16px;font-weight:700;font-size:15px;color:var(--purple-l);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-#geomap{height:320px;width:100%;flex-shrink:0}
+#geomap{height:300px;width:100%;flex-shrink:0}
+@media(min-height:700px){#geomap{height:360px}}
 .map-coords{padding:10px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);background:var(--bg)}
 .map-coords strong{color:var(--text)}
-.map-modal-footer{padding:12px 16px;display:flex;gap:8px;border-top:1px solid var(--border)}
+.map-modal-footer{padding:12px 16px;padding-bottom:calc(12px + var(--sab));display:flex;gap:8px;border-top:1px solid var(--border)}
 .geo-status{font-size:12px;color:var(--muted);padding:0 16px 8px}
-/* SYNC */
-.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block}
+
+/* ── Sync indicator ── */
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0}
 .sync-dot.offline{background:var(--red)}
 .sync-dot.syncing{background:var(--yellow);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.pending-badge{position:fixed;bottom:84px;right:24px;background:var(--yellow);color:#000;border-radius:12px;padding:4px 10px;font-size:12px;font-weight:700;z-index:190;display:none}
-/* ANALYTICS */
+
+/* Pending badge — safe-area-bottom */
+.pending-badge{
+  position:fixed;
+  bottom:calc(80px + var(--sab));
+  right:calc(20px + var(--sar));
+  background:var(--yellow);color:#000;
+  border-radius:12px;padding:4px 10px;
+  font-size:12px;font-weight:700;z-index:190;display:none;
+}
+
+/* ── Analytics ── */
 .an-kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px}
 @media(min-width:480px){.an-kpi-grid{grid-template-columns:repeat(4,1fr)}}
 .an-kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
-.an-kpi-val{font-size:26px;font-weight:800;color:var(--purple-l);line-height:1}
+.an-kpi-val{font-size:24px;font-weight:800;color:var(--purple-l);line-height:1}
 .an-kpi-sub{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.3}
 .an-kpi.green .an-kpi-val{color:var(--green)}
 .an-kpi.yellow .an-kpi-val{color:var(--yellow)}
@@ -168,8 +360,7 @@ button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
 .an-kpi.blue .an-kpi-val{color:#93c5fd}
 .chart-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
 .chart-title{font-size:12px;font-weight:700;color:var(--purple-l);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
-.chart-wrap{position:relative}
-.chart-wrap canvas{display:block}
+.chart-wrap{position:relative}.chart-wrap canvas{display:block}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:480px){.chart-grid{grid-template-columns:1fr}}
 .an-empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:13px}
@@ -3046,16 +3237,17 @@ const T2_LABELS = {
   '83':'Observaciones'
 };
 const T3_LABELS = {
-  '3':'Primer apellido','4':'Segundo apellido','5':'Primer nombre','6':'Segundo nombre',
-  '7':'Tipo identificación','8':'Número identificación','9':'Fecha nacimiento','10':'Sexo',
-  '11':'Ciclo vital','12':'Pertenencia étnica','13':'Código ocupación (CIUO)',
-  '14':'Descripción ocupación','15':'Tipo afiliación','16':'Código EAPB','17':'Diagnósticos',
-  '18':'Zona residencia','19':'Escolaridad','20':'Estado civil','21':'Condición especial',
-  '22':'Peso (kg)','23':'Talla (cm)','24':'Diagnóstico nutricional','25':'Hemoglobina',
-  '26':'Tensión arterial sistólica','27':'Tensión arterial diastólica','28':'Intervenciones pendientes',
-  '29':'Vacunas pendientes','30':'Vacunas al día','31':'Anticoncepción','32':'Método anticonceptivo',
-  '33':'Detección temprana','34':'Salud mental','35':'Discapacidad persona','36':'Tipo discapacidad',
-  '37':'Actividades rehabilitación'
+  '3':'Primer nombre','4':'Segundo nombre','5':'Primer apellido','6':'Segundo apellido',
+  '7':'Tipo de identificación','8':'Número de identificación','9':'Fecha de nacimiento','10':'Sexo biológico',
+  '11':'¿En gestación?','12':'Rol en la familia','13':'Código ocupación (CIUO)',
+  '14':'Nivel educativo','15':'Régimen de afiliación','16':'Código EAPB','17':'Grupo poblacional especial',
+  '18':'Pertenencia étnica','19':'Agente medicina tradicional','20':'Código pueblo indígena',
+  '21':'Condición de discapacidad','22':'Peso (kg)','23':'Talla (cm)','24':'Diagnóstico nutricional P/T',
+  '25':'Perímetro braquial (cm)','26':'Condición de salud crónica','27':'Esquema de atenciones de promoción',
+  '28':'Intervenciones pendientes de promoción','29':'Motivos no atención de promoción',
+  '30':'Practica deporte o ejercicio','31':'Lactancia materna exclusiva 6m','32':'Meses de lactancia materna',
+  '33':'Signos desnutrición aguda','34':'Enfermedad aguda último mes','35':'Descripción enfermedad aguda',
+  '36':'Recibe atención enfermedad aguda','37':'Motivos no atención enfermedad aguda'
 };
 
 async function downloadExcel() {
