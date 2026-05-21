@@ -1,0 +1,14 @@
+# Archivos temporales de Office
+~$*
+
+# PDFs de referencia y archivos locales grandes
+*.pdf
+pdf_content.txt
+
+# Imágenes de trabajo
+*.jpeg
+*.jpg
+*.png
+
+# Carpeta interna de Claude
+.claude/

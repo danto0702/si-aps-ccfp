@@ -1,0 +1,2219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
+<meta name="theme-color" content="#7c1d6f">
+<title>SI-APS CCFP</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --bg:#0d1117;--card:#161b22;--border:#30363d;
+  --purple:#7c1d6f;--purple-l:#a855f7;--red:#e94560;
+  --green:#38c793;--yellow:#ffb432;--blue:#4a6fa5;
+  --text:#e6edf3;--muted:#8b949e;--input-bg:#0d1117;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:16px}
+button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
+.hdr{position:sticky;top:0;z-index:100;background:#161b22;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:12px 16px}
+.hdr-title{flex:1;font-weight:700;font-size:15px}
+.hdr-sub{font-size:11px;color:var(--muted);font-weight:400}
+.btn-icon{background:transparent;color:var(--muted);padding:6px;border-radius:8px;font-size:18px;line-height:1}
+.btn-icon:hover{background:var(--border);color:var(--text)}
+.conn-banner{display:none;text-align:center;padding:6px;font-size:12px;font-weight:600}
+.conn-banner.offline{display:block;background:#7c2d2d;color:#fca5a5}
+.conn-banner.syncing{display:block;background:#1a3a5c;color:#93c5fd}
+#main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:100px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.card-title{font-size:13px;font-weight:700;color:var(--purple-l);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.card-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.card-row:last-child{border-bottom:none}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.stat-n{font-size:28px;font-weight:700;color:var(--purple-l)}
+.stat-l{font-size:11px;color:var(--muted);margin-top:2px}
+.familia-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px}
+.familia-item:hover{border-color:var(--purple)}
+.familia-icon{width:40px;height:40px;border-radius:8px;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.familia-info{flex:1;min-width:0}
+.familia-nombre{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.familia-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.familia-actions{display:flex;gap:6px;flex-shrink:0}
+.persona-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.persona-avatar{width:36px;height:36px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.persona-info{flex:1;min-width:0}
+.persona-nombre{font-weight:600;font-size:14px}
+.persona-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.btn{padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;transition:.15s}
+.btn-primary{background:var(--purple);color:#fff}.btn-primary:hover{background:#9b2d8f}
+.btn-secondary{background:var(--border);color:var(--text)}.btn-secondary:hover{background:#3d444d}
+.btn-success{background:#1a4731;color:var(--green);border:1px solid var(--green)}
+.btn-danger{background:#3d1a1a;color:var(--red);border:1px solid var(--red)}
+.btn-block{width:100%;margin-bottom:8px}
+.btn-sm{padding:6px 10px;font-size:12px}
+.fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--purple);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(124,29,111,.5);z-index:200}
+.fab:hover{background:#9b2d8f}
+.steps-container{overflow-x:auto;margin-bottom:16px;padding-bottom:4px}
+.steps{display:flex;gap:0;min-width:max-content}
+.step{display:flex;flex-direction:column;align-items:center;min-width:80px;cursor:pointer;padding:8px 4px;position:relative}
+.step:not(:last-child)::after{content:'';position:absolute;top:20px;left:calc(50% + 16px);width:calc(100% - 32px);height:2px;background:var(--border)}
+.step.done::after{background:var(--green)}
+.step-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:2px solid var(--border);background:var(--bg);position:relative;z-index:1}
+.step.active .step-circle{border-color:var(--purple);background:var(--purple);color:#fff}
+.step.done .step-circle{border-color:var(--green);background:var(--green);color:#fff}
+.step-label{font-size:10px;margin-top:4px;color:var(--muted);text-align:center}
+.step.active .step-label{color:var(--purple-l)}
+.field{margin-bottom:14px}
+.field-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.field-num{font-size:11px;color:var(--purple-l);font-weight:700;background:#2d1a3a;padding:1px 5px;border-radius:4px}
+.req{color:var(--red)}
+.field-input,.field-select{width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit}
+.field-input:focus,.field-select:focus{outline:none;border-color:var(--purple-l)}
+.field-select option{background:var(--card)}
+.field-note{font-size:11px;color:var(--muted);margin-top:4px}
+.field-ro{background:#1a1f27;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--muted);font-family:monospace;word-break:break-all}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.toggle-group{display:grid;grid-template-columns:1fr 1fr;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.toggle-btn{padding:10px;text-align:center;font-weight:700;font-size:14px;background:transparent;color:var(--muted);transition:.15s}
+.toggle-btn.active-si{background:#1a4731;color:var(--green)}
+.toggle-btn.active-no{background:#3d1a1a;color:var(--red)}
+.toggle-btn:hover{background:var(--border)}
+.mc-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+@media(max-width:400px){.mc-grid{grid-template-columns:1fr}}
+.mc-item{display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:.1s;font-size:13px}
+.mc-item:hover{border-color:var(--purple)}
+.mc-item.selected{border-color:var(--green);background:#0d2318}
+.mc-item.custom-opt{border-color:var(--yellow)}
+.mc-item.custom-opt.selected{border-color:var(--yellow);background:#2d2000}
+.mc-box{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center}
+.mc-item.selected .mc-box{background:var(--green);border-color:var(--green);color:#fff;font-size:11px}
+.mc-item.custom-opt.selected .mc-box{background:var(--yellow);border-color:var(--yellow);color:#000}
+.mc-label{flex:1}.mc-code{color:var(--muted);margin-right:4px}
+.badge{padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-green{background:#1a4731;color:var(--green)}
+.badge-yellow{background:#3d2a0a;color:var(--yellow)}
+.badge-red{background:#3d1a1a;color:var(--red)}
+.badge-purple{background:#2d1a3a;color:var(--purple-l)}
+.badge-blue{background:#1a2a3d;color:#93c5fd}
+.empty{text-align:center;padding:48px 16px}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-title{font-size:17px;font-weight:700;margin-bottom:6px}
+.empty-sub{font-size:13px;color:var(--muted)}
+.bottom-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:12px 16px;display:flex;gap:10px;z-index:150}
+.bottom-bar .btn{flex:1}
+.preview{background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:12px;font-family:monospace;font-size:11px;word-break:break-all;white-space:pre-wrap;color:#7ee787;max-height:180px;overflow-y:auto}
+.config-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.config-row:last-child{border-bottom:none}
+.config-val{color:var(--purple-l);font-weight:600;text-align:right;max-width:60%}
+.toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;transition:.3s;white-space:nowrap}
+.toast.show{opacity:1}
+.toast.ok{border-color:var(--green);color:var(--green)}
+.toast.err{border-color:var(--red);color:var(--red)}
+.toast.info{border-color:var(--blue);color:#93c5fd}
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.login-logo{font-size:48px;margin-bottom:8px}
+.login-title{font-size:22px;font-weight:800;color:var(--purple-l);margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;text-align:center}
+.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px}
+/* ADMIN */
+.admin-tabs{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.admin-tab{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:600;background:transparent;color:var(--muted);border:none;cursor:pointer}
+.admin-tab.active{background:var(--purple);color:#fff}
+.user-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px}
+.user-card-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.user-avatar{width:38px;height:38px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-name{font-weight:700;font-size:14px}
+.user-email{font-size:12px;color:var(--muted)}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px;color:var(--purple-l)}
+.option-row{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)}
+.option-row:last-of-type{border-bottom:none}
+/* BUSCADOR INLINE */
+.sf-wrap{position:relative}
+.sf-results{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:300;background:var(--card);border:1px solid var(--purple-l);border-radius:8px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.sf-item{padding:8px 12px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid var(--border);transition:.1s}
+.sf-item:last-child{border-bottom:none}
+.sf-item:hover{background:var(--border)}
+.sf-code{color:var(--purple-l);font-weight:700;font-size:11px;white-space:nowrap;flex-shrink:0;padding-top:1px}
+.sf-label{color:var(--text);font-size:12px;flex:1;line-height:1.4}
+.sf-selected{font-size:11px;color:var(--green);margin-top:4px}
+/* SYNC */
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block}
+.sync-dot.offline{background:var(--red)}
+.sync-dot.syncing{background:var(--yellow);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.pending-badge{position:fixed;bottom:84px;right:24px;background:var(--yellow);color:#000;border-radius:12px;padding:4px 10px;font-size:12px;font-weight:700;z-index:190;display:none}
+</style>
+</head>
+<body>
+<div id="conn-banner" class="conn-banner"></div>
+<div class="hdr" id="hdr" style="display:none">
+  <button class="btn-icon" id="btn-back" onclick="goBack()">←</button>
+  <div class="hdr-title" id="hdr-title"></div>
+  <span id="sync-dot" class="sync-dot" title="Sincronización"></span>
+  <button class="btn-icon" id="btn-admin" style="display:none" onclick="navigate('admin')">⚙</button>
+  <button class="btn-icon" onclick="doLogout()" title="Salir">↩</button>
+</div>
+<div id="main"></div>
+<div id="pending-badge" class="pending-badge"></div>
+<div id="toast" class="toast"></div>
+<div id="modal-root"></div>
+
+<script>
+'use strict';
+// ── TABLAS DE REFERENCIA (MSPS) ───────────────────────────────
+const REF_CIUO=[{"v":"0110","l":"Oficiales de las Fuerzas Militares"},{"v":"0210","l":"Suboficiales de las Fuerzas Militares"},{"v":"0310","l":"Otros miembros de las Fuerzas Militares"},{"v":"1111","l":"Directores formuladores de políticas y normas"},{"v":"1112","l":"Directores del gobierno"},{"v":"1113","l":"Jefes de comunidades étnicas"},{"v":"1114","l":"Dirigentes de organizaciones con un interés específico partidos políticos, sindicatos y organizaciones sociales"},{"v":"1120","l":"Directores y gerentes generales"},{"v":"1211","l":"Directores financieros"},{"v":"1212","l":"Directores de recursos humanos"},{"v":"1213","l":"Directores de políticas y planificación"},{"v":"1219","l":"Directores de administración y servicios no clasificados en otros grupos primarios"},{"v":"1221","l":"Directores de ventas y comercialización"},{"v":"1222","l":"Directores de publicidad y relaciones públicas"},{"v":"1223","l":"Directores de investigación y desarrollo"},{"v":"1311","l":"Directores de producción agropecuaria y silvicultura"},{"v":"1312","l":"Directores de producción de piscicultura y pesca"},{"v":"1321","l":"Directores de industrias manufactureras"},{"v":"1322","l":"Directores de explotaciones de minería"},{"v":"1323","l":"Directores de empresas de construcción"},{"v":"1324","l":"Directores de empresas de abastecimiento, distribución y afines"},{"v":"1330","l":"Directores de servicios de tecnología de la información y las comunicaciones"},{"v":"1341","l":"Directores de servicios de cuidados infantiles"},{"v":"1342","l":"Directores de servicios de salud"},{"v":"1343","l":"Directores de servicios de atención a personas mayores"},{"v":"1344","l":"Directores de servicios de bienestar social"},{"v":"1345","l":"Directores de servicios de educación"},{"v":"1346","l":"Gerentes de sucursales de bancos, de servicios financieros y de seguros"},{"v":"1349","l":"Directores y gerentes de servicios profesionales no clasificados en otros grupos primarios"},{"v":"1411","l":"Gerentes de hoteles"},{"v":"1412","l":"Gerentes de restaurantes"},{"v":"1420","l":"Gerentes de comercios al por mayor y al por menor"},{"v":"1431","l":"Gerentes de centros deportivos, de esparcimiento y culturales"},{"v":"1439","l":"Otros gerentes de servicios no clasificados en otros grupos primarios"},{"v":"2111","l":"Físicos y astrónomos"},{"v":"2112","l":"Meteorólogos"},{"v":"2113","l":"Químicos"},{"v":"2114","l":"Geólogos y geofísicos"},{"v":"2120","l":"Matemáticos, actuarios y estadísticos"},{"v":"2131","l":"Biólogos, botánicos, zoólogos y afines"},{"v":"2132","l":"Agrónomos, silvicultores, zootecnistas y afines"},{"v":"2133","l":"Profesionales de la protección medioambiental"},{"v":"2141","l":"Ingenieros industriales y de producción"},{"v":"2142","l":"Ingenieros civiles"},{"v":"2143","l":"Ingenieros medioambientales"},{"v":"2144","l":"Ingenieros mecánicos"},{"v":"2145","l":"Ingenieros químicos"},{"v":"2146","l":"Ingenieros de minas, metalúrgicos y afines"},{"v":"2149","l":"Ingenieros no clasificados en otros grupos primarios"},{"v":"2151","l":"Ingenieros electricistas"},{"v":"2152","l":"Ingenieros electrónicos"},{"v":"2153","l":"Ingenieros de telecomunicaciones"},{"v":"2161","l":"Arquitectos constructores"},{"v":"2162","l":"Arquitectos paisajistas"},{"v":"2163","l":"Diseñadores de productos y de prendas"},{"v":"2164","l":"Planificadores urbanos, regionales y de tránsito"},{"v":"2165","l":"Cartógrafos y topógrafos"},{"v":"2166","l":"Diseñadores gráficos y multimedia"},{"v":"2211","l":"Médicos generales"},{"v":"2212","l":"Médicos especialistas"},{"v":"2221","l":"Profesionales de enfermería"},{"v":"2222","l":"Profesionales de partería"},{"v":"2230","l":"Profesionales de medicina tradicional y alternativa"},{"v":"2240","l":"Paramédicos e instrumentadores quirúrgicos"},{"v":"2250","l":"Veterinarios"},{"v":"2261","l":"Odontólogos"},{"v":"2262","l":"Farmacéuticos"},{"v":"2263","l":"Profesionales de la salud y la higiene laboral y ambiental"},{"v":"2264","l":"Fisioterapeutas"},{"v":"2265","l":"Dietistas y nutricionistas"},{"v":"2266","l":"Fonoaudiólogos y terapeutas del lenguaje"},{"v":"2267","l":"Optómetras"},{"v":"2269","l":"Otros profesionales de la salud no clasificados en otros grupos primarios"},{"v":"2310","l":"Profesores de instituciones de educación superior"},{"v":"2320","l":"Profesores de formación profesional"},{"v":"2330","l":"Profesores de educación secundaria"},{"v":"2341","l":"Profesores de educación primaria"},{"v":"2342","l":"Profesores de primera infancia"},{"v":"2351","l":"Especialistas en métodos pedagógicos"},{"v":"2352","l":"Profesores de educación especial e inclusiva"},{"v":"2353","l":"Otros profesores de idiomas"},{"v":"2354","l":"Otros profesores de música"},{"v":"2355","l":"Otros profesores de artes"},{"v":"2356","l":"Instructores de tecnología de la información"},{"v":"2359","l":"Otros profesionales de la educación no clasificados en otros grupos primarios"},{"v":"2411","l":"Contadores"},{"v":"2412","l":"Asesores financieros y de inversiones"},{"v":"2413","l":"Analistas financieros"},{"v":"2421","l":"Analistas de gestión y organización"},{"v":"2422","l":"Profesionales en políticas de administración"},{"v":"2423","l":"Profesionales de gestión de talento humano"},{"v":"2424","l":"Profesionales en formación y desarrollo de personal"},{"v":"2431","l":"Profesionales de la publicidad y la comercialización"},{"v":"2432","l":"Profesionales de relaciones públicas"},{"v":"2433","l":"Profesionales de ventas técnicas y médicas (excluyendo las TIC)"},{"v":"2434","l":"Profesionales de ventas de tecnología de la información y las comunicaciones"},{"v":"2511","l":"Analistas de sistemas"},{"v":"2512","l":"Desarrolladores de software"},{"v":"2513","l":"Desarrolladores web y multimedia"},{"v":"2514","l":"Programadores de aplicaciones"},{"v":"2519","l":"Desarrolladores y analistas de software y multimedia no clasificados en otros grupos primarios"},{"v":"2521","l":"Diseñadores y administradores de bases de datos"},{"v":"2522","l":"Administradores de sistemas"},{"v":"2523","l":"Profesionales en redes de computadores"},{"v":"2529","l":"Profesionales en bases de datos y en redes de computadores no clasificados en otros grupos primarios"},{"v":"2611","l":"Abogados"},{"v":"2612","l":"Jueces"},{"v":"2619","l":"Profesionales en derecho no clasificados en otros grupos primarios"},{"v":"2621","l":"Archivistas y curadores de arte"},{"v":"2622","l":"Bibliotecarios, documentalistas y afines"},{"v":"2631","l":"Economistas"},{"v":"2632","l":"Sociólogos, antropólogos y afines"},{"v":"2633","l":"Filósofos, historiadores y especialistas en ciencias políticas"},{"v":"2634","l":"Psicólogos"},{"v":"2635","l":"Profesionales del trabajo social y consejeros"},{"v":"2636","l":"Profesionales religiosos"},{"v":"2641","l":"Autores y otros escritores"},{"v":"2642","l":"Periodistas"},{"v":"2643","l":"Traductores, intérpretes y otros lingüistas"},{"v":"2651","l":"Escultores, pintores artísticos y afines"},{"v":"2652","l":"Compositores, músicos y cantantes"},{"v":"2653","l":"Coreógrafos y bailarines"},{"v":"2654","l":"Directores y productores de cine, de teatro y afines"},{"v":"2655","l":"Actores"},{"v":"2656","l":"Locutores de radio, televisión y otros medios de comunicación"},{"v":"2659","l":"Artistas creativos e interpretativos no clasificados en otros grupos primarios"},{"v":"3111","l":"Técnicos en ciencias físicas y químicas"},{"v":"3112","l":"Técnicos en ingeniería civil"},{"v":"3113","l":"Electrotécnicos"},{"v":"3114","l":"Técnicos en electrónica"},{"v":"3115","l":"Técnicos en ingeniería mecánica"},{"v":"3116","l":"Técnicos en química industrial"},{"v":"3117","l":"Técnicos de minas y metalurgia"},{"v":"3118","l":"Delineantes y dibujantes técnicos"},{"v":"3119","l":"Técnicos en ciencias físicas y en ingeniería no clasificados en otros grupos primarios"},{"v":"3121","l":"Supervisores de minas"},{"v":"3122","l":"Supervisores de industrias manufactureras"},{"v":"3123","l":"Supervisores de la construcción"},{"v":"3131","l":"Operadores de plantas de producción de energía"},{"v":"3132","l":"Operadores de incineradores, instalaciones de tratamiento de agua y afines"},{"v":"3133","l":"Controladores de instalaciones de procesamiento de productos químicos"},{"v":"3134","l":"Operadores de instalaciones de refinación de petróleo y gas natural"},{"v":"3135","l":"Operadores de procesos de producción de metales"},{"v":"3139","l":"Técnicos en control de procesos no clasificados en otros grupos primarios"},{"v":"3141","l":"Técnicos en ciencias biológicas (excluyendo la medicina)"},{"v":"3142","l":"Técnicos agropecuarios"},{"v":"3143","l":"Técnicos forestales"},{"v":"3151","l":"Oficiales maquinistas en navegación"},{"v":"3152","l":"Capitanes, oficiales de cubierta y prácticos"},{"v":"3153","l":"Pilotos de aviación y afines"},{"v":"3154","l":"Controladores de tráfico aéreo y marítimo"},{"v":"3155","l":"Técnicos en seguridad aeronáutica"},{"v":"3211","l":"Técnicos en aparatos de diagnóstico y tratamiento médico"},{"v":"3212","l":"Técnicos de laboratorios médicos"},{"v":"3213","l":"Técnicos y asistentes farmacéuticos"},{"v":"3214","l":"Técnicos de prótesis médicas y dentales"},{"v":"3221","l":"Técnicos y profesionales del nivel medio en enfermería"},{"v":"3222","l":"Técnicos y profesionales del nivel medio en partería"},{"v":"3230","l":"Técnicos y profesionales del nivel medio en medicina tradicional y alternativa"},{"v":"3240","l":"Técnicos y asistentes veterinarios"},{"v":"3251","l":"Higienistas y asistentes odontológicos"},{"v":"3252","l":"Técnicos en documentación sanitaria"},{"v":"3253","l":"Trabajadores comunitarios de la salud"},{"v":"3254","l":"Técnicos en optometría y ópticas"},{"v":"3255","l":"Técnicos y asistentes terapeutas"},{"v":"3256","l":"Asistentes médicos"},{"v":"3257","l":"Inspectores de seguridad, salud ocupacional, medioambiental y afines"},{"v":"3258","l":"Técnicos en atención prehospitalaria"},{"v":"3259","l":"Otros técnicos y profesionales del nivel medio de la salud, no clasificados en otros grupos primarios"},{"v":"3311","l":"Agentes de bolsa, cambio y otros servicios financieros"},{"v":"3312","l":"Analistas de préstamos y créditos"},{"v":"3313","l":"Técnicos de contabilidad y afines"},{"v":"3314","l":"Técnicos y profesionales del nivel medio de servicios estadísticos, matemáticos y afines"},{"v":"3315","l":"Tasadores y evaluadores"},{"v":"3321","l":"Agentes de seguros"},{"v":"3322","l":"Representantes comerciales"},{"v":"3323","l":"Agentes de compras"},{"v":"3324","l":"Agentes de operaciones comerciales y consignatarios"},{"v":"3331","l":"Declarantes o gestores de aduana"},{"v":"3332","l":"Organizadores de conferencias y eventos"},{"v":"3333","l":"Agentes de empleo y contratistas de mano de obra"},{"v":"3334","l":"Agentes inmobiliarios"},{"v":"3339","l":"Agentes de servicios comerciales no clasificados en otros grupos primarios"},{"v":"3341","l":"Supervisores de oficina"},{"v":"3342","l":"Secretarios jurídicos"},{"v":"3343","l":"Secretarios administrativos y ejecutivos"},{"v":"3344","l":"Secretarios médicos"},{"v":"3351","l":"Agentes de aduana e inspectores de frontera"},{"v":"3352","l":"Agentes de administración tributaria"},{"v":"3353","l":"Agentes de servicios de seguridad social"},{"v":"3354","l":"Agentes gubernamentales de expedición de licencias"},{"v":"3355","l":"Inspectores de policía y detectives"},{"v":"3359","l":"Agentes de gobierno y profesionales del nivel medio para la aplicación de regulaciones no clasificados en otros grupos primarios"},{"v":"3411","l":"Técnicos y profesionales del nivel medio del derecho de servicios legales y afines"},{"v":"3412","l":"Trabajadores y asistentes sociales"},{"v":"3413","l":"Auxiliares laicos de las religiones"},{"v":"3421","l":"Atletas y deportistas"},{"v":"3422","l":"Entrenadores, instructores y árbitros de actividades deportivas"},{"v":"3423","l":"Instructores de educación física y actividades recreativas"},{"v":"3431","l":"Fotógrafos"},{"v":"3432","l":"Diseñadores y decoradores de interiores"},{"v":"3433","l":"Técnicos en galerías de arte, museos y bibliotecas"},{"v":"3434","l":"Chefs"},{"v":"3435","l":"Otros técnicos y profesionales del nivel medio en actividades culturales y artísticas"},{"v":"3511","l":"Técnicos en operaciones de tecnología de la información y las comunicaciones"},{"v":"3512","l":"Técnicos en asistencia y soporte al usuario de tecnología de la información y las comunicaciones"},{"v":"3513","l":"Técnicos en redes y sistemas de computación"},{"v":"3514","l":"Técnicos de la Web"},{"v":"3521","l":"Técnicos de radiodifusión y grabación audio visual"},{"v":"3522","l":"Técnicos de ingeniería de las telecomunicaciones"},{"v":"4110","l":"Oficinistas generales"},{"v":"4120","l":"Secretarios generales"},{"v":"4131","l":"Operadores de máquinas de procesamiento de texto y mecanógrafos"},{"v":"4132","l":"Grabadores de datos"},{"v":"4211","l":"Cajeros de bancos y afines"},{"v":"4212","l":"Receptores de apuestas y afines"},{"v":"4213","l":"Prestamistas"},{"v":"4214","l":"Cobradores y afines"},{"v":"4221","l":"Empleados y consultores de viajes"},{"v":"4222","l":"Empleados de centros de llamadas"},{"v":"4223","l":"Telefonistas"},{"v":"4224","l":"Recepcionistas de hoteles"},{"v":"4225","l":"Empleados de ventanillas de informaciones"},{"v":"4226","l":"Recepcionistas generales"},{"v":"4227","l":"Entrevistadores de encuestas y de investigaciones de mercados"},{"v":"4229","l":"Otros empleados de servicios de información al cliente no clasificados en otros grupos primarios"},{"v":"4311","l":"Auxiliares de contabilidad y cálculo de costos"},{"v":"4312","l":"Auxiliares de servicios estadísticos, financieros y de seguros"},{"v":"4313","l":"Auxiliares encargados de las nóminas"},{"v":"4321","l":"Empleados de control de abastecimientos e inventario"},{"v":"4322","l":"Empleados de servicios de apoyo a la producción"},{"v":"4323","l":"Empleados de servicios de transporte"},{"v":"4411","l":"Empleados de bibliotecas"},{"v":"4412","l":"Empleados de servicios de correos"},{"v":"4413","l":"Codificadores de datos, correctores de pruebas de imprenta y afines"},{"v":"4414","l":"Escribientes públicos y afines"},{"v":"4415","l":"Empleados de archivos"},{"v":"4416","l":"Empleados del servicio de personal"},{"v":"4419","l":"Otro personal de apoyo administrativo no clasificados en otros grupos primarios"},{"v":"5111","l":"Personal de servicio a pasajeros"},{"v":"5112","l":"Revisores y cobradores de los transportes públicos"},{"v":"5113","l":"Guías"},{"v":"5120","l":"Cocineros"},{"v":"5131","l":"Meseros"},{"v":"5132","l":"Bármanes"},{"v":"5141","l":"Peluqueros"},{"v":"5142","l":"Especialistas en tratamientos de belleza y afines"},{"v":"5151","l":"Supervisores de mantenimiento y limpieza en oficinas, hoteles y otros establecimientos"},{"v":"5152","l":"Mayordomos domésticos"},{"v":"5153","l":"Conserjes y afines"},{"v":"5161","l":"Astrólogos, adivinos y trabajadores afines"},{"v":"5162","l":"Acompañantes"},{"v":"5163","l":"Personal de servicios funerarios y embalsamadores"},{"v":"5164","l":"Cuidadores de animales"},{"v":"5165","l":"Instructores de conducción"},{"v":"5169","l":"Otros trabajadores de servicios personales no clasificados en otros grupos primarios"},{"v":"5211","l":"Vendedores de quioscos y de puestos de mercado"},{"v":"5212","l":"Vendedores ambulantes de alimentos preparados para consumo inmediato"},{"v":"5221","l":"Comerciantes de tiendas"},{"v":"5222","l":"Supervisores de tiendas y almacenes"},{"v":"5223","l":"Vendedores y auxiliares de venta en tiendas, almacenes y afines"},{"v":"5230","l":"Cajeros de comercio, taquilleros y expendedores de boletas"},{"v":"5241","l":"Modelos de moda, arte y publicidad"},{"v":"5242","l":"Demostradores de tiendas, almacenes y afines"},{"v":"5243","l":"Vendedores puerta a puerta"},{"v":"5244","l":"Vendedores a través de medios tecnológicos"},{"v":"5245","l":"Expendedores de combustibles para vehículos"},{"v":"5246","l":"Vendedores de comidas al mostrador"},{"v":"5249","l":"Otros vendedores no clasificados en otros grupos primarios"},{"v":"5311","l":"Cuidadores de niños"},{"v":"5312","l":"Auxiliares de maestros"},{"v":"5321","l":"Trabajadores de los cuidados personales en instituciones"},{"v":"5322","l":"Trabajadores de los cuidados personales a domicilio"},{"v":"5329","l":"Trabajadores de los cuidados personales en servicios de salud no clasificados en otros grupos primarios"},{"v":"5411","l":"Bomberos y rescatistas"},{"v":"5412","l":"Policías"},{"v":"5413","l":"Guardianes de prisión"},{"v":"5414","l":"Guardias de seguridad"},{"v":"5419","l":"Personal de los servicios de protección no clasificadosen otros grupos primarios"},{"v":"6111","l":"Agricultores y trabajadores calificados de cultivos extensivos"},{"v":"6112","l":"Agricultores y trabajadores calificados de plantaciones de árboles y arbustos"},{"v":"6113","l":"Agricultores y trabajadores calificados de huertas, invernaderos, viveros y jardines"},{"v":"6114","l":"Agricultores y trabajadores calificados de cultivos mixtos"},{"v":"6121","l":"Criadores de ganado y trabajadores de la cría de animales domésticos (excepto aves de corral)"},{"v":"6122","l":"Avicultores y trabajadores calificados de la avicultura"},{"v":"6123","l":"Criadores y trabajadores calificados de la apicultura y la sericicultura"},{"v":"6129","l":"Criadores y trabajadores pecuarios calificados, avicultores y criadores de insectos no clasificados en otros grupos primarios"},{"v":"6130","l":"Productores y trabajadores calificados de explotaciones agropecuarias mixtas cuya producción se destina al mercado"},{"v":"6210","l":"Trabajadores forestales calificados y afines"},{"v":"6221","l":"Trabajadores de explotaciones de acuicultura"},{"v":"6222","l":"Pescadores de agua dulce y en aguas costeras"},{"v":"6223","l":"Pescadores de alta mar"},{"v":"6224","l":"Cazadores y tramperos"},{"v":"6310","l":"Trabajadores agrícolas de subsistencia"},{"v":"6320","l":"Trabajadores pecuarios de subsistencia"},{"v":"6330","l":"Trabajadores agropecuarios de subsistencia"},{"v":"6340","l":"Pescadores, cazadores, tramperos y recolectores de subsistencia"},{"v":"7111","l":"Constructores de casas"},{"v":"7112","l":"Albañiles"},{"v":"7113","l":"Labrantes, tronzadores y grabadores de piedra"},{"v":"7114","l":"Operarios en cemento armado, enfoscadores y afines"},{"v":"7115","l":"Carpinteros de armar y de obra blanca"},{"v":"7119","l":"Oficiales y operarios de la construcción de obra gruesa y afines no clasificados en otros grupos primarios"},{"v":"7121","l":"Techadores"},{"v":"7122","l":"Enchapadores, parqueteros y colocadores de suelos"},{"v":"7123","l":"Revocadores"},{"v":"7124","l":"Instaladores de material aislante y de insonorización"},{"v":"7125","l":"Cristaleros"},{"v":"7126","l":"Fontaneros e instaladores de tuberías"},{"v":"7127","l":"Mecánicos montadores de aire acondicionado y refrigeración"},{"v":"7131","l":"Pintores y empapeladores"},{"v":"7132","l":"Barnizadores y afines"},{"v":"7133","l":"Limpiadores de fachadas y deshollinadores"},{"v":"7211","l":"Moldeadores y macheros"},{"v":"7212","l":"Soldadores y oxicortadores"},{"v":"7213","l":"Chapistas y caldereros"},{"v":"7214","l":"Montadores de estructuras metálicas"},{"v":"7215","l":"Aparejadores y empalmadores de cables"},{"v":"7221","l":"Herreros y forjadores"},{"v":"7222","l":"Herramentistas y afines"},{"v":"7223","l":"Ajustadores y operadores de máquinas herramientas"},{"v":"7224","l":"Pulidores de metales y afiladores de herramientas"},{"v":"7231","l":"Mecánicos y reparadores de vehículos de motor"},{"v":"7232","l":"Mecánicos y reparadores de sistemas y motores de aeronaves"},{"v":"7233","l":"Mecánicos y reparadores de máquinas agrícolas e industriales"},{"v":"7234","l":"Reparadores de bicicletas y afines"},{"v":"7311","l":"Mecánicos y reparadores de instrumentos de precisión"},{"v":"7312","l":"Fabricantes y afinadores de instrumentos musicales"},{"v":"7314","l":"Alfareros y ceramistas (barro y arcilla)"},{"v":"7315","l":"Sopladores, modeladores, laminadores, cortadores y pulidores de vidrio"},{"v":"7316","l":"Rotulistas, pintores decorativos y grabadores"},{"v":"7321","l":"Preimpresores y afines"},{"v":"7322","l":"Impresores"},{"v":"7323","l":"Encuadernadores y afines"},{"v":"7331","l":"Tejedores con telares"},{"v":"7332","l":"Tejedores con agujas"},{"v":"7333","l":"Otros tejedores"},{"v":"7341","l":"Cesteros y mimbreros"},{"v":"7342","l":"Sombrereros artesanales"},{"v":"7351","l":"Talladores piezas artesanales de madera"},{"v":"7352","l":"Decoradores de piezas artesanales en madera"},{"v":"7361","l":"Joyeros"},{"v":"7362","l":"Orfebres y plateros"},{"v":"7363","l":"Bisuteros"},{"v":"7370","l":"Artesanos del cuero"},{"v":"7391","l":"Artesanos de papel"},{"v":"7392","l":"Artesanos del hierro y otros metales"},{"v":"7393","l":"Artesanos de las semillas y cortezas vegetales"},{"v":"7399","l":"Artesanos de otros materiales no clasificados en otros grupos primarios"},{"v":"7411","l":"Electricistas de obras y afines"},{"v":"7412","l":"Mecánicos y ajustadores electricistas"},{"v":"7413","l":"Instaladores y reparadores de líneas eléctricas"},{"v":"7421","l":"Mecánicos y reparadores en electrónica"},{"v":"7422","l":"Instaladores y reparadores en tecnología de la información y las comunicaciones"},{"v":"7511","l":"Carniceros, pescaderos y afines"},{"v":"7512","l":"Panaderos, pasteleros y confiteros"},{"v":"7513","l":"Operarios de la elaboración de productos lácteos"},{"v":"7514","l":"Operarios de la conservación de frutas, legumbres, verduras y afines"},{"v":"7515","l":"Catadores y clasificadores de alimentos y bebidas"},{"v":"7516","l":"Preparadores y elaboradores de tabaco y sus productos"},{"v":"7521","l":"Operarios del tratamiento de la madera"},{"v":"7522","l":"Ebanistas y carpinteros (excluye carpinteros de armar y de obra blanca)"},{"v":"7523","l":"Ajustadores y operadores de máquinas para trabajar madera"},{"v":"7531","l":"Sastres, modistos, peleteros y sombrereros"},{"v":"7532","l":"Patronistas y cortadores de tela, cuero y afines"},{"v":"7533","l":"Costureros, bordadores y afines"},{"v":"7534","l":"Tapiceros, colchoneros y afines"},{"v":"7535","l":"Apelambradores, pellejeros y curtidores"},{"v":"7536","l":"Zapateros y afines"},{"v":"7541","l":"Buzos"},{"v":"7542","l":"Dinamiteros y pegadores"},{"v":"7543","l":"Clasificadores y probadores de productos (excluyendo alimentos y bebidas)"},{"v":"7544","l":"Fumigadores y otros controladores de plagas y malas hierbas"},{"v":"7549","l":"Otros oficiales, operarios y oficios relacionados no clasificados en otros grupos primarios"},{"v":"8111","l":"Mineros y operadores de instalaciones mineras"},{"v":"8112","l":"Operadores de instalaciones de procesamiento de minerales y rocas"},{"v":"8113","l":"Perforadores y sondistas de pozos y afines"},{"v":"8114","l":"Operadores de máquinas para fabricar cemento y otros productos minerales"},{"v":"8121","l":"Operadores de instalaciones de procesamiento de metales"},{"v":"8122","l":"Operadores de máquinas pulidoras, galvanizadoras y recubridoras de metales"},{"v":"8131","l":"Operadores de plantas y máquinas de productos químicos"},{"v":"8132","l":"Operadores de máquinas para fabricar productos fotográficos"},{"v":"8141","l":"Operadores de máquinas para fabricar productos de caucho"},{"v":"8142","l":"Operadores de máquinas para fabricar productos de material plástico"},{"v":"8143","l":"Operadores de máquinas para fabricar productos de papel"},{"v":"8151","l":"Operadores de máquinas de preparación de fibras, hilado y devanado"},{"v":"8152","l":"Operadores de telares y otras máquinas tejedoras"},{"v":"8153","l":"Operadores de máquinas de coser"},{"v":"8154","l":"Operadores de máquinas de blanqueamiento, teñido y limpieza de tejidos"},{"v":"8155","l":"Operadores de máquinas de tratamiento de pieles y cueros"},{"v":"8156","l":"Operadores de máquinas para la fabricación de calzado y afines"},{"v":"8157","l":"Operadores de máquinas de lavandería"},{"v":"8159","l":"Operadores de máquinas para fabricar productos textiles y artículos de piel y cuero no clasificados en otros grupos primarios"},{"v":"8160","l":"Operadores de máquinas para elaborar alimentos y productos afines"},{"v":"8171","l":"Operadores de instalaciones para la preparación de pasta para papel y papel"},{"v":"8172","l":"Operadores de instalaciones de procesamiento de la madera"},{"v":"8181","l":"Operadores de máquinas y de instalaciones para elaborar productos de vidrio y cerámica"},{"v":"8182","l":"Operadores de máquinas de vapor y calderas"},{"v":"8183","l":"Operadores de máquinas de embalaje, embotellamiento y etiquetado"},{"v":"8189","l":"Otros operadores de máquinas y de instalaciones fijas no clasificados en otros grupos primarios"},{"v":"8211","l":"Ensambladores de maquinaria mecánica"},{"v":"8212","l":"Ensambladores de equipos eléctricos y electrónicos"},{"v":"8219","l":"Ensambladores no clasificados bajo otros grupos primarios"},{"v":"8311","l":"Maquinistas de locomotoras"},{"v":"8312","l":"Guardafrenos, guardagujas y agentes de maniobras"},{"v":"8321","l":"Conductores de motocicletas"},{"v":"8323","l":"Conductores de camionetas y vehículos livianos"},{"v":"8324","l":"Conductores de taxis"},{"v":"8331","l":"Conductores de buses, microbuses y tranvías"},{"v":"8332","l":"Conductores de camiones y vehículos pesados"},{"v":"8341","l":"Operadores de maquinaria agrícola y forestal móvil"},{"v":"8342","l":"Operadores de máquinas de movimiento de tierras, construcción de vías y afines"},{"v":"8343","l":"Operadores de grúas, aparatos elevadores y afines"},{"v":"8344","l":"Operadores de montacargas"},{"v":"8350","l":"Marineros de cubierta y afines"},{"v":"9111","l":"Personal doméstico"},{"v":"9112","l":"Aseadores de oficinas, hoteles y otros establecimientos"},{"v":"9121","l":"Lavanderos y planchadores manuales"},{"v":"9122","l":"Lavadores de vehículos"},{"v":"9123","l":"Lavadores de ventanas"},{"v":"9129","l":"Otro personal de limpieza no clasificados bajo otros grupos primarios"},{"v":"9211","l":"Obreros y peones de explotaciones agrícolas"},{"v":"9212","l":"Obreros y peones de explotaciones ganaderas"},{"v":"9213","l":"Obreros y peones de explotaciones agropecuarias"},{"v":"9214","l":"Obreros y peones de jardinería y horticultura"},{"v":"9215","l":"Obreros y peones forestales"},{"v":"9216","l":"Obreros y peones de pesca y acuicultura"},{"v":"9311","l":"Obreros y peones de minas y canteras"},{"v":"9312","l":"Obreros y peones de obras públicas y mantenimiento"},{"v":"9313","l":"Obreros y peones de la construcción de edificios"},{"v":"9321","l":"Empacadores manuales"},{"v":"9329","l":"Obreros y peones de la industria manufacturera no clasificados en otros grupos primarios"},{"v":"9331","l":"Conductores de vehículos accionados a pedal o a brazo"},{"v":"9332","l":"Conductores de vehículos y máquinas de tracción animal"},{"v":"9333","l":"Obreros y peones de carga"},{"v":"9334","l":"Surtidores de estanterías"},{"v":"9411","l":"Cocineros de comidas rápidas"},{"v":"9412","l":"Ayudantes de cocina"},{"v":"9510","l":"Trabajadores ambulantes de servicios y afines"},{"v":"9520","l":"Vendedores ambulantes (excluyendo comidas de preparación inmediata)"},{"v":"9611","l":"Recolectores de basura y material reciclable"},{"v":"9612","l":"Clasificadores de desechos"},{"v":"9613","l":"Barrenderos y afines"},{"v":"9621","l":"Mensajeros, mandaderos, maleteros y repartidores"},{"v":"9622","l":"Personas que realizan trabajos varios"},{"v":"9624","l":"Acarreadores de agua y recolectores de leña"},{"v":"9625","l":"Recolectores de dinero y surtidores de máquinas de venta automática"},{"v":"9626","l":"Lectores de medidores"},{"v":"9629","l":"Otras ocupaciones elementales no clasificadas en otros grupos primarios"},{"v":"9998","l":"Jubilado, desempleado, ama de casa, estudiante, dedicación al hogar, menor de edad"},{"v":"9999","l":"En los casos en que no se tiene esta información registrar"}];
+const REF_EAPB=[{"v":"CCF002","l":"COMFAMA CAJA DE COMPENSACIÓN FAMILIAR DE ANTIOQUIA"},{"v":"CCF007","l":"COMFAMILIAR - CAJA DE COMPENSACION FAMILIAR DE CARTAGENA"},{"v":"CCF009","l":"COMFABOY - CAJA DE COMPENSACION FAMILIAR DE BOYACA"},{"v":"CCF015","l":"CAJA DE COMPENSACION FAMILIAR DE CORDOBA"},{"v":"CCF018","l":"CAFAM"},{"v":"CCF023","l":"CAJA DE COMPENSACION FAMILIAR DE LA GUAJIRA"},{"v":"CCF024","l":"COMFAMILIAR HUILA"},{"v":"CCF027","l":"EPS CAJA DE COMPENSACION FAMILIAR DE NARIÑO"},{"v":"CCF033","l":"COMFASUCRE EPS-S"},{"v":"CCF045","l":"CAJA DE COMPENSACION FAMILIAR DEL NORTE DE SANTANDER- COMFANORTE A.R.S."},{"v":"CCF049","l":"COMFAORIENTE - CAJA DE COMPENSACION FAMILIAR DEL ORIENTE COLOMBIANO"},{"v":"CCF050","l":"CAJA DE COMPENSACIÓN FAMILIAR DEL ORIENTE COLOMBIANO \"COMFAORIENTE\""},{"v":"CCF053","l":"COMFACUNDI - CAJA DE COMPENSACION FAMILIAR DE CUNDINAMAR"},{"v":"CCF055","l":"CAJACOPI - CAJA DE COMPESACION FAMILIAR CAJACOPI ATLANTICO"},{"v":"CCF101","l":"CAJA COLOMBIANA DE SUBSIDIO FAMILIAR"},{"v":"CCF102","l":"COMFACHOCO - CAJA DE COMPENSACION FAMILIAR DEL CHOCO"},{"v":"CCFC20","l":"CAJA DE COMPENSACIÓN FAMILIAR DEL CHOCÓ"},{"v":"CCFC33","l":"EPS FAMILIAR DE COLOMBIA"},{"v":"CCFS33","l":"EPS FAMILIAR DE COLOMBIA"},{"v":"CCFS50","l":"CAJA DE COMPENSACIÓN FAMILIAR DEL ORIENTE COLOMBIANO \"COMFAORIENTE\""},{"v":"CCFS55","l":"CAJACOPI EPS SAS"},{"v":"EAS016","l":"UNIDAD SERVICIO MEDICO Y ODONTOLOGICO DE EMPRESAS PUBLICAS DE MEDELLIN EAS016"},{"v":"EAS027","l":"FONDO PASIVO SOCIAL FERROCARRILES NACIONALES DE COLOMBIA"},{"v":"EPS001","l":"ALIANSALUD EPS"},{"v":"EPS002","l":"SALUD TOTAL - ENTIDAD PROMOTORA DE SALUD DEL REGIMEN CONTRIBUTIVO"},{"v":"EPS003","l":"CAFESALUD EPS"},{"v":"EPS005","l":"EPS SANITAS"},{"v":"EPS008","l":"COMPENSAR"},{"v":"EPS010","l":"SURA - COMPANIA SURAMERICANA DE SERVICIOS DE SALUD SA"},{"v":"EPS012","l":"COMFENALCO VALLE EPS"},{"v":"EPS013","l":"SALUDCOOP EPS"},{"v":"EPS016","l":"COOMEVA EPS S A"},{"v":"EPS017","l":"EPS FAMISANAR LTDA"},{"v":"EPS018","l":"SERVICIO OCCIDENTAL DE SALUD SA SOS"},{"v":"EPS020","l":"CAPRECOM - CAJA DE PREVISION SOCIAL DE COMUNICACION CAPRECOM EPS"},{"v":"EPS022","l":"CONVIDA - ENTIDAD PROMOTORA DE SALUD DEL REGIMEN SUBSIDIADO EPSS CONVIDA"},{"v":"EPS023","l":"CRUZ BLANCA EPS"},{"v":"EPS025","l":"CAPRESOCA EPS"},{"v":"EPS033","l":"SALUD VIDA EPS"},{"v":"EPS037","l":"NUEVA EPS"},{"v":"EPS039","l":"GOLDEN GROUP S.A. EPS"},{"v":"EPS040","l":"ALIANZA MEDELLIN ANTIOQUIA EPS S.A.S. \"SAVIA SALUD EPS\""},{"v":"EPS041","l":"NUEVA EPS S.A."},{"v":"EPS046","l":"FUNDACION SALUD MIA EPS"},{"v":"EPSC34","l":"CAPITAL SALUD ENTIDAD PROMOTORA DE SALUD DEL REGIMEN SUBSIDIADO S.A.S."},{"v":"EPSI01","l":"DUSAKAWI EPSI"},{"v":"EPSI02","l":"MANEXKA EPSI"},{"v":"EPSI03","l":"AIC EPSI -ASOCIACION INDIGENA DEL CAUCA"},{"v":"EPSI04","l":"ANAS WAYUU EPSI"},{"v":"EPSI05","l":"MALLAMAS - EMPRESA PROMOTORA DE SALUD MALLAMAS EPS INDIGENA"},{"v":"EPSI06","l":"PIJAOS SALUD EPS -I"},{"v":"EPSS02","l":"SALUD TOTAL EPS-S S.A."},{"v":"EPSS03","l":"CAFESALUD EPS"},{"v":"EPSS08","l":"CAJA COMPENSACIÓN FAMILIAR COMPENSAR"},{"v":"EPSS10","l":"EPS SURAMERICANA S.A."},{"v":"EPSS12","l":"COMFENALCO VALLE EPS"},{"v":"EPSS17","l":"EPS FAMISANAR S.A.S"},{"v":"EPSS18","l":"ENTIDAD PROMOTORA DE SALUD SERVICIO OCCIDENTAL DE SALUD S.A. S.O.S."},{"v":"EPSS25","l":"CAPRESOCA E.P.S."},{"v":"EPSS33","l":"SALUD VIDA EPS"},{"v":"EPSS34","l":"CAPITAL SALUD EPS-S S.A.S."},{"v":"EPSS37","l":"NUEVA EPS S.A."},{"v":"EPSS40","l":"ALIANZA MEDELLIN ANTIOQUIA EPS S.A.S. \"SAVIA SALUD EPS\""},{"v":"EPSS46","l":"FUNDACION SALUD MIA EPS"},{"v":"EPST01","l":"SAVIA SALUD -ALIANZA MEDELLIN ANTIOQUIA EPS SAS"},{"v":"ESC207","l":"ASOCIACIÓN MUTUAL SER EMPRESA SOLIDARIA DE SALUD ENTIDAD PROMOTORA DE SALUD - MUTUAL SER EPS"},{"v":"ESS002","l":"EMDISALUD - EMPRESA MUTUAL PARA EL DESARROLLO INTEGRAL DE LA SALUD EMDISALUD ESS-EPS-S"},{"v":"ESS024","l":"COOSALUD ESS EPS-S"},{"v":"ESS062","l":"ASMET - ASOCIACIÓN MUTUAL LA ESPERANZA DE EL TAMBO ASMET ESS"},{"v":"ESS076","l":"ASOCIACION MUTUAL BARRIOS UNIDOS DE QUIBDO"},{"v":"ESS091","l":"ECOOPSOS - ENTIDAD COOPERATIVA SOLIDADARIA DE SALUD ECOOPSOS ESS EPS-S"},{"v":"ESS118","l":"EMSSANAR - ASOCIACION MUTIAL EMPRESA SOLIDARIA DE SALUD EMSSANAR ESS"},{"v":"ESS133","l":"COMPARTA - COOPERATIVA DE SALUD COMUNITARIA COMPARTA EPS S"},{"v":"ESS207","l":"ASOCIACION MUTUAL SER EPS-S"},{"v":"ESSC24","l":"COOSALUD EPS S.A."},{"v":"ESSS24","l":"COOSALUD EPS S.A."},{"v":"RES001","l":"DIRECCION DE SANIDAD POLICIA NACIONAL"},{"v":"RES002","l":"ECOPETROL S.A."},{"v":"RES003","l":"DIRECCION GENERAL DE SANIDAD MILITAR"},{"v":"RES004","l":"FIDUPREVISORA S.A"},{"v":"RES007","l":"UNIVERSIDAD DEL VALLE SERVICIO DE SALUD"},{"v":"RES008","l":"UNIDAD DE SERVICIOS DE SALUD UNISALUD DE LA UNIVERSIDAD NACIONAL DE COLOMBIA"},{"v":"RES011","l":"UNIVERSIDAD DE ANTIOQUIA"},{"v":"RES014","l":"UNIDAD DE SERVICIOS DE SALUD UNISALUD - UPTC"},{"v":"REUE02","l":"CAJA DE PREVISIÓN SOCIAL DE LA UNIVERSIDAD INDUSTRIAL DE SANTANDER. CAPRUIS"},{"v":"REUE03","l":"UNIDAD ADMINISTRATIVA ESPECIAL DE SALUD UNIVERSIDAD DE CORDOBA"},{"v":"REUE04","l":"CAJA DE PREVISION SOCIAL DE LA UNIVERSIDAD DE CARTAGENA"},{"v":"REUE05","l":"FONDO DE SEGURIDAD SOCIAL EN SALUD UNIVERSIDAD DE NARIÑO"},{"v":"REUE06","l":"UNIVERSIDAD DEL CAUCA UNIDAD DE SALUD"},{"v":"REUE09","l":"UNIDAD DE SALUD DE LA UNIVERSIDAD DEL ATLANTICO"},{"v":"REUE99","l":"UISALUD UNIDAD ESPECIALIZADA DE SALUD DE LA UNIVERSIDAD INDUSTRIAL DE SANTANDER"}];
+// ── SUPABASE ──────────────────────────────────────────────────
+const SB_URL  = 'https://wttljozqyaxlzilomnef.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0dGxqb3pxeWF4bHppbG9tbmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDg5NTEsImV4cCI6MjA5NDg4NDk1MX0.kAQkgGq7RmZxTM9KlwI6KI7BjhEBy-8w6OdHVkOPBDM';
+const SB_FUNC = SB_URL + '/functions/v1';
+
+// ── REF TABLES ───────────────────────────────────────────────
+const REF = {
+  tipoIdEntidad:[{v:'NI',l:'NIT (Prestador de Servicios)'},{v:'MU',l:'Municipio'},{v:'DE',l:'Departamento'},{v:'DI',l:'Distrito'}],
+  tipoIdPersona:[{v:'CC',l:'Cédula de Ciudadanía'},{v:'TI',l:'Tarjeta de Identidad'},{v:'RC',l:'Registro Civil'},{v:'CE',l:'Cédula de Extranjería'},{v:'PA',l:'Pasaporte'},{v:'MS',l:'Menor sin identificación'},{v:'AS',l:'Adulto sin identificación'},{v:'PE',l:'Permiso Especial de Permanencia'},{v:'PT',l:'Permiso Temporal de Protección'}],
+  tipoVivienda:[{v:'1',l:'Casa'},{v:'2',l:'Casa Indígena'},{v:'3',l:'Carpa'},{v:'4',l:'Apartamento'},{v:'5',l:'Pieza/Cuarto en Inquilinato'},{v:'6',l:'Contenedor'},{v:'7',l:'Embarcación'},{v:'8',l:'Vagón'},{v:'9',l:'Refugio Natural'},{v:'10',l:'Cueva'},{v:'11',l:'Puente'},{v:'12',l:'Otro'}],
+  materialPared:[{v:'1',l:'Bloque, ladrillo, piedra, madera pulida'},{v:'2',l:'Tapia pisada, adobe'},{v:'3',l:'Bahareque'},{v:'4',l:'Material prefabricado'},{v:'5',l:'Madera burda, tabla, tablón'},{v:'6',l:'Guadua, caña, esterilla, otro vegetal'},{v:'7',l:'Zinc, tela, lona, cartón, latas, desechos, plástico'},{v:'8',l:'Otro'},{v:'0',l:'Sin paredes'}],
+  materialPiso:[{v:'1',l:'Alfombra, mármol, parquet, madera pulida lacada'},{v:'2',l:'Baldosa, vinilo, tableta, ladrillo'},{v:'3',l:'Cemento, gravilla'},{v:'4',l:'Madera burda, madera en mal estado, tabla, tablón'},{v:'5',l:'Tierra o arena'},{v:'6',l:'Otro'}],
+  materialTecho:[{v:'1',l:'Concreto'},{v:'2',l:'Tejas de barro'},{v:'3',l:'Fibrocemento'},{v:'4',l:'Zinc'},{v:'5',l:'Palma o paja'},{v:'6',l:'Plástico'},{v:'7',l:'Desechos (cartón, lata, tela, sacos, etc.)'},{v:'8',l:'Otro'}],
+  riesgoAccidente:[{v:'1',l:'Objetos cortantes o punzantes al alcance de niños'},{v:'2',l:'Sustancias químicas al alcance de niños'},{v:'3',l:'Medicamentos al alcance de niños'},{v:'4',l:'Velas, velones, incienso encendido en la vivienda'},{v:'5',l:'Conexiones eléctricas en mal estado o sobrecargadas'},{v:'6',l:'Botones, canicas u objetos pequeños al alcance de niños'},{v:'7',l:'Pasillos obstruidos con juguetes, sillas u otros objetos'},{v:'8',l:'Superficies resbaladizas, suelos con agua, grasas, aceites'},{v:'9',l:'Tanques o recipientes de almacenamiento de agua sin tapa'},{v:'10',l:'Escaleras sin protección'},{v:'11',l:'Ninguno'}],
+  sitiosAcceso:[{v:'1',l:'Medios de transporte (buses, autos, camiones, lanchas)'},{v:'2',l:'Parques, áreas deportivas, centros sociales/recreacionales'},{v:'3',l:'Instituciones educativas'},{v:'4',l:'Servicios de salud'},{v:'5',l:'Ninguna'}],
+  fuentesEnergia:[{v:'1',l:'Electricidad'},{v:'2',l:'Gas natural'},{v:'3',l:'Gas Licuado del Petróleo (gas propano)'},{v:'4',l:'Leña, madera o carbón de leña'},{v:'5',l:'Petróleo, gasolina, kerosén, alcohol'},{v:'6',l:'Carbón mineral'},{v:'7',l:'Materiales de desecho'},{v:'8',l:'Otro'}],
+  obsVivienda:[{v:'1',l:'Cultivos'},{v:'2',l:'Apriscos'},{v:'3',l:'Porquerizas'},{v:'4',l:'Galpones'},{v:'5',l:'Terrenos baldíos'},{v:'6',l:'Presencia de plagas: roedores, cucarachas, zancudos'},{v:'7',l:'Ruido o sonidos desagradables'},{v:'8',l:'Malos olores'},{v:'9',l:'Sitios satélites de disposición de excretas'},{v:'10',l:'Rellenos sanitarios/botaderos'},{v:'11',l:'Industrias contaminantes'},{v:'12',l:'Contaminación visual'},{v:'13',l:'Río o quebrada'},{v:'14',l:'Planta de tratamiento de agua residual'},{v:'15',l:'Extracción minera'},{v:'16',l:'Canales de agua lluvia'},{v:'17',l:'Vías de tráfico vehicular'},{v:'18',l:'Quemas a cielo abierto'},{v:'19',l:'Otro'},{v:'20',l:'Ninguno'}],
+  animales:[{v:'1',l:'Perros'},{v:'2',l:'Gato'},{v:'3',l:'Porcinos'},{v:'4',l:'Bóvidos: búfalos, vacas, toros'},{v:'5',l:'Équidos: asnos, mulas, caballos, burros'},{v:'6',l:'Ovinos/caprinos'},{v:'7',l:'Aves de producción'},{v:'8',l:'Aves ornamentales'},{v:'9',l:'Peces ornamentales, hámster'},{v:'10',l:'Cobayos, conejos'},{v:'11',l:'Animales silvestres'},{v:'12',l:'Otro'},{v:'13',l:'Ninguno'}],
+  fuenteAgua:[{v:'1',l:'Acueducto administrado por empresa prestadora (ESP)'},{v:'2',l:'Agua embotellada o en bolsa'},{v:'3',l:'Acueducto veredal o comunitario'},{v:'4',l:'Pila pública'},{v:'5',l:'Carro tanque'},{v:'6',l:'Abasto con distribución comunitaria'},{v:'7',l:'Pozo con bomba'},{v:'8',l:'Pozo sin bomba, aljibe, jagüey o barreno'},{v:'9',l:'Laguna o jagüey'},{v:'10',l:'Río, quebrada, manantial o nacimiento'},{v:'11',l:'Aguas lluvias'},{v:'12',l:'Aguatero'},{v:'13',l:'Otro'}],
+  sistemaExcretas:[{v:'1',l:'Sanitario conectado al alcantarillado'},{v:'2',l:'Sanitario y letrina'},{v:'3',l:'Sanitario conectado a pozo séptico'},{v:'4',l:'Sanitario ecológico seco'},{v:'5',l:'Sanitario sin conexión'},{v:'6',l:'Sanitario con disposición a fuente hídrica'},{v:'7',l:'Campo abierto'},{v:'8',l:'Otro'}],
+  aguasResiduales:[{v:'1',l:'Alcantarillado'},{v:'2',l:'Pozo séptico'},{v:'3',l:'Campo de oxidación'},{v:'4',l:'Biofiltro'},{v:'5',l:'Fuente hídrica'},{v:'6',l:'Campo abierto'},{v:'7',l:'Otro'}],
+  disposicionResiduos:[{v:'1',l:'Recolección por servicio de aseo distrital o municipal'},{v:'2',l:'Enterramiento'},{v:'3',l:'Quema a campo abierto'},{v:'4',l:'Disposición en fuentes de agua cercana'},{v:'5',l:'Disposición a campo abierto'},{v:'6',l:'Otro'}],
+  tipoFamilia:[{v:'1',l:'Nuclear biparental'},{v:'2',l:'Nuclear monoparental'},{v:'3',l:'Extenso biparental'},{v:'4',l:'Extenso monoparental'},{v:'5',l:'Compuesto biparental'},{v:'6',l:'Compuesto monoparental'},{v:'7',l:'Unipersonal'}],
+  familiograma:[{v:'1',l:'Biológicos'},{v:'2',l:'Psicológicos'},{v:'3',l:'Sociales'}],
+  apgar:[{v:'1',l:'Normal (17-20 puntos)'},{v:'2',l:'Disfunción leve (13-16 puntos)'},{v:'3',l:'Disfunción moderada (10-12 puntos)'},{v:'4',l:'Disfunción severa (≤ 9 puntos)'}],
+  zarit:[{v:'1',l:'Ausencia de sobrecarga (≤ 46)'},{v:'2',l:'Sobrecarga ligera (47-55)'},{v:'3',l:'Sobrecarga intensa (≥ 56)'}],
+  ecomapa:[{v:'1',l:'Positivo'},{v:'2',l:'Tenue'},{v:'3',l:'Estresante'},{v:'4',l:'Fluye'},{v:'5',l:'Intenso'}],
+  enfermedadTransmisible:[{v:'1',l:'TB (Tuberculosis)'},{v:'2',l:'Lepra'},{v:'3',l:'Escabiosis, enfermedades infecciosas de la piel'},{v:'4',l:'Malaria'},{v:'5',l:'Dengue'},{v:'6',l:'Chagas'},{v:'7',l:'Hepatitis A'},{v:'8',l:'Alguna enfermedad inmunoprevenible'}],
+  formaAlimentos:[{v:'1',l:'Cultiva'},{v:'2',l:'Cría de animales'},{v:'3',l:'Cacería'},{v:'4',l:'Recolección de alimentos'},{v:'5',l:'Trueque o intercambio'},{v:'6',l:'Compra'},{v:'7',l:'Asistencia del Estado'},{v:'8',l:'Ayuda humanitaria'},{v:'9',l:'Otro'}],
+  sexo:[{v:'1',l:'Hombre'},{v:'2',l:'Mujer'},{v:'3',l:'Indeterminado'}],
+  rolFamilia:[{v:'1',l:'Jefe(a) de hogar'},{v:'2',l:'Cónyuge/Compañero(a)'},{v:'3',l:'Hijo(a)'},{v:'4',l:'Nieto(a)'},{v:'5',l:'Padre/Madre'},{v:'6',l:'Suegro(a)'},{v:'7',l:'Hermano(a)'},{v:'8',l:'Yerno/Nuera'},{v:'9',l:'Otro pariente'},{v:'10',l:'Empleado(a) doméstico(a)'},{v:'11',l:'Pensionista'},{v:'12',l:'Otro no pariente'}],
+  nivelEducativo:[{v:'1',l:'Sin escolaridad'},{v:'2',l:'Preescolar'},{v:'3',l:'Básica Primaria'},{v:'4',l:'Básica Secundaria'},{v:'5',l:'Media Vocacional'},{v:'6',l:'Técnico/Tecnólogo'},{v:'7',l:'Universitario'},{v:'8',l:'Especialización/Maestría/Doctorado'},{v:'9',l:'No aplica (< 5 años)'}],
+  regimen:[{v:'1',l:'Contributivo'},{v:'2',l:'Subsidiado'},{v:'3',l:'Excepción o Especial'},{v:'4',l:'No asegurado'},{v:'5',l:'Indeterminado'}],
+  grupoPoblacional:[{v:'1',l:'Primera Infancia (0-5 años)'},{v:'2',l:'Infancia (6-11 años)'},{v:'3',l:'Adolescencia (12-17 años)'},{v:'4',l:'Jóvenes (18-26 años)'},{v:'5',l:'Adultos (27-59 años)'},{v:'6',l:'Adultos Mayores (≥ 60 años)'},{v:'7',l:'Mujer en edad fértil'},{v:'8',l:'Gestante'},{v:'9',l:'Víctima del conflicto armado'},{v:'10',l:'Habitante de calle'},{v:'11',l:'Persona privada de libertad'},{v:'12',l:'Migrante/retornado'},{v:'13',l:'Ninguno'}],
+  etnia:[{v:'01',l:'Indígena'},{v:'02',l:'ROM'},{v:'03',l:'Raizal'},{v:'04',l:'Palenquero'},{v:'05',l:'Afrocolombiano'},{v:'06',l:'Otro'},{v:'07',l:'Ninguno'}],
+  agenteMedTradicional:[{v:'1',l:'Médico tradicional'},{v:'2',l:'Partera'},{v:'3',l:'Tegua o empírico'},{v:'4',l:'Curandero'},{v:'5',l:'Sobandero'},{v:'6',l:'Yerbatero'},{v:'7',l:'Otro'}],
+  discapacidad:[{v:'1',l:'Visual'},{v:'2',l:'Auditiva'},{v:'3',l:'Voz y habla'},{v:'4',l:'Física'},{v:'5',l:'Mental o psicosocial'},{v:'6',l:'Intelectual o cognitiva'},{v:'7',l:'Múltiple'},{v:'8',l:'Ninguna'}],
+  pesoTalla:[{v:'1',l:'Delgadez severa'},{v:'2',l:'Delgadez'},{v:'3',l:'Normal'},{v:'4',l:'Posible riesgo de sobrepeso'},{v:'5',l:'Sobrepeso'},{v:'6',l:'Obesidad'},{v:'7',l:'No aplica (gestante o > 5 años)'}],
+  intervencionPendiente:[{v:'1',l:'Control de crecimiento y desarrollo'},{v:'2',l:'Vacunación'},{v:'3',l:'Salud Oral'},{v:'4',l:'Atención prenatal'},{v:'5',l:'Planificación familiar'},{v:'6',l:'Citología'},{v:'7',l:'Control adulto mayor'},{v:'8',l:'Ninguna'}],
+  motivoNoAtencionProm:[{v:'1',l:'No hay servicio disponible en el territorio'},{v:'2',l:'Falta de dinero para desplazarse'},{v:'3',l:'No le dan cita'},{v:'4',l:'No ha sentido la necesidad'},{v:'5',l:'Usa medicina tradicional o alternativa'},{v:'6',l:'Dificultad de desplazamiento (distancia/terreno)'},{v:'7',l:'Orden público/seguridad'},{v:'8',l:'Otro'}],
+  signosDesnutricion:[{v:'1',l:'Cabello quebradizo o decolorado'},{v:'2',l:'Cara de luna llena'},{v:'3',l:'Palidez generalizada'},{v:'4',l:'Edema bilateral en piernas'},{v:'5',l:'Delgadez extrema'},{v:'6',l:'Distensión abdominal'},{v:'7',l:'Úlceras en la comisura de los labios'},{v:'8',l:'Ninguno'}],
+  motivoNoAtencionAguda:[{v:'1',l:'No hay servicio disponible en el territorio'},{v:'2',l:'Falta de dinero para desplazarse'},{v:'3',l:'No le dan cita'},{v:'4',l:'No ha considerado necesario'},{v:'5',l:'Usa medicina tradicional o alternativa'},{v:'6',l:'Dificultad de desplazamiento'},{v:'7',l:'Orden público/seguridad'},{v:'8',l:'Otro'}]
+};
+
+// Campos con soporte de opciones personalizadas
+const CAMPOS_CUSTOM = {
+  tipoVivienda:'Tipo de vivienda',materialPared:'Material paredes',materialPiso:'Material piso',
+  materialTecho:'Material techo',riesgoAccidente:'Riesgo de accidente',sitiosAcceso:'Sitios de acceso',
+  fuentesEnergia:'Fuentes de energía',obsVivienda:'Obs. vivienda',animales:'Animales',
+  fuenteAgua:'Fuente de agua',sistemaExcretas:'Sistema de excretas',aguasResiduales:'Aguas residuales',
+  disposicionResiduos:'Disposición residuos',tipoFamilia:'Tipo de familia',
+  enfermedadTransmisible:'Enfermedades transmisibles',formaAlimentos:'Forma de obtención de alimentos',
+  grupoPoblacional:'Grupo poblacional',intervencionPendiente:'Intervenciones pendientes',
+  motivoNoAtencionProm:'Motivos no atención prom.',signosDesnutricion:'Signos de desnutrición',
+  motivoNoAtencionAguda:'Motivos no atención aguda',discapacidad:'Discapacidad'
+};
+
+// ── MUNICIPIOS NORTE DE SANTANDER (DANE) ─────────────────────
+const MUNIS_NS = {
+  '54001':'Cúcuta','54003':'Ábrego','54051':'Arboledas',
+  '54099':'Bucarasica','54109':'Cácota','54125':'Cachirá',
+  '54128':'Convención','54172':'Chinácota','54174':'Chitagá',
+  '54206':'Cucutilla','54223':'Durania','54245':'El Carmen',
+  '54250':'El Tarra','54261':'El Zulia','54313':'Gramalote',
+  '54344':'Hacarí','54347':'Herrán','54377':'Labateca',
+  '54385':'La Playa de Belén','54398':'Los Patios','54405':'Lourdes',
+  '54418':'Mutiscua','54480':'Ocaña','54498':'Pamplona',
+  '54518':'Pamplonita','54520':'Puerto Santander','54553':'San Calixto',
+  '54599':'Sardinata','54660':'Teorama','54670':'Tibú',
+  '54673':'Toledo','54720':'Villa Caro','54743':'Villa del Rosario'
+};
+
+REF.tipoPrestador = [
+  {v:'1',l:'IPS Pública (ESE / Hospital)'},
+  {v:'2',l:'IPS Privada'},
+  {v:'3',l:'IPS Mixta'},
+  {v:'4',l:'Gobernación'},
+  {v:'5',l:'Alcaldía'},
+  {v:'6',l:'Entidad Territorial (Sec. Salud)'}
+];
+
+REF.perfilAcademico = [
+  {v:'Médico general',l:'Médico general'},
+  {v:'Médico familiar y comunitario',l:'Médico familiar y comunitario'},
+  {v:'Enfermero(a)',l:'Enfermero(a)'},
+  {v:'Auxiliar de enfermería',l:'Auxiliar de enfermería'},
+  {v:'Odontólogo(a)',l:'Odontólogo(a)'},
+  {v:'Auxiliar de odontología',l:'Auxiliar de odontología'},
+  {v:'Psicólogo(a)',l:'Psicólogo(a)'},
+  {v:'Nutricionista dietista',l:'Nutricionista dietista'},
+  {v:'Trabajador(a) social',l:'Trabajador(a) social'},
+  {v:'Promotor(a) de salud',l:'Promotor(a) de salud'},
+  {v:'Gestor(a) comunitario',l:'Gestor(a) comunitario'},
+  {v:'Regente de farmacia',l:'Regente de farmacia'},
+  {v:'Otro profesional de salud',l:'Otro profesional de salud'}
+];
+
+// ── Catálogo completo de campos configurables ─────────────────
+// type: 'text'|'num'|'dec'|'sel'|'sino'|'multi'|'dat'|'ro'
+// refKey: clave en REF (para sel/multi con CAMPOS_CUSTOM)
+const ALL_FIELDS_T2 = [
+  {step:1, label:'Paso 1 — Consentimiento y Ubicación', fields:[
+    {id:'2',  label:'Consentimiento informado',            type:'sino'},
+    {id:'4',  label:'Código Subregión/UZPE',              type:'sel'},
+    {id:'5',  label:'Código Municipio (DANE)',            type:'sel'},
+    {id:'6',  label:'Código Territorio',                  type:'sel'},
+    {id:'7',  label:'Código Microterritorio',             type:'sel'},
+    {id:'8',  label:'Nombre corregimiento/vereda/barrio', type:'text'},
+    {id:'9',  label:'Dirección',                          type:'text'},
+    {id:'10', label:'Latitud',                            type:'dec'},
+    {id:'11', label:'Longitud',                           type:'dec'},
+    {id:'12', label:'Descripción de ubicación',           type:'text'},
+  ]},
+  {step:2, label:'Paso 2 — EBS, Encuestador y Fechas', fields:[
+    {id:'17', label:'N° de integrantes del EBS',          type:'num'},
+    {id:'20', label:'NIT prestador',                      type:'text'},
+    {id:'21', label:'Tipo de identificación responsable', type:'sel'},
+    {id:'22', label:'N° identificación responsable',      type:'text'},
+    {id:'23', label:'Perfil académico',                   type:'sel'},
+    {id:'25', label:'Fecha de diligenciamiento',          type:'dat'},
+  ]},
+  {step:3, label:'Paso 3 — Vivienda', fields:[
+    {id:'26', label:'Tipo de vivienda',                   type:'sel',   refKey:'tipoVivienda'},
+    {id:'27', label:'Descripción tipo vivienda (Otro)',   type:'text'},
+    {id:'28', label:'Material predominante paredes',      type:'sel',   refKey:'materialPared'},
+    {id:'29', label:'Descripción material paredes (Otro)',type:'text'},
+    {id:'30', label:'Material predominante piso',         type:'sel',   refKey:'materialPiso'},
+    {id:'31', label:'Descripción material piso (Otro)',   type:'text'},
+    {id:'32', label:'Material predominante techo',        type:'sel',   refKey:'materialTecho'},
+    {id:'33', label:'Descripción material techo (Otro)',  type:'text'},
+    {id:'34', label:'Número de dormitorios',              type:'num'},
+    {id:'35', label:'Hacinamiento',                       type:'sino'},
+  ]},
+  {step:4, label:'Paso 4 — Entorno y Servicios', fields:[
+    {id:'36', label:'Riesgo de accidente',                type:'multi', refKey:'riesgoAccidente'},
+    {id:'37', label:'Sitios de interés cercanos',         type:'multi', refKey:'sitiosAcceso'},
+    {id:'38', label:'Fuentes de energía para cocinar',    type:'multi', refKey:'fuentesEnergia'},
+    {id:'39', label:'¿Criaderos o reservorios de vectores?', type:'sino'},
+    {id:'40', label:'Obs. lugares cerca de la vivienda',  type:'multi', refKey:'obsVivienda'},
+    {id:'41', label:'Descripción otro lugar/observación', type:'text'},
+    {id:'42', label:'¿Actividad productiva en vivienda?', type:'sino'},
+    {id:'43', label:'Animales en la vivienda',            type:'multi', refKey:'animales'},
+    {id:'44', label:'Tipo y cantidad de animales (Otro)', type:'text'},
+    {id:'45', label:'N° total de animales',               type:'num'},
+    {id:'46', label:'Fuente de agua para consumo',        type:'multi', refKey:'fuenteAgua'},
+    {id:'47', label:'Descripción otra fuente de agua',    type:'text'},
+    {id:'48', label:'Sistema de disposición de excretas', type:'multi', refKey:'sistemaExcretas'},
+    {id:'49', label:'Descripción otro sistema excretas',  type:'text'},
+    {id:'50', label:'Disposición aguas residuales',       type:'multi', refKey:'aguasResiduales'},
+    {id:'51', label:'Descripción otro sistema aguas res.',type:'text'},
+    {id:'52', label:'Disposición residuos sólidos',       type:'multi', refKey:'disposicionResiduos'},
+    {id:'53', label:'Descripción otra disposición res.',  type:'text'},
+  ]},
+  {step:5, label:'Paso 5 — Familia y Condiciones', fields:[
+    {id:'54', label:'Tipo de familia',                    type:'sel',   refKey:'tipoFamilia'},
+    {id:'55', label:'N° de integrantes de la familia',    type:'num'},
+    {id:'56', label:'Hallazgos del familiograma',         type:'sel',   refKey:'familiograma'},
+    {id:'57', label:'APGAR familiar',                     type:'sel',   refKey:'apgar'},
+    {id:'58', label:'¿Hay cuidador de adulto mayor?',     type:'sino'},
+    {id:'59', label:'Escala ZARIT',                       type:'sel',   refKey:'zarit'},
+    {id:'60', label:'ECOMAPA',                            type:'sel',   refKey:'ecomapa'},
+    {id:'61', label:'¿Niños menores de 5 años?',          type:'sino'},
+    {id:'62', label:'¿Mujeres gestantes?',                type:'sino'},
+    {id:'63', label:'¿Adultos mayores (≥60)?',            type:'sino'},
+    {id:'64', label:'¿Víctimas del conflicto armado?',    type:'sino'},
+    {id:'65', label:'¿Personas con discapacidad?',        type:'sino'},
+    {id:'66', label:'¿Personas con enfermedad crónica?',  type:'sino'},
+    {id:'67', label:'Enfermedades transmisibles',         type:'multi', refKey:'enfermedadTransmisible'},
+    {id:'68', label:'¿Sucesos vitales o crisis?',         type:'sino'},
+    {id:'69', label:'¿Situaciones vulnerabilidad social?',type:'sino'},
+    {id:'70', label:'¿Prácticas de cuidado críticas?',    type:'sino'},
+    {id:'71', label:'¿Antecedentes crónicos?',            type:'sino'},
+    {id:'72', label:'Descripción antecedentes crónicos',  type:'text'},
+    {id:'73', label:'Forma de obtención de alimentos',    type:'multi', refKey:'formaAlimentos'},
+    {id:'74', label:'Descripción otra obtención alimentos',type:'text'},
+    {id:'75', label:'¿Hábitos saludables de alimentación?',type:'sino'},
+    {id:'76', label:'¿Recursos potenciadores de salud?',  type:'sino'},
+    {id:'77', label:'¿Prácticas entornos saludables?',    type:'sino'},
+    {id:'78', label:'¿Prácticas relaciones saludables?',  type:'sino'},
+    {id:'79', label:'¿Recursos/redes colectivas salud?',  type:'sino'},
+    {id:'80', label:'¿Prácticas autonomía adultos mayores?',type:'sino'},
+    {id:'81', label:'¿Prácticas prevención enfermedades?',type:'sino'},
+    {id:'82', label:'¿Prácticas cuidado ancestrales?',    type:'sino'},
+    {id:'83', label:'¿Capacidad exigibilidad derecho salud?',type:'sino'},
+  ]},
+];
+
+const ALL_FIELDS_T3 = [
+  {step:1, label:'Datos del integrante de la familia', fields:[
+    {id:'3',  label:'Primer nombre',                      type:'text'},
+    {id:'4',  label:'Segundo nombre',                     type:'text'},
+    {id:'5',  label:'Primer apellido',                    type:'text'},
+    {id:'6',  label:'Segundo apellido',                   type:'text'},
+    {id:'7',  label:'Tipo de identificación',             type:'sel',   refKey:'tipoIdPersona'},
+    {id:'8',  label:'Número de identificación',           type:'text'},
+    {id:'9',  label:'Fecha de nacimiento',                type:'dat'},
+    {id:'10', label:'Sexo biológico',                     type:'sel',   refKey:'sexo'},
+    {id:'11', label:'¿Está en gestación?',                type:'sino'},
+    {id:'12', label:'Rol dentro de la familia',           type:'sel',   refKey:'rolFamilia'},
+    {id:'13', label:'Código de ocupación (CIUO)',         type:'text'},
+    {id:'14', label:'Nivel educativo',                    type:'sel',   refKey:'nivelEducativo'},
+    {id:'15', label:'Régimen de afiliación',              type:'sel',   refKey:'regimen'},
+    {id:'16', label:'Código EAPB',                        type:'text'},
+    {id:'17', label:'Grupo poblacional especial',         type:'sel',   refKey:'grupoPoblacional'},
+    {id:'18', label:'Pertenencia étnica',                 type:'sel',   refKey:'etnia'},
+    {id:'19', label:'Acomp. medicina tradicional',        type:'sino'},
+    {id:'20', label:'Código comunidad/pueblo indígena',   type:'text'},
+    {id:'21', label:'Condición de discapacidad',          type:'sel',   refKey:'discapacidad'},
+    {id:'22', label:'Peso (kg)',                          type:'dec'},
+    {id:'23', label:'Talla (cm)',                         type:'dec'},
+    {id:'24', label:'Diagnóstico nutricional P/T',        type:'sel',   refKey:'pesoTalla'},
+    {id:'25', label:'Perímetro braquial (cm)',            type:'dec'},
+    {id:'26', label:'¿Condiciones de salud crónica?',     type:'sino'},
+    {id:'27', label:'¿Esquema de atenciones promoción?',  type:'sino'},
+    {id:'28', label:'Intervenciones pendientes',          type:'sel',   refKey:'intervencionPendiente'},
+    {id:'29', label:'Motivos no atención de promoción',   type:'sel',   refKey:'motivoNoAtencionProm'},
+    {id:'30', label:'¿Practica deporte o ejercicio?',     type:'sino'},
+    {id:'31', label:'¿Lactancia materna exclusiva 6m?',   type:'sino'},
+    {id:'32', label:'Meses de lactancia materna',         type:'num'},
+    {id:'33', label:'Signos desnutrición aguda',          type:'sel',   refKey:'signosDesnutricion'},
+    {id:'34', label:'¿Enfermedad aguda último mes?',      type:'sino'},
+    {id:'35', label:'Descripción enfermedad aguda',       type:'text'},
+    {id:'36', label:'¿Recibe atención por enfermedad?',   type:'sino'},
+    {id:'37', label:'Motivos no atención (descripción)',  type:'text'},
+  ]},
+];
+
+// Persiste field_config en IDB y Supabase config table
+async function saveFieldConfig() {
+  const val = STATE.fieldConfig;
+  await idb.put('config', {key:'field_cfg', value: val});
+  if (STATE.isOnline && STATE.auth) {
+    try {
+      await sbFetch('/rest/v1/config', {
+        method:'POST',
+        headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
+        body: JSON.stringify({key:'field_cfg', value: val})
+      });
+    } catch(e){ await addPending('upsert','config',{key:'field_cfg',value:val}); }
+  } else {
+    await addPending('upsert','config',{key:'field_cfg',value:val});
+  }
+}
+
+// ============================================================
+// SUPABASE REST CLIENT
+// ============================================================
+async function sbFetch(path, opts={}) {
+  const tok = STATE.auth?.access_token;
+  const headers = {
+    'apikey': SB_ANON,
+    'Authorization': `Bearer ${tok||SB_ANON}`,
+    'Content-Type': 'application/json',
+    ...(opts.headers||{})
+  };
+  let res = await fetch(SB_URL+path, {...opts, headers});
+  if (res.status===401 && tok) {
+    const ok = await doRefresh();
+    if (ok) {
+      headers['Authorization'] = `Bearer ${STATE.auth.access_token}`;
+      res = await fetch(SB_URL+path, {...opts, headers});
+    }
+  }
+  if (res.status===204||res.status===201&&opts.noBody) return null;
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return text ? JSON.parse(text) : null;
+}
+
+async function sbFn(name, body, tok) {
+  const res = await fetch(`${SB_FUNC}/${name}`, {
+    method:'POST',
+    headers:{
+      'apikey':SB_ANON,
+      'Authorization':`Bearer ${tok||STATE.auth?.access_token||SB_ANON}`,
+      'Content-Type':'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return text ? JSON.parse(text) : null;
+}
+
+// ── AUTH ──────────────────────────────────────────────────────
+async function doLogin(email, password) {
+  const data = await sbFetch('/auth/v1/token?grant_type=password', {
+    method:'POST', body: JSON.stringify({email,password})
+  });
+  STATE.auth = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    user: data.user
+  };
+  await loadProfile();
+  await idb.put('auth', {id:'session', ...STATE.auth, profile: STATE.profile});
+  return STATE.profile;
+}
+
+async function doSignup(email, password, nombre) {
+  // Use Edge Function bootstrap mode — creates user auto-confirmed without requiring caller auth.
+  // Only succeeds when 0 profiles exist (enforced server-side).
+  const r = await fetch(SB_FUNC + '/create-user', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_ANON},
+    body: JSON.stringify({email, password, nombre, bootstrap: true})
+  });
+  const result = await r.json();
+  if (!r.ok) throw new Error(result.error || 'Error al crear cuenta');
+  // Now sign in normally — user is auto-confirmed
+  await doLogin(email, password);
+  return STATE.profile;
+}
+
+async function doRefresh() {
+  try {
+    const rt = STATE.auth?.refresh_token;
+    if (!rt) return false;
+    const data = await sbFetch('/auth/v1/token?grant_type=refresh_token', {
+      method:'POST', body: JSON.stringify({refresh_token:rt})
+    });
+    STATE.auth.access_token  = data.access_token;
+    STATE.auth.refresh_token = data.refresh_token;
+    const sess = await idb.get('auth','session');
+    if (sess) await idb.put('auth',{...sess, access_token:data.access_token, refresh_token:data.refresh_token});
+    return true;
+  } catch(e){ return false; }
+}
+
+async function doLogout() {
+  try { await sbFetch('/auth/v1/logout',{method:'POST'}); } catch(e){}
+  STATE.auth = null; STATE.profile = null; STATE.familias = [];
+  await idb.clear('auth');
+  render();
+}
+
+async function loadProfile() {
+  // get_profiles() returns own profile (or all for admin) — use it for current user load
+  const rows = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
+  // Filter to own profile
+  const own = (rows||[]).find(r=>r.id===STATE.auth.user.id);
+  STATE.profile = own || rows?.[0] || null;
+  document.getElementById('btn-admin').style.display =
+    STATE.profile?.rol==='admin' ? '' : 'none';
+}
+
+// ============================================================
+// INDEXEDDB (offline store)
+// ============================================================
+const DB_NAME='siaps_v2', DB_VER=1;
+let _db = null;
+
+async function openDB() {
+  if (_db) return _db;
+  return new Promise((res,rej)=>{
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e=>{
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('auth'))
+        db.createObjectStore('auth',{keyPath:'id'});
+      if (!db.objectStoreNames.contains('familias')) {
+        const fs = db.createObjectStore('familias',{keyPath:'id'});
+        fs.createIndex('ebs_code','ebs_code',{unique:false});
+      }
+      if (!db.objectStoreNames.contains('personas')) {
+        const ps = db.createObjectStore('personas',{keyPath:'id'});
+        ps.createIndex('familia_id','familia_id',{unique:false});
+      }
+      if (!db.objectStoreNames.contains('opciones_custom'))
+        db.createObjectStore('opciones_custom',{keyPath:'id'});
+      if (!db.objectStoreNames.contains('config'))
+        db.createObjectStore('config',{keyPath:'key'});
+      if (!db.objectStoreNames.contains('sync_pending'))
+        db.createObjectStore('sync_pending',{keyPath:'id',autoIncrement:true});
+      if (!db.objectStoreNames.contains('profiles'))
+        db.createObjectStore('profiles',{keyPath:'id'});
+    };
+    req.onsuccess = e=>{ _db=e.target.result; res(_db); };
+    req.onerror  = e=>rej(e.target.error);
+  });
+}
+
+const idb = {
+  async get(store, key) {
+    const db = await openDB();
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(store,'readonly');
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = ()=>res(req.result);
+      req.onerror   = ()=>rej(req.error);
+    });
+  },
+  async getAll(store) {
+    const db = await openDB();
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(store,'readonly');
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = ()=>res(req.result||[]);
+      req.onerror   = ()=>rej(req.error);
+    });
+  },
+  async getAllByIndex(store, index, val) {
+    const db = await openDB();
+    return new Promise((res,rej)=>{
+      const tx  = db.transaction(store,'readonly');
+      const idx = tx.objectStore(store).index(index);
+      const req = idx.getAll(val);
+      req.onsuccess = ()=>res(req.result||[]);
+      req.onerror   = ()=>rej(req.error);
+    });
+  },
+  async put(store, obj) {
+    const db = await openDB();
+    return new Promise((res,rej)=>{
+      const tx  = db.transaction(store,'readwrite');
+      const req = tx.objectStore(store).put(obj);
+      req.onsuccess = ()=>res(req.result);
+      req.onerror   = ()=>rej(req.error);
+    });
+  },
+  async delete(store, key) {
+    const db = await openDB();
+    return new Promise((res,rej)=>{
+      const tx  = db.transaction(store,'readwrite');
+      const req = tx.objectStore(store).delete(key);
+      req.onsuccess = ()=>res();
+      req.onerror   = ()=>rej(req.error);
+    });
+  },
+  async clear(store) {
+    const db = await openDB();
+    return new Promise((res,rej)=>{
+      const tx  = db.transaction(store,'readwrite');
+      const req = tx.objectStore(store).clear();
+      req.onsuccess = ()=>res();
+      req.onerror   = ()=>rej(req.error);
+    });
+  }
+};
+
+// ============================================================
+// SYNC MANAGER
+// ============================================================
+let _syncing = false;
+
+async function addPending(op, table, data) {
+  await idb.put('sync_pending', {op, table, data, ts: Date.now()});
+  updateSyncUI();
+}
+
+async function syncToCloud() {
+  if (_syncing || !STATE.isOnline || !STATE.auth) return;
+  _syncing = true; setSyncDot('syncing');
+  try {
+    const pending = await idb.getAll('sync_pending');
+    for (const item of pending) {
+      try {
+        await execSyncOp(item);
+        await idb.delete('sync_pending', item.id);
+      } catch(e){ console.warn('sync item failed:', e.message); }
+    }
+    await pullFromCloud();
+    setSyncDot('online');
+  } catch(e){ setSyncDot('online'); }
+  _syncing = false;
+  updateSyncUI();
+}
+
+async function execSyncOp(item) {
+  const {op, table, data} = item;
+  if (op==='upsert') {
+    await sbFetch(`/rest/v1/${table}`, {
+      method:'POST',
+      headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(data)
+    });
+  } else if (op==='delete') {
+    await sbFetch(`/rest/v1/${table}?id=eq.${data.id}`, {method:'DELETE'});
+  } else if (op==='soft-delete') {
+    await sbFetch(`/rest/v1/${table}?id=eq.${data.id}`, {
+      method:'PATCH', headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({deleted_at: new Date().toISOString()})
+    });
+  }
+}
+
+async function pullFromCloud() {
+  if (!STATE.auth) return;
+  // Refresh current user's profile first
+  try {
+    const allProfs = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
+    const freshProf = (allProfs||[]).filter(r=>r.id===STATE.auth.user.id);
+    if (freshProf?.[0]) {
+      STATE.profile = freshProf[0];
+      // Update IDB session with fresh profile
+      const sess = await idb.get('auth','session');
+      if (sess) await idb.put('auth', {...sess, profile: STATE.profile});
+      document.getElementById('btn-admin').style.display =
+        STATE.profile?.rol==='admin' ? '' : 'none';
+    }
+  } catch(e){}
+  // Familias
+  const fams = await sbFetch('/rest/v1/familias?deleted_at=is.null&select=*');
+  for (const f of (fams||[])) await idb.put('familias', f);
+  // Personas
+  const pers = await sbFetch('/rest/v1/personas?deleted_at=is.null&select=*');
+  for (const p of (pers||[])) await idb.put('personas', p);
+  // Opciones custom
+  const opts = await sbFetch('/rest/v1/opciones_custom?activo=eq.true&select=*');
+  await idb.clear('opciones_custom');
+  for (const o of (opts||[])) await idb.put('opciones_custom', o);
+  // Config (reportConfig + field_cfg + any other keys)
+  const cfgs = await sbFetch('/rest/v1/config?select=*');
+  for (const c of (cfgs||[])) {
+    await idb.put('config', c);
+    // Apply field_cfg immediately so form renders use fresh config
+    if (c.key==='field_cfg' && c.value) {
+      STATE.fieldConfig = {t2:{}, t3:{}, ...c.value};
+    }
+  }
+  // Profiles (admin only) — via RPC to bypass RLS+select bug
+  if (STATE.profile?.rol==='admin') {
+    const profs = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
+    STATE.adminUsers = profs||[];
+    for (const p of (profs||[])) await idb.put('profiles', p);
+  }
+  await rebuildAppState();
+  // Re-render to reflect fresh data (profile name, config, etc.)
+  render();
+  updateSyncUI();
+}
+
+async function rebuildAppState() {
+  // Load familias from IDB
+  let fams;
+  if (STATE.profile?.rol==='admin') {
+    fams = await idb.getAll('familias');
+  } else {
+    const codes = STATE.profile?.ebs_codes||[];
+    fams = [];
+    for (const code of codes) {
+      const fs = await idb.getAllByIndex('familias','ebs_code',code);
+      fams.push(...fs);
+    }
+  }
+  fams = fams.filter(f=>!f.deleted_at);
+  // Attach personas
+  for (const f of fams) {
+    const ps = await idb.getAllByIndex('personas','familia_id',f.id);
+    f.personas = ps.filter(p=>!p.deleted_at).map(p=>({id:p.id, d3:p.d3}));
+  }
+  STATE.familias = fams;
+  // Load custom options into REF
+  const opts = await idb.getAll('opciones_custom');
+  for (const o of opts) {
+    if (REF[o.campo_id]) {
+      if (!REF[o.campo_id].find(x=>x.v===o.codigo)) {
+        REF[o.campo_id].push({v:o.codigo, l:o.label, custom:true, dbId:o.id});
+      }
+    }
+  }
+  // Load report config
+  const cfg = await idb.get('config','reportConfig');
+  if (cfg?.value) STATE.config = cfg.value;
+  // Load field configuration (dropdown options + defaults for any field)
+  const fcfg = await idb.get('config','field_cfg');
+  if (fcfg?.value) {
+    STATE.fieldConfig = {t2:{}, t3:{}, ...fcfg.value};
+  } else {
+    STATE.fieldConfig = {t2:{}, t3:{}};
+  }
+}
+
+function setSyncDot(state) {
+  const dot = document.getElementById('sync-dot');
+  if (!dot) return;
+  dot.className = 'sync-dot' + (state==='offline'?' offline':state==='syncing'?' syncing':'');
+  dot.title = state==='offline'?'Sin conexión':state==='syncing'?'Sincronizando...':'Sincronizado';
+}
+
+async function updateSyncUI() {
+  const pending = await idb.getAll('sync_pending');
+  const badge = document.getElementById('pending-badge');
+  if (badge) {
+    badge.style.display = pending.length>0 ? '' : 'none';
+    badge.textContent = `${pending.length} pendiente${pending.length!==1?'s':''}`;
+  }
+}
+
+async function writeRecord(table, data) {
+  await idb.put(table, data);
+  if (STATE.isOnline && STATE.auth) {
+    try {
+      await sbFetch(`/rest/v1/${table}`, {
+        method:'POST',
+        headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
+        body: JSON.stringify(data)
+      });
+    } catch(e){ await addPending('upsert', table, data); }
+  } else {
+    await addPending('upsert', table, data);
+  }
+}
+
+async function softDeleteRecord(table, id) {
+  const rec = await idb.get(table, id);
+  if (rec) { rec.deleted_at = new Date().toISOString(); await idb.put(table, rec); }
+  if (STATE.isOnline && STATE.auth) {
+    try {
+      await sbFetch(`/rest/v1/${table}?id=eq.${id}`, {
+        method:'PATCH', headers:{'Prefer':'return=minimal'},
+        body: JSON.stringify({deleted_at: new Date().toISOString()})
+      });
+    } catch(e){ await addPending('soft-delete', table, {id}); }
+  } else { await addPending('soft-delete', table, {id}); }
+}
+
+// ── Connectivity ──────────────────────────────────────────────
+function initConnectivity() {
+  const banner = document.getElementById('conn-banner');
+  function update() {
+    STATE.isOnline = navigator.onLine;
+    setSyncDot(STATE.isOnline ? 'online' : 'offline');
+    if (banner) {
+      banner.className = STATE.isOnline ? 'conn-banner' : 'conn-banner offline';
+      banner.textContent = STATE.isOnline ? '' : '⚠ Sin conexión — los datos se guardan localmente y se sincronizarán al recuperar señal';
+    }
+    if (STATE.isOnline) syncToCloud();
+  }
+  window.addEventListener('online',  update);
+  window.addEventListener('offline', update);
+  update();
+}
+
+// ============================================================
+// APP STATE
+// ============================================================
+const STATE = {
+  auth: null, profile: null,
+  screen: 'login',
+  isOnline: navigator.onLine,
+  config: {tipoEntidad:'NI', nit:'', fechaInicio:'', fechaFin:''},
+  familias: [],
+  editFamId: null, editPerId: null,
+  t2step: 1, draft2: {}, draft3: {},
+  adminTab: 'users',
+  adminUsers: [],
+  modal: null,
+  // Campo configuration: options override + default values for any field
+  fieldConfig: {t2:{}, t3:{}}
+  // shape: {t2: {campo_id: {options:[{v,l}], defaultVal:''} }, t3: {...}}
+};
+
+function isAdmin() { return STATE.profile?.rol==='admin'; }
+function myEBS()   { return STATE.profile?.ebs_codes||[]; }
+// All valid EBS codes visible to current user (admin sees all, field sees own)
+function allKnownEBS() {
+  const base = isAdmin()
+    ? [...new Set(STATE.adminUsers.flatMap(u=>u.ebs_codes||[]))]
+    : myEBS();
+  return base.filter(c=>c.length>=27);
+}
+// Build sel() options from a slice of each EBS code, with optional label function
+function ebsOptsFor(start, end, labelFn) {
+  const vals = [...new Set(allKnownEBS().map(c=>c.slice(start,end)).filter(Boolean))].sort();
+  return vals.map(v=>({v, l: labelFn ? labelFn(v) : v}));
+}
+function uid()     { return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function esc(s)    { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function today()   { return new Date().toISOString().slice(0,10); }
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+const SCREEN_META = {
+  login:      {t:'SI-APS CCFP', s:'Sistema de Información APS', back:false, noHdr:true},
+  home:       {t:'SI-APS CCFP', s:'Caracterización Familia y Persona', back:false},
+  config:     {t:'Configuración', s:'Datos del reporte PISIS', back:true},
+  admin:      {t:'Administración', s:'Usuarios y opciones', back:true},
+  familia_t2: {t:'', s:'Registro Tipo 2 — Hogar', back:true},
+  familia_t3: {t:'Integrantes', s:'Registro Tipo 3 — Personas', back:true},
+  persona:    {t:'', s:'Registro Tipo 3', back:true},
+  export:     {t:'Exportar Archivo', s:'Archivo plano PISIS', back:true}
+};
+
+function navigate(screen, extra={}) {
+  Object.assign(STATE, extra);
+  STATE.screen = screen;
+  render();
+  window.scrollTo(0,0);
+  document.getElementById('main').scrollTop=0;
+  // Refresh admin users list whenever entering admin panel
+  if (screen === 'admin') loadAdminUsers(true);
+}
+
+function goBack() {
+  const backs = {
+    config:'home', admin:'home', export:'home',
+    familia_t2:'home', familia_t3:'home',
+    persona:'familia_t3'
+  };
+  navigate(backs[STATE.screen]||'home');
+}
+
+// ============================================================
+// RENDER ENGINE
+// ============================================================
+function render() {
+  const m   = document.getElementById('main');
+  const hdr = document.getElementById('hdr');
+  const meta = SCREEN_META[STATE.screen]||SCREEN_META.home;
+
+  if (STATE.screen==='login') {
+    hdr.style.display='none';
+    m.innerHTML = renderLogin();
+    return;
+  }
+
+  hdr.style.display='';
+  const bt   = document.getElementById('hdr-title');
+  const back = document.getElementById('btn-back');
+  let title  = meta.t;
+  if (STATE.screen==='familia_t2') title = STATE.editFamId ? 'Editar Familia' : 'Nueva Familia';
+  if (STATE.screen==='persona')    title = STATE.editPerId ? 'Editar Persona' : 'Agregar Persona';
+  bt.innerHTML   = `${esc(title)}<div class="hdr-sub">${meta.s}</div>`;
+  back.style.display = meta.back ? '' : 'none';
+
+  const renders = {
+    home: renderHome, config: renderConfig,
+    admin: renderAdmin,
+    familia_t2: renderT2, familia_t3: renderT3List,
+    persona: renderPersona, export: renderExport
+  };
+  m.innerHTML = (renders[STATE.screen]||renderHome)();
+}
+
+// ============================================================
+// SCREEN: LOGIN
+// ============================================================
+let _loginMode = 'login'; // 'login' | 'signup'
+
+function renderLogin() {
+  const isSignup = _loginMode === 'signup';
+  return `<div class="login-wrap">
+    <div class="login-logo">🏥</div>
+    <div class="login-title">SI-APS CCFP</div>
+    <div class="login-sub">Caracterización Familia y Persona<br>ESE Hospital Regional Noroccidental</div>
+    <div class="login-card">
+      ${isSignup ? `<div style="background:#1a2a3d;border:1px solid var(--blue);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#93c5fd">
+        📋 Crear la cuenta de <strong>administrador</strong>. Solo el primer registro se convierte en admin; los demás usuarios los crea el admin desde el panel.
+      </div>` : ''}
+      ${isSignup ? `<div class="field">
+        <div class="field-label">Nombre completo <span class="req">*</span></div>
+        <input class="field-input" id="li-nombre" type="text" autocomplete="name" placeholder="Ej: Danilo Torrado">
+      </div>` : ''}
+      <div class="field">
+        <div class="field-label">Correo electrónico</div>
+        <input class="field-input" id="li-email" type="email" inputmode="email"
+          autocomplete="email" placeholder="usuario@ejemplo.com">
+      </div>
+      <div class="field">
+        <div class="field-label">Contraseña</div>
+        <input class="field-input" id="li-pass" type="password"
+          autocomplete="${isSignup?'new-password':'current-password'}" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter')loginSubmit()">
+      </div>
+      ${isSignup ? `<div class="field">
+        <div class="field-label">Confirmar contraseña <span class="req">*</span></div>
+        <input class="field-input" id="li-pass2" type="password" autocomplete="new-password" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter')loginSubmit()">
+      </div>` : ''}
+      <div id="li-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none"></div>
+      <button class="btn btn-primary btn-block" onclick="loginSubmit()" id="li-btn">
+        ${isSignup ? 'Crear cuenta →' : 'Ingresar →'}
+      </button>
+      <div style="text-align:center;margin-top:14px">
+        ${isSignup
+          ? `<button class="btn btn-secondary btn-sm" onclick="_loginMode='login';render()">← Volver a iniciar sesión</button>`
+          : `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Si no tienes acceso, contacta al administrador del sistema.</div>
+             <button class="btn btn-secondary btn-sm" onclick="_loginMode='signup';render()">Primera vez — Crear cuenta de administrador</button>`
+        }
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loginSubmit() {
+  const email  = document.getElementById('li-email')?.value?.trim();
+  const pass   = document.getElementById('li-pass')?.value;
+  const btn    = document.getElementById('li-btn');
+  const err    = document.getElementById('li-err');
+  err.style.display = 'none';
+
+  if (_loginMode === 'signup') {
+    const nombre = document.getElementById('li-nombre')?.value?.trim();
+    const pass2  = document.getElementById('li-pass2')?.value;
+    if (!nombre||!email||!pass||!pass2) { showErr(err,'Completa todos los campos'); return; }
+    if (pass !== pass2) { showErr(err,'Las contraseñas no coinciden'); return; }
+    if (pass.length < 6) { showErr(err,'La contraseña debe tener al menos 6 caracteres'); return; }
+    btn.textContent='Creando cuenta...'; btn.disabled=true;
+    try {
+      await doSignup(email, pass, nombre);
+      await pullFromCloud();
+      _loginMode = 'login';
+      navigate('home');
+    } catch(e) {
+      showErr(err, e.message.includes('already')
+        ? 'Ya existe una cuenta con ese correo.' : 'Error: '+e.message);
+      btn.textContent='Crear cuenta →'; btn.disabled=false;
+    }
+  } else {
+    if (!email||!pass) { showErr(err,'Ingresa correo y contraseña'); return; }
+    btn.textContent='Ingresando...'; btn.disabled=true;
+    try {
+      await doLogin(email, pass);
+      await pullFromCloud();
+      navigate('home');
+    } catch(e) {
+      showErr(err, e.message.includes('Invalid')||e.message.includes('invalid')
+        ? 'Correo o contraseña incorrectos' : 'Error de conexión. Verifica tu internet.');
+      btn.textContent='Ingresar →'; btn.disabled=false;
+    }
+  }
+}
+function showErr(el, msg) { el.textContent=msg; el.style.display=''; }
+
+// ============================================================
+// SCREEN: HOME
+// ============================================================
+function renderHome() {
+  const fams = STATE.familias.filter(f=>!f.deleted_at);
+  const totalP = fams.reduce((s,f)=>(f.personas||[]).length+s,0);
+  const confOk = STATE.config.nit && STATE.config.fechaInicio && STATE.config.fechaFin;
+  const user   = STATE.profile;
+
+  const statsHtml = `<div class="stats">
+    <div class="stat"><div class="stat-n">${fams.length}</div><div class="stat-l">Familias</div></div>
+    <div class="stat"><div class="stat-n">${totalP}</div><div class="stat-l">Personas</div></div>
+    <div class="stat"><div class="stat-n" style="color:${confOk?'var(--green)':'var(--red)'}">
+      ${confOk?'✓':'!'}</div><div class="stat-l">Config</div></div>
+  </div>`;
+
+  const userInfo = `<div class="card" style="border-color:var(--purple);margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:15px">${(user?.nombre||user?.email||'?')[0].toUpperCase()}</div>
+      <div>
+        <div style="font-weight:700;font-size:14px">${esc(user?.nombre||user?.email)}</div>
+        <div style="font-size:11px;color:var(--muted)">${isAdmin()?'Administrador':'Usuario de campo'}
+          ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
+      </div>
+      ${isAdmin()?`<button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navigate('admin')">⚙ Admin</button>`:''}
+    </div>
+  </div>`;
+
+  if (!confOk && isAdmin()) {
+    return userInfo+statsHtml+`<div class="card" style="border-color:var(--yellow)">
+      <div style="font-size:13px;color:var(--yellow)">⚠ Configure el NIT y el período de reporte antes de capturar datos.</div>
+      <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="navigate('config')">Ir a Configuración</button>
+    </div>`;
+  }
+
+  const listHtml = fams.length===0
+    ? `<div class="empty"><div class="empty-icon">🏠</div>
+       <div class="empty-title">Sin familias registradas</div>
+       <div class="empty-sub">Pulse el botón + para agregar la primera familia</div></div>`
+    : fams.map(f=>{
+        const d=f.d2||{};
+        const lugar=d['8']||d['5']||'(sin ubicación)';
+        const np=(f.personas||[]).length;
+        const ebsCode=calcEBS(d);
+        return `<div class="familia-item">
+          <div class="familia-icon">🏠</div>
+          <div class="familia-info">
+            <div class="familia-nombre">${esc(lugar)}</div>
+            <div class="familia-meta">Mun: ${d['5']||'—'} · EBS: ${esc(ebsCode.slice(-6))} · ${np} persona(s) · ${d['25']||'—'}</div>
+          </div>
+          <div class="familia-actions">
+            <button class="btn btn-secondary btn-sm" onclick="editFamilia('${f.id}')">✏</button>
+            <button class="btn btn-secondary btn-sm" onclick="navigate('familia_t3',{editFamId:'${f.id}'})">👥</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteFamilia('${f.id}')">🗑</button>
+          </div>
+        </div>`;
+      }).join('');
+
+  return userInfo+statsHtml+listHtml+
+    `<div style="height:20px"></div>
+     <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
+     ${isAdmin()?`<button class="btn btn-secondary btn-block" onclick="navigate('config')">⚙ Configuración del reporte</button>`:''}
+     <button class="fab" onclick="nuevaFamilia()">+</button>`;
+}
+
+// ============================================================
+// SCREEN: CONFIG (solo admin)
+// ============================================================
+function renderConfig() {
+  const c = STATE.config;
+  return `<div class="card">
+    <div class="card-title">Datos de la entidad reportadora</div>
+    <div class="field">
+      <div class="field-label">Tipo de identificación <span class="req">*</span></div>
+      <select class="field-select" id="cfg-tipo" onchange="STATE.config.tipoEntidad=this.value">
+        ${REF.tipoIdEntidad.map(o=>`<option value="${o.v}" ${c.tipoEntidad===o.v?'selected':''}>${o.l}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <div class="field-label">NIT de la entidad <span class="req">*</span></div>
+      <input class="field-input" id="cfg-nit" type="text" maxlength="12"
+        value="${esc(c.nit)}" placeholder="Ej: 890212356"
+        oninput="STATE.config.nit=this.value">
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Período de reporte</div>
+    <div class="grid-2">
+      <div class="field">
+        <div class="field-label">Fecha inicial <span class="req">*</span></div>
+        <input class="field-input" type="date" value="${c.fechaInicio}"
+          onchange="STATE.config.fechaInicio=this.value">
+      </div>
+      <div class="field">
+        <div class="field-label">Fecha de corte <span class="req">*</span></div>
+        <input class="field-input" type="date" value="${c.fechaFin}"
+          onchange="STATE.config.fechaFin=this.value">
+      </div>
+    </div>
+    <div class="field-note">Periodicidad semanal. La fecha de corte aparece en el nombre del archivo.</div>
+  </div>
+  <div class="bottom-bar">
+    <button class="btn btn-secondary" onclick="navigate('home')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveConfig()">Guardar</button>
+  </div>`;
+}
+
+async function saveConfig() {
+  const nit  = document.getElementById('cfg-nit').value.trim();
+  const tipo = document.getElementById('cfg-tipo').value;
+  if (!nit||!STATE.config.fechaInicio||!STATE.config.fechaFin)
+    return toast('Complete todos los campos requeridos','err');
+  STATE.config = {...STATE.config, nit, tipoEntidad:tipo};
+  const rec = {key:'reportConfig', value:STATE.config, updated_at:new Date().toISOString(), updated_by:STATE.auth?.user?.id};
+  await idb.put('config', rec);
+  if (STATE.isOnline) {
+    try { await sbFetch('/rest/v1/config',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rec)}); }
+    catch(e){ await addPending('upsert','config',rec); }
+  } else { await addPending('upsert','config',rec); }
+  toast('Configuración guardada','ok');
+  navigate('home');
+}
+
+// ============================================================
+// SCREEN: ADMIN
+// ============================================================
+function renderAdmin() {
+  const tab = STATE.adminTab||'users';
+  return `<div class="admin-tabs">
+    <button class="admin-tab ${tab==='users'?'active':''}" onclick="STATE.adminTab='users';render()">👥 Usuarios</button>
+    <button class="admin-tab ${tab==='options'?'active':''}" onclick="STATE.adminTab='options';render()">🔧 Opciones</button>
+  </div>
+  ${tab==='users' ? renderAdminUsers() : renderAdminOptions()}`;
+}
+
+// ── Admin: Usuarios ──────────────────────────────────────────
+function renderAdminUsers() {
+  const users = STATE.adminUsers||[];
+  const listHtml = users.length===0
+    ? `<div class="empty"><div class="empty-icon">👤</div>
+       <div class="empty-title">Cargando usuarios…</div></div>`
+    : users.map(u=>{
+        const initials=(u.nombre||u.email||'?')[0].toUpperCase();
+        const ebsStr=(u.ebs_codes||[]).join(', ')||'—';
+        const rolBadge=u.rol==='admin'
+          ? '<span class="badge badge-purple">Admin</span>'
+          : '<span class="badge badge-blue">Campo</span>';
+        const activoBadge=u.activo
+          ? '<span class="badge badge-green">Activo</span>'
+          : '<span class="badge badge-red">Inactivo</span>';
+        return `<div class="user-card">
+          <div class="user-card-top">
+            <div class="user-avatar">${initials}</div>
+            <div class="user-info">
+              <div class="user-name">${esc(u.nombre||'Sin nombre')} ${rolBadge} ${activoBadge}</div>
+              <div class="user-email">${esc(u.email)}</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="openEditUser('${u.id}')">✏</button>
+              ${u.activo?`<button class="btn btn-danger btn-sm" onclick="toggleUserActive('${u.id}',false)">✗</button>`
+                        :`<button class="btn btn-success btn-sm" onclick="toggleUserActive('${u.id}',true)">✓</button>`}
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted)">EBS asignados: <span style="color:var(--text);font-family:monospace;font-size:10px">${esc(ebsStr)}</span></div>
+        </div>`;
+      }).join('');
+
+  return listHtml +
+    `<button class="btn btn-primary btn-block" style="margin-top:8px" onclick="openCreateUser()">+ Crear usuario</button>`;
+}
+
+// ── Admin: Configuración de campos ───────────────────────────
+// Sub-tab state for T2 vs T3
+let _fcTab = 't2';
+
+function renderAdminOptions() {
+  const all  = _fcTab==='t2' ? ALL_FIELDS_T2 : ALL_FIELDS_T3;
+  const fc   = STATE.fieldConfig?.[_fcTab]||{};
+  // Custom REF options (for multi/sel fields via CAMPOS_CUSTOM)
+  const customByRef = {};
+  Object.entries(REF).forEach(([k,items])=>{
+    const c=items.filter(x=>x.custom);
+    if(c.length) customByRef[k]=c;
+  });
+
+  const tabs = `<div class="toggle-group" style="margin-bottom:12px">
+    <button class="toggle-btn${_fcTab==='t2'?' active-si':''}" onclick="_fcTab='t2';render()">Ficha T2 — Familia</button>
+    <button class="toggle-btn${_fcTab==='t3'?' active-si':''}" onclick="_fcTab='t3';render()">Ficha T3 — Persona</button>
+  </div>`;
+
+  const typeBadge = t => ({
+    text:'Texto',num:'Número',dec:'Decimal',
+    sel:'Lista','sino':'Sí/No',multi:'Múltiple',dat:'Fecha',ro:'Solo lectura'
+  }[t]||t);
+  const typeBadgeColor = t => ({'text':'badge-blue','num':'badge-purple','dec':'badge-purple',
+    'sel':'badge-green','sino':'badge-yellow','multi':'badge-green','dat':'badge-blue'}[t]||'badge-blue');
+
+  const sections = all.map(group=>{
+    const rows = group.fields.map(f=>{
+      const cfg = fc[f.id]||{};
+      const customOpts = cfg.options||[];
+      const refCustoms = f.refKey ? (customByRef[f.refKey]||[]) : [];
+      const hasDefault = cfg.defaultVal!=null && cfg.defaultVal!=='';
+      const totalCustom = customOpts.length + refCustoms.length;
+      return `<div class="card-row" style="flex-wrap:wrap;gap:6px;padding:10px 0">
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px">
+          <span class="badge ${typeBadgeColor(f.type)}" style="font-size:10px;white-space:nowrap">${typeBadge(f.type)}</span>
+          <span style="font-size:13px"><span style="color:var(--purple-l);font-size:11px;font-weight:700">${f.id} </span>${esc(f.label)}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          ${totalCustom?`<span class="badge badge-yellow">${totalCustom} opc.</span>`:''}
+          ${hasDefault?`<span class="badge badge-green" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(cfg.defaultVal)}">✓ Dflt</span>`:''}
+          <button class="btn btn-secondary btn-sm" onclick="openFieldConfig('${_fcTab}','${f.id}','${esc(f.label)}','${f.type}','${f.refKey||''}')">⚙ Config.</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:10px">
+      <div class="card-title">${esc(group.label)}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  return tabs + sections;
+}
+
+// ── Modal: Crear usuario ─────────────────────────────────────
+function openCreateUser() {
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-title">Crear usuario</div>
+      <div class="field"><div class="field-label">Nombre completo</div>
+        <input class="field-input" id="mu-nombre" type="text" placeholder="María González"></div>
+      <div class="field"><div class="field-label">Correo electrónico <span class="req">*</span></div>
+        <input class="field-input" id="mu-email" type="email" placeholder="usuario@correo.com"></div>
+      <div class="field"><div class="field-label">Contraseña temporal <span class="req">*</span></div>
+        <input class="field-input" id="mu-pass" type="text" placeholder="Mínimo 8 caracteres"></div>
+      <div class="field"><div class="field-label">Rol <span class="req">*</span></div>
+        <select class="field-select" id="mu-rol" onchange="document.getElementById('mu-ebs-wrap').style.display=this.value==='field'?'':'none'">
+          <option value="field">Usuario de campo</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div id="mu-ebs-wrap">
+        <div class="field">
+          <div class="field-label">Códigos EBS asignados</div>
+          <input class="field-input" id="mu-ebs" type="text"
+            placeholder="Ej: 54UZPE99954003T99MT99EBS001, 54UZPE99954003T99MT99EBS002">
+          <div class="field-note">Separa múltiples códigos con coma. Usa el mismo código que genera la app en el Paso 1 del formulario.</div>
+        </div>
+      </div>
+      <div id="mu-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" id="mu-btn" onclick="submitCreateUser()">Crear usuario</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitCreateUser() {
+  const nombre = document.getElementById('mu-nombre')?.value?.trim()||'';
+  const email  = document.getElementById('mu-email')?.value?.trim();
+  const pass   = document.getElementById('mu-pass')?.value?.trim();
+  const rol    = document.getElementById('mu-rol')?.value||'field';
+  const ebsRaw = document.getElementById('mu-ebs')?.value||'';
+  const ebs_codes = rol==='field' ? ebsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const err = document.getElementById('mu-err');
+  const btn = document.getElementById('mu-btn');
+  if (!email||!pass) { showErr(err,'Correo y contraseña son requeridos'); return; }
+  if (pass.length<8) { showErr(err,'La contraseña debe tener mínimo 8 caracteres'); return; }
+  btn.textContent='Creando...'; btn.disabled=true;
+  try {
+    const result = await sbFn('create-user', {email, password:pass, nombre, rol, ebs_codes});
+    toast('Usuario creado: '+email,'ok');
+    closeModal();
+    await loadAdminUsers();
+    render();
+  } catch(e) {
+    showErr(err, e.message.includes('already')
+      ? 'Ya existe un usuario con ese correo'
+      : 'Error: '+e.message);
+    btn.textContent='Crear usuario'; btn.disabled=false;
+  }
+}
+
+// ── Modal: Editar usuario ────────────────────────────────────
+async function openEditUser(id) {
+  const u = (STATE.adminUsers||[]).find(x=>x.id===id);
+  if (!u) return;
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-title">Editar usuario</div>
+      <div class="field"><div class="field-label">Nombre</div>
+        <input class="field-input" id="eu-nombre" type="text" value="${esc(u.nombre||'')}"></div>
+      <div class="field"><div class="field-label">Correo</div>
+        <input class="field-input" type="text" value="${esc(u.email)}" disabled style="opacity:.5"></div>
+      <div class="field"><div class="field-label">Rol</div>
+        <select class="field-select" id="eu-rol" onchange="document.getElementById('eu-ebs-wrap').style.display=this.value==='field'?'':'none'">
+          <option value="field" ${u.rol==='field'?'selected':''}>Usuario de campo</option>
+          <option value="admin" ${u.rol==='admin'?'selected':''}>Administrador</option>
+        </select>
+      </div>
+      <div id="eu-ebs-wrap" style="${u.rol!=='field'?'display:none':''}">
+        <div class="field">
+          <div class="field-label">Códigos EBS asignados</div>
+          <input class="field-input" id="eu-ebs" type="text" value="${esc((u.ebs_codes||[]).join(', '))}">
+          <div class="field-note">Separa múltiples códigos con coma.</div>
+        </div>
+      </div>
+      <div id="eu-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" id="eu-btn" onclick="submitEditUser('${id}')">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitEditUser(id) {
+  const nombre   = document.getElementById('eu-nombre')?.value?.trim()||'';
+  const rol      = document.getElementById('eu-rol')?.value||'field';
+  const ebsRaw   = document.getElementById('eu-ebs')?.value||'';
+  const ebs_codes= rol==='field' ? ebsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const err=document.getElementById('eu-err');
+  const btn=document.getElementById('eu-btn');
+  btn.textContent='Guardando...'; btn.disabled=true;
+  try {
+    await sbFetch(`/rest/v1/profiles?id=eq.${id}`,{
+      method:'PATCH', headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({nombre, rol, ebs_codes})
+    });
+    toast('Usuario actualizado','ok');
+    closeModal();
+    await loadAdminUsers();
+    render();
+  } catch(e){ showErr(err,'Error: '+e.message); btn.textContent='Guardar'; btn.disabled=false; }
+}
+
+async function toggleUserActive(id, activo) {
+  if (!confirm(activo ? '¿Activar este usuario?' : '¿Desactivar este usuario?')) return;
+  try {
+    await sbFetch(`/rest/v1/profiles?id=eq.${id}`,{
+      method:'PATCH', headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({activo})
+    });
+    toast(activo?'Usuario activado':'Usuario desactivado','ok');
+    await loadAdminUsers();
+    render();
+  } catch(e){ toast('Error: '+e.message,'err'); }
+}
+
+const PROFILES_COLS = 'id,email,nombre,rol,ebs_codes,activo,created_at,created_by';
+
+async function loadAdminUsers(andRender=false) {
+  if (!isAdmin()) return;
+  try {
+    // Use SECURITY DEFINER RPC to bypass RLS (PostgREST+RLS+select bug workaround)
+    const rows = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
+    STATE.adminUsers = rows||[];
+    for (const u of STATE.adminUsers) await idb.put('profiles', u);
+  } catch(e) {
+    STATE.adminUsers = await idb.getAll('profiles');
+  }
+  if (andRender && STATE.screen==='admin') render();
+}
+
+// ── Modal: Configuración individual de campo ─────────────────
+function openFieldConfig(form, id, label, type, refKey) {
+  const fc   = STATE.fieldConfig?.[form]?.[id]||{};
+  const opts = fc.options||[];
+  const defV = fc.defaultVal||'';
+
+  // Build "current options" list (own list + REF customs if sel/multi)
+  const refCustoms = refKey ? (REF[refKey]||[]).filter(x=>x.custom) : [];
+
+  // Build default-value input according to type
+  let defInput = '';
+  if(type==='sino'){
+    defInput = `<div class="toggle-group" style="max-width:200px">
+      <button class="toggle-btn${defV==='1'?' active-si':''}" onclick="document.getElementById('fc-def').value='1';this.classList.add('active-si');this.nextElementSibling.classList.remove('active-no')">SI</button>
+      <button class="toggle-btn${defV==='2'?' active-no':''}" onclick="document.getElementById('fc-def').value='2';this.classList.add('active-no');this.previousElementSibling.classList.remove('active-si')">NO</button>
+    </div><input type="hidden" id="fc-def" value="${esc(defV)}">`;
+  } else if(type==='dat'){
+    defInput = `<input class="field-input" id="fc-def" type="date" value="${esc(defV)}">`;
+  } else if(type==='sel' && refKey && REF[refKey]){
+    const allOpts = REF[refKey];
+    defInput = `<select class="field-select" id="fc-def"><option value="">— Sin predeterminado —</option>${allOpts.map(o=>`<option value="${esc(o.v)}" ${defV===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select>`;
+  } else {
+    defInput = `<input class="field-input" id="fc-def" type="text" placeholder="Valor predeterminado" value="${esc(defV)}">`;
+  }
+
+  // Sección "Opciones de lista" — solo para campos que no son ya multi/sel con REF, o para todo texto/num/dec
+  const canAddList = ['text','num','dec','sel'].includes(type);
+  const listSection = canAddList ? `
+    <div class="card" style="background:#0d1117;margin-bottom:12px">
+      <div class="card-title" style="color:var(--yellow)">📋 Opciones de lista desplegable</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Al agregar opciones, el campo se convierte en menú desplegable.</div>
+      ${opts.length===0 && refCustoms.length===0
+        ? '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Sin opciones configuradas</div>'
+        : ''
+      }
+      ${opts.map((o,i)=>`<div class="option-row">
+          <span class="badge badge-purple" style="font-size:10px">${esc(o.v)}</span>
+          <span style="flex:1;font-size:13px;margin-left:8px">${esc(o.l)}</span>
+          <button class="btn btn-danger btn-sm" onclick="deleteFieldOption('${form}','${id}',${i});openFieldConfig('${form}','${id}','${esc(label)}','${type}','${refKey||''}')">🗑</button>
+        </div>`).join('')}
+      ${refCustoms.map(o=>`<div class="option-row">
+          <span class="badge badge-yellow" style="font-size:10px">${esc(o.v)}</span>
+          <span style="flex:1;font-size:13px;margin-left:8px">${esc(o.l)} <span style="color:var(--muted)">(via REF)</span></span>
+        </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input class="field-input" id="fc-opt-label" type="text" placeholder="Texto que verá el usuario" style="flex:2">
+        <input class="field-input" id="fc-opt-val" type="text" placeholder="Valor PISIS" style="flex:1">
+        <button class="btn btn-secondary btn-sm" style="white-space:nowrap" onclick="addFieldOption('${form}','${id}','${esc(label)}','${type}','${refKey||''}')">+ Añadir</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Valor PISIS: código corto que se guarda en el archivo (ej: <code>54003</code>, <code>T01</code>). Si se deja vacío se genera automáticamente.</div>
+    </div>` : '';
+
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-title">⚙ Configurar campo</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        <span class="badge badge-blue">${esc(id)}</span>
+        <span style="margin-left:6px">${esc(label)}</span>
+      </div>
+      ${listSection}
+      <div class="card" style="background:#0d1117;margin-bottom:12px">
+        <div class="card-title" style="color:var(--green)">📌 Valor predeterminado</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Se aplica automáticamente al crear una nueva ficha.</div>
+        ${defInput}
+      </div>
+      <div id="fc-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cerrar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="submitFieldConfig('${form}','${id}','${esc(label)}','${type}','${refKey||''}')">💾 Guardar predeterminado</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function addFieldOption(form, id, label, type, refKey) {
+  const l = document.getElementById('fc-opt-label')?.value?.trim();
+  if(!l){ alert('Escribe el texto de la opción'); return; }
+  const rawV = document.getElementById('fc-opt-val')?.value?.trim();
+  const v = rawV || ('C'+Date.now().toString(36).toUpperCase());
+  if(!STATE.fieldConfig[form]) STATE.fieldConfig[form]={};
+  if(!STATE.fieldConfig[form][id]) STATE.fieldConfig[form][id]={options:[],defaultVal:''};
+  STATE.fieldConfig[form][id].options.push({v, l});
+  await saveFieldConfig();
+  openFieldConfig(form, id, label, type, refKey);
+  render();
+}
+
+async function deleteFieldOption(form, id, idx) {
+  const cfg = STATE.fieldConfig?.[form]?.[id];
+  if(!cfg) return;
+  cfg.options.splice(idx,1);
+  await saveFieldConfig();
+  render();
+}
+
+async function submitFieldConfig(form, id, label, type, refKey) {
+  const defV = document.getElementById('fc-def')?.value||'';
+  if(!STATE.fieldConfig[form]) STATE.fieldConfig[form]={};
+  if(!STATE.fieldConfig[form][id]) STATE.fieldConfig[form][id]={options:[],defaultVal:''};
+  STATE.fieldConfig[form][id].defaultVal = defV;
+  await saveFieldConfig();
+  toast('Configuración guardada','ok');
+  closeModal();
+  render();
+}
+
+// ── Modal: Agregar opción personalizada (multi-select via CAMPOS_CUSTOM) ─
+function openAddOption(campoId, label) {
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-title">Nueva opción: ${esc(label)}</div>
+      <div class="card" style="background:#1a1f27;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--yellow)">ℹ Al seleccionarse en el formulario, esta opción usará el código "Otro" del campo y pondrá el texto como descripción en el campo adyacente del archivo PISIS.</div>
+      </div>
+      <div class="field"><div class="field-label">Texto de la opción <span class="req">*</span></div>
+        <input class="field-input" id="ao-label" type="text" placeholder="Ej: Rancho de bareque">
+      </div>
+      <div id="ao-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" id="ao-btn" onclick="submitAddOption('${campoId}')">Agregar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitAddOption(campoId) {
+  const label = document.getElementById('ao-label')?.value?.trim();
+  const err=document.getElementById('ao-err');
+  const btn=document.getElementById('ao-btn');
+  if (!label) { showErr(err,'Escribe el texto de la opción'); return; }
+  btn.textContent='Guardando...'; btn.disabled=true;
+  const codigo = 'C'+Date.now().toString(36).toUpperCase();
+  const rec = {campo_id:campoId, codigo, label, activo:true, created_by:STATE.auth?.user?.id};
+  try {
+    const rows = await sbFetch('/rest/v1/opciones_custom',{
+      method:'POST', headers:{'Prefer':'return=representation'},
+      body: JSON.stringify(rec)
+    });
+    const saved = rows?.[0]||{...rec, id:uid()};
+    await idb.put('opciones_custom', saved);
+    if (!REF[campoId]) REF[campoId]=[];
+    REF[campoId].push({v:saved.codigo, l:saved.label, custom:true, dbId:saved.id});
+    toast('Opción agregada','ok');
+    closeModal();
+    render();
+  } catch(e){ showErr(err,'Error: '+e.message); btn.textContent='Agregar'; btn.disabled=false; }
+}
+
+async function deleteOption(dbId, campoId, codigo) {
+  if (!confirm('¿Eliminar esta opción?')) return;
+  try {
+    await sbFetch(`/rest/v1/opciones_custom?id=eq.${dbId}`,{
+      method:'PATCH', headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({activo:false})
+    });
+    await idb.delete('opciones_custom', dbId);
+    if (REF[campoId]) REF[campoId] = REF[campoId].filter(x=>x.v!==codigo);
+    toast('Opción eliminada','ok');
+    render();
+  } catch(e){ toast('Error: '+e.message,'err'); }
+}
+
+function closeModal() { document.getElementById('modal-root').innerHTML=''; }
+
+// ============================================================
+// HELPERS: IDs automáticos
+// ============================================================
+function calcEBS(d) {
+  const dpto=String(d['3']||'').slice(0,2).padEnd(2,' ');
+  const sub =String(d['4']||'').slice(0,7).padEnd(7,' ');
+  const mun =String(d['5']||'').slice(0,5).padEnd(5,' ');
+  const ter =String(d['6']||'').slice(0,3).padEnd(3,' ');
+  const mic =String(d['7']||'').slice(0,4).padEnd(4,' ');
+  const ne  =String(d.ebs_num||'001').padStart(3,'0');
+  return (dpto+sub+mun+ter+mic+'EBS'+ne).replace(/\s/g,'');
+}
+function calcNumVivienda(d,idx){const ebs=calcEBS(d);const h=String(d.hogar_num||idx+1).padStart(4,'0');return ebs+'H'+h;}
+function calcNumFamilia(d,idx){const nv=calcNumVivienda(d,idx);return nv+'F'+String(d.familia_num||'1').padStart(4,'0');}
+function calcCodFicha(d,idx){return calcNumFamilia(d,idx)+'CF001';}
+function calcNumIdFamilia(d,idx){return calcNumVivienda(d,idx)+calcNumFamilia(d,idx);}
+
+// ============================================================
+// HELPERS: Componentes de formulario
+// ============================================================
+// Text/number inputs: only update state, NO render() — prevents focus loss on each keystroke
+function setDraft2(k,v){STATE.draft2[k]=v;}
+function setDraft3(k,v){STATE.draft3[k]=v;}
+// Select/date inputs: update state AND re-render (needed for conditional field show/hide)
+function setDraftSel2(k,v){STATE.draft2[k]=v;render();}
+function setDraftSel3(k,v){STATE.draft3[k]=v;render();}
+
+function toggleMulti2(campo,val){
+  const arr=STATE.draft2[campo]||[];
+  const i=arr.indexOf(val);
+  if(i>=0)arr.splice(i,1);else arr.push(val);
+  STATE.draft2[campo]=[...arr];render();
+}
+function toggleMulti3(campo,val){
+  const arr=STATE.draft3[campo]||[];
+  const i=arr.indexOf(val);
+  if(i>=0)arr.splice(i,1);else arr.push(val);
+  STATE.draft3[campo]=[...arr];render();
+}
+function setSino2(campo,val){STATE.draft2[campo]=val;render();}
+function setSino3(campo,val){STATE.draft3[campo]=val;render();}
+
+// ── BUSCADOR INLINE (T3) — sin re-render completo, solo actualiza el div ──
+function searchField3(id, data, val, req){
+  const resultsId=`sf3-res-${id}`;
+  const inputId=`sf3-in-${id}`;
+  const selected=val?data.find(d=>d.v===val):null;
+  const displayText=selected?`${selected.v} — ${selected.l}`:'';
+  return `<div class="field sf-wrap">
+    ${fl(id,req,'3')}
+    <input class="field-input" id="${inputId}" type="text"
+      placeholder="Buscar por código o nombre…" value="${esc(displayText)}"
+      autocomplete="off"
+      oninput="sfSearch3('${id}','${resultsId}',this.value)"
+      onfocus="sfSearch3('${id}','${resultsId}',this.value)"
+      onblur="setTimeout(()=>{const r=document.getElementById('${resultsId}');if(r)r.style.display='none'},200)">
+    <div id="${resultsId}" class="sf-results" style="display:none"></div>
+  </div>`;
+}
+function sfSearch3(id, resultsId, query){
+  const data=id==='13'?REF_CIUO:id==='16'?REF_EAPB:[];
+  // Si el texto ya tiene el formato "CODIGO — NOMBRE", buscar solo por el código
+  const rawQ=(query||'').trim();
+  const q=rawQ.includes(' — ')?rawQ.split(' — ')[0].trim().toLowerCase():rawQ.toLowerCase();
+  const results=q.length<1?data.slice(0,10)
+    :data.filter(r=>r.v.toLowerCase().includes(q)||r.l.toLowerCase().includes(q)).slice(0,15);
+  const el=document.getElementById(resultsId);
+  if(!el)return;
+  if(!results.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=results.map(r=>`<div class="sf-item" onmousedown="sfSelect3('${id}','${resultsId}','${esc(r.v)}',${JSON.stringify(r.l)})"><span class="sf-code">${esc(r.v)}</span><span class="sf-label">${esc(r.l)}</span></div>`).join('');
+}
+function sfSelect3(id, resultsId, val, label){
+  STATE.draft3[id]=val;
+  const inputEl=document.getElementById(`sf3-in-${id}`);
+  if(inputEl)inputEl.value=val+' — '+label;
+  const el=document.getElementById(resultsId);
+  if(el)el.style.display='none';
+}
+
+function fieldLabel2(id){const L={'2':'Consentimiento informado','3':'Código Departamento (DANE)','4':'Código Subregión/UZPE','5':'Código Municipio (DANE)','6':'Código Territorio','7':'Código Microterritorio','8':'Nombre corregimiento/vereda/barrio/localidad','9':'Dirección','10':'Geopunto — Latitud','11':'Geopunto — Longitud','12':'Descripción de ubicación','13':'N° identificación único vivienda/hogar','14':'N° identificación único de la familia','15':'Tipo de prestador','16':'N° del EBS que realiza la visita','17':'N° de integrantes del EBS','18':'N° de la ficha diligenciada','19':'Código EBS','20':'NIT prestador/organismo de adscripción','21':'Tipo de identificación del responsable','22':'N° identificación del responsable','23':'Perfil académico de quien diligencia','24':'Código de la ficha','25':'Fecha de diligenciamiento','26':'Tipo de vivienda','27':'Descripción tipo de vivienda','28':'Material predominante de las paredes','29':'Descripción material paredes','30':'Material predominante del piso','31':'Descripción material piso','32':'Material predominante del techo','33':'Descripción material techo','34':'Número de dormitorios','35':'Hacinamiento','36':'Riesgo de accidente en la vivienda','37':'Sitios de interés de fácil acceso desde la vivienda','38':'Fuentes de energía o combustible para cocinar','39':'¿Observa criaderos o reservorios de vectores?','40':'Observaciones de lugares cerca de la vivienda','41':'Descripción de otro lugar u observación','42':'¿Realiza alguna actividad productiva en la vivienda?','43':'Animales en la vivienda o su entorno inmediato','44':'Tipo y cantidad de animales','45':'N° total de animales','46':'Fuente de abastecimiento de agua para consumo','47':'Descripción de otra fuente de agua','48':'Sistema de disposición de excretas','49':'Descripción de otro sistema de excretas','50':'Disposición de aguas residuales','51':'Descripción de otro sistema de aguas residuales','52':'Disposición de residuos sólidos','53':'Descripción de otra disposición de residuos','54':'Tipo de familia','55':'N° de integrantes de la familia','56':'Hallazgos del familiograma','57':'APGAR familiar','58':'¿Hay cuidador de adulto mayor?','59':'Escala ZARIT','60':'ECOMAPA','61':'¿Niños menores de 5 años?','62':'¿Mujeres gestantes?','63':'¿Adultos mayores (≥ 60 años)?','64':'¿Víctimas del conflicto armado?','65':'¿Personas con discapacidad?','66':'¿Personas con enfermedad crónica o terminal?','67':'Enfermedades transmisibles identificadas','68':'¿Sucesos vitales o situaciones de crisis?','69':'¿Situaciones de vulnerabilidad social?','70':'¿Prácticas de cuidado de la salud críticas?','71':'¿Antecedentes crónicos?','72':'Descripción de antecedentes crónicos','73':'Forma de obtención de alimentos','74':'Descripción de otra forma de obtención de alimentos','75':'¿Hábitos saludables de alimentación?','76':'¿Recursos potenciadores de la salud?','77':'¿Prácticas de entornos saludables?','78':'¿Prácticas de relaciones saludables?','79':'¿Recursos/redes colectivas para la salud?','80':'¿Prácticas para la autonomía de personas mayores?','81':'¿Prácticas para la prevención de enfermedades?','82':'¿Prácticas de cuidado desde saberes ancestrales?','83':'¿Capacidad de exigibilidad del derecho a la salud?','84':'N° identificación único de la familia'};return L[id]||('Campo '+id);}
+function fieldLabel3(id){const L={'3':'Primer nombre','4':'Segundo nombre','5':'Primer apellido','6':'Segundo apellido','7':'Tipo de identificación','8':'Número de identificación','9':'Fecha de nacimiento','10':'Sexo biológico','11':'¿Está en gestación?','12':'Rol dentro de la familia','13':'Código de ocupación (CIUO)','14':'Nivel educativo','15':'Régimen de afiliación','16':'Código EAPB','17':'Grupo poblacional especial','18':'Pertenencia étnica','19':'Acompañamiento por agente de medicina tradicional','20':'Código comunidad/pueblo indígena','21':'Condición de discapacidad','22':'Peso (kg)','23':'Talla (cm)','24':'Diagnóstico nutricional: Peso/Talla','25':'Perímetro braquial (cm)','26':'¿Condiciones de salud crónica?','27':'¿Esquema de atenciones de promoción?','28':'Intervenciones pendientes de promoción','29':'Motivos de no atención de promoción','30':'¿Practica deporte o ejercicio?','31':'¿Lactancia materna exclusiva hasta los 6 meses?','32':'Meses de lactancia materna','33':'Signos físicos de desnutrición aguda','34':'¿Ha presentado en el último mes enfermedad gástrica o respiratoria aguda?','35':'Descripción de la enfermedad aguda','36':'¿Recibe atención para la enfermedad aguda?','37':'Motivos por los cuales no ha recibido atención','38':'N° id único de la familia','39':'N° id único del integrante'};return L[id]||('Campo '+id);}
+
+function fl(id,req=false,t='2'){const lbl=t==='2'?fieldLabel2(id):fieldLabel3(id);return `<div class="field-label"><span class="field-num">${id}</span>${esc(lbl)}${req?'<span class="req">*</span>':''}</div>`;}
+
+// T2 form helpers — check fieldConfig.t2[id] to override with dropdown if options exist
+function txt(id,val,maxl,req,ph){
+  const fc=STATE.fieldConfig?.t2?.[id]; const v=val||(fc?.defaultVal||'');
+  if(fc?.options?.length) return `<div class="field">${fl(id,req)}<select class="field-select" onchange="setDraftSel2('${id}',this.value)"><option value="">Seleccione...</option>${fc.options.map(o=>`<option value="${esc(o.v)}" ${v===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>`;
+  return `<div class="field">${fl(id,req)}<input class="field-input" type="text" maxlength="${maxl}" placeholder="${esc(ph||'')}" value="${esc(v)}" oninput="setDraft2('${id}',this.value)"></div>`;
+}
+function num(id,val,req,mn,mx){
+  const fc=STATE.fieldConfig?.t2?.[id]; const v=val||(fc?.defaultVal||'');
+  if(fc?.options?.length) return `<div class="field">${fl(id,req)}<select class="field-select" onchange="setDraftSel2('${id}',this.value)"><option value="">Seleccione...</option>${fc.options.map(o=>`<option value="${esc(o.v)}" ${v===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>`;
+  return `<div class="field">${fl(id,req)}<input class="field-input" type="number" min="${mn}" max="${mx}" value="${esc(v)}" oninput="setDraft2('${id}',this.value)"></div>`;
+}
+function dec(id,val){
+  const fc=STATE.fieldConfig?.t2?.[id]; const v=val||(fc?.defaultVal||'');
+  if(fc?.options?.length) return `<div class="field">${fl(id,false)}<select class="field-select" onchange="setDraftSel2('${id}',this.value)"><option value="">Seleccione...</option>${fc.options.map(o=>`<option value="${esc(o.v)}" ${v===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>`;
+  return `<div class="field">${fl(id,false)}<input class="field-input" type="number" step="0.01" value="${esc(v)}" oninput="setDraft2('${id}',this.value)"></div>`;
+}
+function dat(id,val,req){return `<div class="field">${fl(id,req)}<input class="field-input" type="date" value="${esc(val)}" onchange="setDraftSel2('${id}',this.value)"></div>`;}
+function ro(id,val,ph){return `<div class="field"><div class="field-label"><span class="field-num">${id}</span>${esc(ph)}</div><div class="field-ro">${esc(val||'—')}</div></div>`;}
+function sino(id,val,req){const si=val==='1',no=val==='2';return `<div class="field">${fl(id,req)}<div class="toggle-group"><button class="toggle-btn${si?' active-si':''}" onclick="setSino2('${id}','1')">SI</button><button class="toggle-btn${no?' active-no':''}" onclick="setSino2('${id}','2')">NO</button></div></div>`;}
+function sel(opts,id,val,req){return `<div class="field">${fl(id,req)}<select class="field-select" onchange="setDraftSel2('${id}',this.value)"><option value="">Seleccione...</option>${opts.map(o=>`<option value="${o.v}" ${val===o.v?'selected':''}>${esc(o.l)}${o.custom?' ★':''}</option>`).join('')}</select></div>`;}
+function multi(refKey,id,val,req){const opts=REF[refKey]||[];return `<div class="field">${fl(id,req)}<div class="mc-grid">${opts.map(o=>{const sel=(val||[]).includes(o.v);return `<div class="mc-item${sel?' selected':''}${o.custom?' custom-opt':''}" onclick="toggleMulti2('${id}','${o.v}')"><div class="mc-box">${sel?'✓':''}</div><div class="mc-label"><span class="mc-code">${o.v}.</span>${esc(o.l)}${o.custom?' ★':''}</div></div>`;}).join('')}</div></div>`;}
+
+// T3 form helpers — check fieldConfig.t3[id] to override with dropdown if options exist
+function txt3(id,val,maxl,req,ph){
+  const fc=STATE.fieldConfig?.t3?.[id]; const v=val||(fc?.defaultVal||'');
+  if(fc?.options?.length) return `<div class="field">${fl(id,req,'3')}<select class="field-select" onchange="setDraftSel3('${id}',this.value)"><option value="">Seleccione...</option>${fc.options.map(o=>`<option value="${esc(o.v)}" ${v===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>`;
+  return `<div class="field">${fl(id,req,'3')}<input class="field-input" type="text" maxlength="${maxl}" placeholder="${esc(ph||'')}" value="${esc(v)}" oninput="setDraft3('${id}',this.value)"></div>`;
+}
+function num3(id,val,req,mn,mx){
+  const fc=STATE.fieldConfig?.t3?.[id]; const v=val||(fc?.defaultVal||'');
+  if(fc?.options?.length) return `<div class="field">${fl(id,req,'3')}<select class="field-select" onchange="setDraftSel3('${id}',this.value)"><option value="">Seleccione...</option>${fc.options.map(o=>`<option value="${esc(o.v)}" ${v===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>`;
+  return `<div class="field">${fl(id,req,'3')}<input class="field-input" type="number" min="${mn}" max="${mx}" value="${esc(v)}" oninput="setDraft3('${id}',this.value)"></div>`;
+}
+function dec3(id,val){
+  const fc=STATE.fieldConfig?.t3?.[id]; const v=val||(fc?.defaultVal||'');
+  if(fc?.options?.length) return `<div class="field">${fl(id,false,'3')}<select class="field-select" onchange="setDraftSel3('${id}',this.value)"><option value="">Seleccione...</option>${fc.options.map(o=>`<option value="${esc(o.v)}" ${v===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>`;
+  return `<div class="field">${fl(id,false,'3')}<input class="field-input" type="number" step="0.01" value="${esc(v)}" oninput="setDraft3('${id}',this.value)"></div>`;
+}
+function dat3(id,val,req){return `<div class="field">${fl(id,req,'3')}<input class="field-input" type="date" value="${esc(val)}" onchange="setDraftSel3('${id}',this.value)"></div>`;}
+function sino3(id,val,req){const si=val==='1',no=val==='2';return `<div class="field">${fl(id,req,'3')}<div class="toggle-group"><button class="toggle-btn${si?' active-si':''}" onclick="setSino3('${id}','1')">SI</button><button class="toggle-btn${no?' active-no':''}" onclick="setSino3('${id}','2')">NO</button></div></div>`;}
+function sel3(opts,id,val,req){return `<div class="field">${fl(id,req,'3')}<select class="field-select" onchange="setDraftSel3('${id}',this.value)"><option value="">Seleccione...</option>${opts.map(o=>`<option value="${o.v}" ${val===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>`;}
+function multi3(refKey,id,val,req){const opts=REF[refKey]||[];return `<div class="field">${fl(id,req,'3')}<div class="mc-grid">${opts.map(o=>{const sel=(val||[]).includes(o.v);return `<div class="mc-item${sel?' selected':''}${o.custom?' custom-opt':''}" onclick="toggleMulti3('${id}','${o.v}')"><div class="mc-box">${sel?'✓':''}</div><div class="mc-label"><span class="mc-code">${o.v}.</span>${esc(o.l)}${o.custom?' ★':''}</div></div>`;}).join('')}</div></div>`;}
+
+// ============================================================
+// FAMILIA CRUD
+// ============================================================
+function nuevaFamilia(){
+  STATE.editFamId=null; STATE.t2step=1;
+  const ebsDefault = myEBS()[0]||'';
+  // Auto-generate campo 18: next ficha number after existing max
+  let maxFicha=0;
+  for(const f of STATE.familias){const n=parseInt(f.d2?.['18']||'0')||0;if(n>maxFicha)maxFicha=n;}
+  STATE.draft2={
+    '2':'1','3':'54','4':'UZPE999','6':'T99','7':'MT99',
+    ebs_num:'001',hogar_num:'',familia_num:'1',
+    '15':'1','16':'1','17':'1','18':String(maxFicha+1),
+    '20':STATE.config.nit||'','21':'CC','25':today()
+  };
+  // Apply configured defaultVals from fieldConfig.t2 (before EBS override so EBS wins)
+  const fc2 = STATE.fieldConfig?.t2||{};
+  Object.entries(fc2).forEach(([id,cfg])=>{
+    if(cfg.defaultVal && STATE.draft2[id]===undefined) STATE.draft2[id]=cfg.defaultVal;
+  });
+  // Pre-fill geo/EBS codes from user's assigned EBS code (these always override)
+  if (ebsDefault.length>=27) {
+    STATE.draft2['3']=ebsDefault.slice(0,2);
+    STATE.draft2['4']=ebsDefault.slice(2,9);
+    STATE.draft2['5']=ebsDefault.slice(9,14);
+    STATE.draft2['6']=ebsDefault.slice(14,17);
+    STATE.draft2['7']=ebsDefault.slice(17,21);
+    STATE.draft2.ebs_num=ebsDefault.slice(24,27);
+    STATE.draft2['16']=String(parseInt(ebsDefault.slice(24,27))||1);
+  }
+  navigate('familia_t2');
+}
+function editFamilia(id){
+  const fam=STATE.familias.find(f=>f.id===id);
+  if(!fam)return;
+  STATE.editFamId=id; STATE.t2step=1;
+  STATE.draft2=JSON.parse(JSON.stringify(fam.d2||{}));
+  navigate('familia_t2');
+}
+async function deleteFamilia(id){
+  if(!confirm('¿Eliminar esta familia y todos sus integrantes?'))return;
+  STATE.familias=STATE.familias.filter(f=>f.id!==id);
+  await softDeleteRecord('familias',id);
+  // Soft-delete personas
+  const ps=await idb.getAllByIndex('personas','familia_id',id);
+  for(const p of ps) await softDeleteRecord('personas',p.id);
+  render(); toast('Familia eliminada','ok');
+}
+
+// ============================================================
+// PANTALLA T2
+// ============================================================
+function renderT2(){
+  const d=STATE.draft2, step=STATE.t2step;
+  const steps=['Ubicación','EBS/Encuestador','Vivienda','Entorno','Familia'];
+  const stepsHtml=`<div class="steps-container"><div class="steps">`+
+    steps.map((s,i)=>{const n=i+1,cls=n<step?'done':n===step?'active':'idle';
+      return `<div class="step ${cls}" onclick="STATE.t2step=${n};render()">
+        <div class="step-circle">${n<step?'✓':n}</div>
+        <div class="step-label">${s}</div></div>`;}).join('')+'</div></div>';
+  let content='';
+  if(step===1)content=renderT2Step1(d);
+  else if(step===2)content=renderT2Step2(d);
+  else if(step===3)content=renderT2Step3(d);
+  else if(step===4)content=renderT2Step4(d);
+  else content=renderT2Step5(d);
+  const prev=step>1?`<button class="btn btn-secondary" onclick="STATE.t2step=${step-1};render()">← Anterior</button>`
+                   :`<button class="btn btn-secondary" onclick="navigate('home')">Cancelar</button>`;
+  const next=step<5?`<button class="btn btn-primary" onclick="STATE.t2step=${step+1};render()">Siguiente →</button>`
+                   :`<button class="btn btn-primary" onclick="saveFamilia()">💾 Guardar familia</button>`;
+  return stepsHtml+content+`<div class="bottom-bar">${prev}${next}</div>`;
+}
+
+function renderT2Step1(d){
+  const idx=STATE.editFamId?STATE.familias.findIndex(f=>f.id===STATE.editFamId):STATE.familias.length;
+  const ebsCode=calcEBS(d),numViv=calcNumVivienda(d,idx),numFam=calcNumFamilia(d,idx),codFicha=calcCodFicha(d,idx);
+  // Build dropdown options from user's assigned EBS codes
+  const uzpeOpts = ebsOptsFor(2,9);
+  const terrOpts = ebsOptsFor(14,17);
+  const microOpts= ebsOptsFor(17,21);
+  const ebsNumOpts=ebsOptsFor(24,27, v=>`EBS N° ${parseInt(v)} (${v})`);
+  // Municipios: merge EBS-derived codes + full NS static list, keep sorted
+  const muniFromEBS = ebsOptsFor(9,14, v=>`${v} — ${MUNIS_NS[v]||'(Municipio)'}`);
+  const muniCodes = new Set(muniFromEBS.map(o=>o.v));
+  const muniOpts = [...muniFromEBS];
+  Object.entries(MUNIS_NS).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([v,l])=>{
+    if(!muniCodes.has(v)) muniOpts.push({v, l:`${v} — ${l}`});
+  });
+  muniOpts.sort((a,b)=>a.v.localeCompare(b.v));
+  return `<div class="card">
+    <div class="card-title">Paso 1 — Consentimiento y Ubicación Geográfica</div>
+    ${sino('2',d['2']||'',true)}
+    <div class="grid-2">
+      ${ro('3',d['3']||'54','Código Departamento (Norte de Santander = 54)')}
+      ${uzpeOpts.length
+        ? sel(uzpeOpts,'4',d['4']||uzpeOpts[0]?.v||'',true)
+        : txt('4',d['4']||'',7,true,'Ej: UZPE001')}
+    </div>
+    ${muniOpts.length
+      ? sel(muniOpts,'5',d['5']||'',true)
+      : txt('5',d['5']||'',5,true,'Ej: 54003')}
+    <div class="grid-2">
+      ${terrOpts.length
+        ? sel(terrOpts,'6',d['6']||terrOpts[0]?.v||'',true)
+        : txt('6',d['6']||'',3,true,'Ej: T01')}
+      ${microOpts.length
+        ? sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true)
+        : txt('7',d['7']||'',4,true,'Ej: MT01')}
+    </div>
+    ${txt('8',d['8']||'',200,true,'Nombre del corregimiento, vereda, barrio...')}
+    ${txt('9',d['9']||'',200,false,'Dirección (opcional)')}
+    <div class="grid-2">${dec('10',d['10']||'')}${dec('11',d['11']||'')}</div>
+    ${txt('12',d['12']||'',200,false,'Descripción de ubicación sin nomenclatura')}
+  </div>
+  <div class="card">
+    <div class="card-title">N° EBS y Consecutivos</div>
+    <div class="grid-2">
+      <div class="field"><div class="field-label">N° del EBS <span class="req">*</span></div>
+        ${ebsNumOpts.length
+          ? `<select class="field-select" onchange="setDraftSel2('ebs_num',this.value)">
+              ${ebsNumOpts.map(o=>`<option value="${o.v}" ${d.ebs_num===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}
+             </select>`
+          : `<input class="field-input" type="text" maxlength="3" placeholder="001"
+               value="${esc(d.ebs_num||'001')}" oninput="setDraft2('ebs_num',this.value)">`
+        }
+        <div class="field-note">3 dígitos — actualiza campos 16 y 19</div></div>
+      <div class="field"><div class="field-label">N° del hogar en microterritorio</div>
+        <input class="field-input" type="text" maxlength="4" placeholder="0001"
+          value="${esc(d.hogar_num||String(idx+1).padStart(4,'0'))}"
+          oninput="setDraft2('hogar_num',this.value)"></div>
+    </div>
+    <div class="field"><div class="field-label">N° de la familia dentro del hogar</div>
+      <input class="field-input" type="text" maxlength="4" placeholder="0001"
+        value="${esc(d.familia_num||'1')}" oninput="setDraft2('familia_num',this.value)"></div>
+    ${ro('19',ebsCode,'Código EBS generado (campo 19)')}
+    ${ro('13',numViv,'N° Identificación vivienda (campo 13)')}
+    ${ro('14',numFam,'N° Identificación familia (campo 14)')}
+    ${ro('24',codFicha,'Código de la ficha (campo 24)')}
+  </div>`;
+}
+
+function renderT2Step2(d){
+  // Campo 16 is always derived from ebs_num (ordinal number of the EBS team)
+  const ebsNumInt = String(parseInt(d.ebs_num||d['16']||'1')||1);
+  return `<div class="card">
+  <div class="card-title">Paso 2 — EBS, Encuestador y Fechas</div>
+  ${ro('15','1 — IPS Pública (ESE / Hospital)','Tipo de prestador — siempre IPS Pública para HRNO')}
+  ${ro('16',ebsNumInt,'N° del EBS — derivado del N° EBS seleccionado en el Paso 1')}
+  ${num('17',d['17']||'1',true,1,99)}
+  ${ro('18',d['18']||'—','N° de la ficha — autogenerado al crear nueva familia')}
+  ${txt('20',d['20']||STATE.config.nit||'',9,true,'NIT sin dígito de verificación')}
+  ${sel(REF.tipoIdPersona,'21',d['21']||'CC',true)}
+  ${txt('22',d['22']||'',20,true,'Número de identificación')}
+  ${sel(REF.perfilAcademico,'23',d['23']||'',true)}
+  ${dat('25',d['25']||today(),true)}
+</div>`;}
+
+function renderT2Step3(d){
+  const s27=d['26']==='12',s29=d['28']==='8',s31=d['30']==='6',s33=d['32']==='8';
+  return `<div class="card">
+    <div class="card-title">Paso 3 — Caracterización de la Vivienda</div>
+    ${sel(REF.tipoVivienda,'26',d['26']||'',true)}
+    ${s27?txt('27',d['27']||'',30,false,'Especifique el tipo de vivienda'):''}
+    ${sel(REF.materialPared,'28',d['28']||'',true)}
+    ${s29?txt('29',d['29']||'',30,false,'Especifique el material de las paredes'):''}
+    ${sel(REF.materialPiso,'30',d['30']||'',true)}
+    ${s31?txt('31',d['31']||'',30,false,'Especifique el material del piso'):''}
+    ${sel(REF.materialTecho,'32',d['32']||'',true)}
+    ${s33?txt('33',d['33']||'',30,false,'Especifique el material del techo'):''}
+    <div class="grid-2">${num('34',d['34']||'',true,0,99)}${sino('35',d['35']||'',true)}</div>
+  </div>`;}
+
+function renderT2Step4(d){
+  const s41=(d['40']||[]).includes('19'),s44=(d['43']||[]).includes('12');
+  const s47=(d['46']||[]).includes('13'),s49=(d['48']||[]).includes('8');
+  const s51=(d['50']||[]).includes('7'),s53=(d['52']||[]).includes('6');
+  return `<div class="card">
+    <div class="card-title">Paso 4 — Entorno y Servicios Públicos</div>
+    ${multi('riesgoAccidente','36',d['36']||[],false)}
+    ${multi('sitiosAcceso','37',d['37']||[],true)}
+    ${multi('fuentesEnergia','38',d['38']||[],true)}
+    ${sino('39',d['39']||'',true)}
+    ${multi('obsVivienda','40',d['40']||[],true)}
+    ${s41?txt('41',d['41']||'',30,false,'Describa el otro lugar o característica'):''}
+    ${sino('42',d['42']||'',true)}
+    ${multi('animales','43',d['43']||[],true)}
+    ${s44?txt('44',d['44']||'',30,true,'Tipo y cantidad de animales'):txt('44',d['44']||'',30,false,'Ej: Perros 2, Gatos 1')}
+    ${num('45',d['45']||'',false,0,99)}
+    ${multi('fuenteAgua','46',d['46']||[],true)}
+    ${s47?txt('47',d['47']||'',30,false,'Especifique la otra fuente de agua'):''}
+    ${multi('sistemaExcretas','48',d['48']||[],true)}
+    ${s49?txt('49',d['49']||'',30,false,'Especifique el otro sistema de excretas'):''}
+    ${multi('aguasResiduales','50',d['50']||[],true)}
+    ${s51?txt('51',d['51']||'',30,false,'Especifique el otro sistema de aguas residuales'):''}
+    ${multi('disposicionResiduos','52',d['52']||[],true)}
+    ${s53?txt('53',d['53']||'',30,false,'Especifique la otra disposición de residuos'):''}
+  </div>`;}
+
+function renderT2Step5(d){
+  const sZarit=d['58']==='1',sTransm=d['66']==='1'||d['64']==='1';
+  const sDescAnt=d['71']==='1',sDescAl=(d['73']||[]).includes('9');
+  return `<div class="card">
+    <div class="card-title">Paso 5 — Familia, Instrumentos y Condiciones</div>
+    <div class="grid-2">${sel(REF.tipoFamilia,'54',d['54']||'',true)}${num('55',d['55']||'',true,1,99)}</div>
+    ${multi('familiograma','56',d['56']||[],true)}
+    ${sel(REF.apgar,'57',d['57']||'',true)}
+    ${sino('58',d['58']||'',true)}
+    ${sZarit?sel(REF.zarit,'59',d['59']||'',false):''}
+    ${sel(REF.ecomapa,'60',d['60']||'',true)}
+    <div class="grid-2">${sino('61',d['61']||'',true)}${sino('62',d['62']||'',true)}</div>
+    <div class="grid-2">${sino('63',d['63']||'',true)}${sino('64',d['64']||'',true)}</div>
+    <div class="grid-2">${sino('65',d['65']||'',true)}${sino('66',d['66']||'',true)}</div>
+    ${sTransm?multi('enfermedadTransmisible','67',d['67']||[],false):''}
+    ${sino('68',d['68']||'',true)}${sino('69',d['69']||'',true)}
+    ${sino('70',d['70']||'',true)}${sino('71',d['71']||'',true)}
+    ${sDescAnt?txt('72',d['72']||'',200,false,'Describa los antecedentes crónicos'):''}
+    ${multi('formaAlimentos','73',d['73']||[],true)}
+    ${sDescAl?txt('74',d['74']||'',100,false,'Especifique la otra forma de obtención de alimentos'):''}
+    <div class="grid-2">${sino('75',d['75']||'',true)}${sino('76',d['76']||'',true)}</div>
+    <div class="grid-2">${sino('77',d['77']||'',true)}${sino('78',d['78']||'',true)}</div>
+    <div class="grid-2">${sino('79',d['79']||'',true)}${sino('80',d['80']||'',true)}</div>
+    <div class="grid-2">${sino('81',d['81']||'',true)}${sino('82',d['82']||'',true)}</div>
+    ${sino('83',d['83']||'',true)}
+  </div>`;}
+
+async function saveFamilia(){
+  const d=STATE.draft2;
+  if(!d['2']||!d['3']||!d['5']||!d['8'])return toast('Complete los campos obligatorios del Paso 1','err');
+  if(!d['25'])return toast('Complete la fecha de diligenciamiento (Paso 2)','err');
+  if(!d['26'])return toast('Seleccione el tipo de vivienda (Paso 3)','err');
+  if(!d['54'])return toast('Seleccione el tipo de familia (Paso 5)','err');
+  // Ensure auto-derived fields are set correctly before saving
+  d['15'] = '1'; // Siempre IPS Pública para HRNO
+  d['16'] = String(parseInt(d.ebs_num||d['16']||'1')||1);
+  const ebsCode=calcEBS(d);
+  if(STATE.editFamId){
+    const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
+    if(fam){
+      fam.d2={...d}; fam.ebs_code=ebsCode; fam.updated_at=new Date().toISOString();
+      await writeRecord('familias',{id:fam.id,ebs_code:ebsCode,d2:d,updated_at:fam.updated_at,created_by:fam.created_by,created_at:fam.created_at});
+    }
+  } else {
+    const id=uid();
+    const now=new Date().toISOString();
+    const rec={id,ebs_code:ebsCode,d2:{...d},created_by:STATE.auth?.user?.id,created_at:now,updated_at:now};
+    STATE.familias.push({...rec,personas:[]});
+    await writeRecord('familias',rec);
+  }
+  toast('Familia guardada','ok'); navigate('home');
+}
+
+// ============================================================
+// PANTALLA T3
+// ============================================================
+function renderT3List(){
+  const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
+  if(!fam)return `<div class="empty"><div class="empty-title">Familia no encontrada</div></div>`;
+  const d=fam.d2||{},personas=fam.personas||[];
+  const summary=`<div class="card" style="border-color:var(--purple)">
+    <div class="card-title">📋 Familia — ${esc(d['8']||d['5']||'—')}</div>
+    <div class="card-row"><span style="color:var(--muted)">Municipio</span><span>${esc(d['5']||'—')}</span></div>
+    <div class="card-row"><span style="color:var(--muted)">Fecha</span><span>${esc(d['25']||'—')}</span></div>
+    <div class="card-row"><span style="color:var(--muted)">Tipo familia</span><span>${esc(REF.tipoFamilia.find(o=>o.v===d['54'])?.l||'—')}</span></div>
+    <div class="card-row"><span style="color:var(--muted)">Integrantes</span>
+      <span class="badge badge-${personas.length>0?'green':'yellow'}">${personas.length} de ${esc(d['55']||'?')}</span></div>
+  </div>`;
+  const list=personas.length===0
+    ?`<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Sin personas registradas</div></div>`
+    :personas.map(p=>{
+        const pd=p.d3||{};
+        const nombre=[pd['3'],pd['4'],pd['5'],pd['6']].filter(Boolean).join(' ')||'(sin nombre)';
+        const meta=[pd['7']&&pd['8']?pd['7']+' '+pd['8']:'',pd['9']||'',REF.sexo.find(o=>o.v===pd['10'])?.l||''].filter(Boolean).join(' · ');
+        const av=pd['10']==='1'?'👨':pd['10']==='2'?'👩':'🧑';
+        return `<div class="persona-item">
+          <div class="persona-avatar">${av}</div>
+          <div class="persona-info"><div class="persona-nombre">${esc(nombre)}</div><div class="persona-meta">${esc(meta)}</div></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" onclick="editPersona('${fam.id}','${p.id}')">✏</button>
+            <button class="btn btn-danger btn-sm" onclick="deletePersona('${fam.id}','${p.id}')">🗑</button>
+          </div>
+        </div>`;
+      }).join('');
+  return summary+list+
+    `<button class="btn btn-primary btn-block" style="margin-top:12px" onclick="nuevaPersona('${fam.id}')">+ Agregar persona</button>`;}
+
+function nuevaPersona(famId){
+  STATE.editFamId=famId; STATE.editPerId=null;
+  STATE.draft3={'15':'1','18':'07','21':['8']};
+  // Apply configured defaultVals from fieldConfig.t3
+  const fc3 = STATE.fieldConfig?.t3||{};
+  Object.entries(fc3).forEach(([id,cfg])=>{
+    if(cfg.defaultVal && STATE.draft3[id]===undefined) STATE.draft3[id]=cfg.defaultVal;
+  });
+  navigate('persona');
+}
+function editPersona(famId,perId){
+  const fam=STATE.familias.find(f=>f.id===famId);
+  const per=fam?.personas?.find(p=>p.id===perId);
+  if(!per)return;
+  STATE.editFamId=famId; STATE.editPerId=perId;
+  STATE.draft3=JSON.parse(JSON.stringify(per.d3||{}));
+  navigate('persona');
+}
+async function deletePersona(famId,perId){
+  if(!confirm('¿Eliminar esta persona?'))return;
+  const fam=STATE.familias.find(f=>f.id===famId);
+  if(fam)fam.personas=fam.personas.filter(p=>p.id!==perId);
+  await softDeleteRecord('personas',perId);
+  navigate('familia_t3',{editFamId:famId}); toast('Persona eliminada','ok');
+}
+
+function renderPersona(){
+  const d=STATE.draft3;
+  const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
+  const famD2=fam?.d2||{};
+  const showGest=d['10']==='2'&&famD2['62']==='1';
+  const showEAPB=d['15']&&d['15']!=='5';
+  const showAgente=d['18']&&d['18']!=='07';
+  const showPueblo=d['18']==='01';
+  const showDesc35=d['34']==='1';
+  const showMotivo37=d['36']==='2';
+  return `
+  <div class="card">
+    <div class="card-title">Identificación de la Persona</div>
+    <div class="grid-2">${txt3('3',d['3']||'',60,true,'Primer nombre')}${txt3('4',d['4']||'',60,false,'Segundo nombre')}</div>
+    <div class="grid-2">${txt3('5',d['5']||'',60,true,'Primer apellido')}${txt3('6',d['6']||'',60,false,'Segundo apellido')}</div>
+    <div class="grid-2">${sel3(REF.tipoIdPersona,'7',d['7']||'CC',true)}${txt3('8',d['8']||'',20,true,'Sin puntos ni guiones')}</div>
+    <div class="grid-2">${dat3('9',d['9']||'',true)}${sel3(REF.sexo,'10',d['10']||'',true)}</div>
+    ${showGest?sino3('11',d['11']||'',false):''}
+    ${sel3(REF.rolFamilia,'12',d['12']||'',true)}
+    ${searchField3('13',REF_CIUO,d['13']||'',true)}
+    <div class="grid-2">${sel3(REF.nivelEducativo,'14',d['14']||'',true)}${sel3(REF.regimen,'15',d['15']||'',true)}</div>
+    ${showEAPB?searchField3('16',REF_EAPB,d['16']||'',false):''}
+  </div>
+  <div class="card">
+    <div class="card-title">Perfil Social y Étnico</div>
+    ${multi3('grupoPoblacional','17',d['17']||[],true)}
+    ${sel3(REF.etnia,'18',d['18']||'07',true)}
+    ${showAgente?multi3('agenteMedTradicional','19',d['19']||[],false):''}
+    ${showPueblo?num3('20',d['20']||'',false,1,999):''}
+  </div>
+  <div class="card">
+    <div class="card-title">Condiciones de Salud</div>
+    ${multi3('discapacidad','21',d['21']||['8'],true)}
+    <div class="grid-2">${dec3('22',d['22']||'')}${dec3('23',d['23']||'')}</div>
+    ${sel3(REF.pesoTalla,'24',d['24']||'',false)}${dec3('25',d['25']||'')}
+    ${sino3('26',d['26']||'',true)}${sino3('27',d['27']||'',false)}
+    ${multi3('intervencionPendiente','28',d['28']||[],false)}
+    ${multi3('motivoNoAtencionProm','29',d['29']||[],false)}
+    ${sino3('30',d['30']||'',false)}
+    <div class="field"><div class="field-note">Campos 31-32 aplican solo si el integrante es menor de 2 años</div></div>
+    ${sino3('31',d['31']||'',false)}${num3('32',d['32']||'',false,0,24)}
+    ${multi3('signosDesnutricion','33',d['33']||[],false)}
+    ${sino3('34',d['34']||'',false)}
+    ${showDesc35?txt3('35',d['35']||'',200,false,'Describa la enfermedad aguda'):''}
+    ${sino3('36',d['36']||'',false)}
+    ${showMotivo37?multi3('motivoNoAtencionAguda','37',d['37']||[],false):''}
+  </div>
+  <div class="bottom-bar">
+    <button class="btn btn-secondary" onclick="navigate('familia_t3',{editFamId:'${STATE.editFamId}'})">Cancelar</button>
+    <button class="btn btn-primary" onclick="savePersona()">💾 Guardar persona</button>
+  </div>`;}
+
+async function savePersona(){
+  const d=STATE.draft3;
+  if(!d['3']||!d['5']||!d['7']||!d['8']||!d['9']||!d['10'])
+    return toast('Complete nombre, identificación, fecha de nacimiento y sexo','err');
+  const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
+  if(!fam)return toast('Error: familia no encontrada','err');
+  const ebsCode=fam.ebs_code||calcEBS(fam.d2||{});
+  const now=new Date().toISOString();
+  if(STATE.editPerId){
+    const per=fam.personas.find(p=>p.id===STATE.editPerId);
+    if(per){
+      per.d3={...d};
+      await writeRecord('personas',{id:per.id,familia_id:fam.id,ebs_code:ebsCode,d3:{...d},updated_at:now,created_by:per.created_by,created_at:per.created_at});
+    }
+  } else {
+    if(!fam.personas)fam.personas=[];
+    const id=uid();
+    fam.personas.push({id,d3:{...d}});
+    await writeRecord('personas',{id,familia_id:fam.id,ebs_code:ebsCode,d3:{...d},created_by:STATE.auth?.user?.id,created_at:now,updated_at:now});
+  }
+  fam.d2['55']=String(fam.personas.length);
+  toast('Persona guardada','ok');
+  navigate('familia_t3',{editFamId:STATE.editFamId});
+}
+
+// ============================================================
+// PANTALLA EXPORT + GENERADOR PISIS
+// ============================================================
+function renderExport(){
+  const c=STATE.config, fams=STATE.familias.filter(f=>!f.deleted_at);
+  const totalT3=fams.reduce((s,f)=>(f.personas||[]).length+s,0);
+  const confOk=c.nit&&c.fechaInicio&&c.fechaFin;
+  const fechaC=(c.fechaFin||'').replace(/-/g,'');
+  const nitPad=String(c.nit||'').padStart(12,'0');
+  const fileName=`APS124CCFP${fechaC}${c.tipoEntidad}${nitPad}.TXT`;
+  let preview='';
+  try{const lines=buildFile();preview=lines.slice(0,6).join('\n')+(lines.length>6?'\n…':'');}
+  catch(e){preview='Error: '+e.message;}
+  return `<div class="card">
+    <div class="card-title">Resumen del archivo</div>
+    <div class="config-row"><span>Entidad</span><span class="config-val">${esc(c.tipoEntidad)} — ${esc(c.nit||'—')}</span></div>
+    <div class="config-row"><span>Período</span><span class="config-val">${esc(c.fechaInicio||'—')} / ${esc(c.fechaFin||'—')}</span></div>
+    <div class="config-row"><span>Familias (Tipo 2)</span><span class="config-val">${fams.length}</span></div>
+    <div class="config-row"><span>Personas (Tipo 3)</span><span class="config-val">${totalT3}</span></div>
+    <div class="config-row"><span>Archivo</span><span class="config-val" style="font-size:10px">${esc(fileName)}</span></div>
+  </div>
+  ${!confOk?`<div class="card" style="border-color:var(--yellow)"><div style="color:var(--yellow)">⚠ Configure primero el NIT y el período de reporte.</div></div>`:''}
+  <div class="card"><div class="card-title">Vista previa</div>
+    <div class="preview">${esc(preview||'— sin datos —')}</div></div>
+  <button class="btn btn-success btn-block" onclick="downloadFile()" ${!confOk?'disabled':''}>⬇ Descargar ${esc(fileName)}</button>`;}
+
+function arrVal(v){if(!v||!Array.isArray(v))return v||'';return v.join(',');}
+
+function resolveCustomVal(val, refKey) {
+  // If a selected value is a custom code, find the "Otro" code and return label for description
+  if (!val) return {val, desc:''};
+  const arr = Array.isArray(val) ? val : [val];
+  const resolved = [], descs = [];
+  for (const v of arr) {
+    const opt = (REF[refKey]||[]).find(o=>o.v===v);
+    if (opt?.custom) {
+      const otroCode = (REF[refKey]||[]).find(o=>o.l==='Otro'||o.l.startsWith('Otro'));
+      resolved.push(otroCode?.v||v);
+      descs.push(opt.l);
+    } else { resolved.push(v); }
+  }
+  return {val: Array.isArray(val)?resolved:resolved[0], desc:descs.join('; ')};
+}
+
+function buildFile(){
+  const c=STATE.config, fams=STATE.familias.filter(f=>!f.deleted_at);
+  const totalT3=fams.reduce((s,f)=>(f.personas||[]).length+s,0);
+  let consec=0;
+  const lines=[];
+  // Tipo 1
+  const nitPad=String(c.nit||'').padStart(12,'0');
+  lines.push([c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT3)].join('|'));
+  fams.forEach((fam,fi)=>{
+    consec++;
+    const d=fam.d2||{};
+    const idx=fi;
+    const numViv=calcNumVivienda(d,idx);
+    const numFam=calcNumFamilia(d,idx);
+    const codFicha=calcCodFicha(d,idx);
+    const numIdFam=calcNumIdFamilia(d,idx);
+    const ebsCode=calcEBS(d);
+
+    // Resolver opciones personalizadas
+    const rv=(field,refKey)=>{const r=resolveCustomVal(d[field],refKey);return {v:r.val,desc:r.desc};};
+
+    const t2=[
+      '2',String(consec),d['2']||'',d['3']||'',d['4']||'',d['5']||'',d['6']||'',d['7']||'',
+      d['8']||'',d['9']||'',d['10']||'',d['11']||'',d['12']||'',
+      numViv,numFam,d['15']||'',d['16']||'',d['17']||'',d['18']||'',
+      ebsCode,d['20']||'',d['21']||'',d['22']||'',d['23']||'',codFicha,d['25']||'',
+      (()=>{const r=rv('26','tipoVivienda');return r.v})(),
+      (()=>{const r=rv('26','tipoVivienda');return r.desc||d['27']||''})(),
+      (()=>{const r=rv('28','materialPared');return r.v})(),
+      (()=>{const r=rv('28','materialPared');return r.desc||d['29']||''})(),
+      (()=>{const r=rv('30','materialPiso');return r.v})(),
+      (()=>{const r=rv('30','materialPiso');return r.desc||d['31']||''})(),
+      (()=>{const r=rv('32','materialTecho');return r.v})(),
+      (()=>{const r=rv('32','materialTecho');return r.desc||d['33']||''})(),
+      d['34']||'',d['35']||'',
+      arrVal(d['36']),arrVal(d['37']),arrVal(d['38']),
+      d['39']||'',arrVal(d['40']),d['41']||'',d['42']||'',
+      arrVal(d['43']),d['44']||'',d['45']||'',
+      arrVal(d['46']),d['47']||'',arrVal(d['48']),d['49']||'',
+      arrVal(d['50']),d['51']||'',arrVal(d['52']),d['53']||'',
+      d['54']||'',d['55']||'',arrVal(d['56']),d['57']||'',
+      d['58']||'',d['59']||'',d['60']||'',
+      d['61']||'',d['62']||'',d['63']||'',d['64']||'',
+      d['65']||'',d['66']||'',arrVal(d['67']),d['68']||'',
+      d['69']||'',d['70']||'',d['71']||'',d['72']||'',
+      arrVal(d['73']),d['74']||'',d['75']||'',d['76']||'',
+      d['77']||'',d['78']||'',d['79']||'',d['80']||'',
+      d['81']||'',d['82']||'',d['83']||'',numIdFam
+    ];
+    lines.push(t2.join('|'));
+    (fam.personas||[]).forEach(per=>{
+      consec++;
+      const pd=per.d3||{};
+      const numIdInt=numIdFam+(pd['7']||'')+(pd['8']||'');
+      const t3=['3',String(consec),'',
+        pd['3']||'',pd['4']||'',pd['5']||'',pd['6']||'',
+        pd['7']||'',pd['8']||'',pd['9']||'',pd['10']||'',pd['11']||'',
+        pd['12']||'',pd['13']||'',pd['14']||'',pd['15']||'',pd['16']||'',
+        arrVal(pd['17']),pd['18']||'',arrVal(pd['19']),pd['20']||'',
+        arrVal(pd['21']),pd['22']||'',pd['23']||'',pd['24']||'',pd['25']||'',
+        pd['26']||'',pd['27']||'',arrVal(pd['28']),arrVal(pd['29']),
+        pd['30']||'',pd['31']||'',pd['32']||'',arrVal(pd['33']),
+        pd['34']||'',pd['35']||'',pd['36']||'',arrVal(pd['37']),
+        numIdFam,numIdInt
+      ];
+      lines.push(t3.join('|'));
+    });
+  });
+  return lines;
+}
+
+function downloadFile(){
+  try{
+    const lines=buildFile();
+    const content=lines.join('\n');
+    const c=STATE.config;
+    const fechaC=(c.fechaFin||'').replace(/-/g,'');
+    const nitPad=String(c.nit||'').padStart(12,'0');
+    const fileName=`APS124CCFP${fechaC}${c.tipoEntidad}${nitPad}.TXT`;
+    const blob=new Blob([content],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=fileName;
+    document.body.appendChild(a);a.click();
+    document.body.removeChild(a);URL.revokeObjectURL(url);
+    toast('Archivo descargado: '+fileName,'ok');
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg,type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='toast show '+type;
+  setTimeout(()=>{el.className='toast';},3500);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  await openDB();
+  // Restore session from IDB
+  const sess = await idb.get('auth','session');
+  if (sess?.access_token) {
+    STATE.auth = {access_token:sess.access_token, refresh_token:sess.refresh_token, user:sess.user};
+    STATE.profile = sess.profile||null;
+    document.getElementById('btn-admin').style.display = STATE.profile?.rol==='admin' ? '' : 'none';
+    // Load data from IDB while trying to refresh online
+    await rebuildAppState();
+    STATE.screen = 'home';
+    // Load admin users if admin (await so data is ready before render)
+    if (isAdmin()) await loadAdminUsers();
+  }
+  initConnectivity();
+  render();
+  updateSyncUI();
+  // Service Worker
+  if ('serviceWorker' in navigator && location.protocol!=='file:')
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+init();
+</script>
+</body>
+</html>
