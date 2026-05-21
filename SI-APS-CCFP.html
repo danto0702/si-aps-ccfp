@@ -1390,7 +1390,7 @@ const EBS_PRESET_HRNO = [
   {num:'021',label:'ESPECIALISTAS TEORAMA'}
 ];
 
-function ebsCode(e){ return `EBS${e.num}-EBS-${e.label}`; }
+function fmtEBS(e){ return `EBS${e.num}-EBS-${e.label}`; }
 
 async function loadEBSPreset() {
   if (!confirm('¿Cargar los 21 EBS predeterminados HRNO? Se reemplazará la lista actual.')) return;
@@ -1406,7 +1406,7 @@ function renderAdminEBS() {
   const rows = list.length
     ? list.map((e,i)=>`<div class="card-row" style="gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;color:var(--purple-l)">${esc(ebsCode(e))}</div>
+          <div style="font-weight:700;font-size:13px;color:var(--purple-l)">${esc(fmtEBS(e))}</div>
         </div>
         <button class="btn btn-danger btn-sm" onclick="deleteEBSItem(${i})">🗑</button>
       </div>`).join('')
@@ -2184,7 +2184,7 @@ function renderT2Step1(d){
   const microOpts= ebsOptsFor(17,21);
   // Si el admin configuró EBS en el panel, usar esa lista; si no, derivar del código de usuario
   const ebsNumOpts=STATE.ebsList?.length
-    ? STATE.ebsList.map(e=>({v:e.num, l:ebsCode(e)}))
+    ? STATE.ebsList.map(e=>({v:e.num, l:fmtEBS(e)}))
     : ebsOptsFor(24,27, v=>`EBS${v}-EBS-(${parseInt(v)})`);
   // Municipios: merge EBS-derived codes + full NS static list, keep sorted
   const muniFromEBS = ebsOptsFor(9,14, v=>`${v} — ${MUNIS_NS[v]||'(Municipio)'}`);
@@ -2919,7 +2919,7 @@ function drawAnalyticsCharts(D) {
     const ebs=sortedEntries(D.byEBS,21);
     const ebsLabels=ebs.map(([k])=>{
       const found=STATE.ebsList?.find(e=>e.num===k);
-      return found?ebsCode(found):('EBS'+k);
+      return found?fmtEBS(found):('EBS'+k);
     });
     mkBar('ch-ebs',ebsLabels,ebs.map(([,v])=>v),AP.slice(0,ebs.length),true);
     // Tiempo line
