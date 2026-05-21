@@ -156,6 +156,23 @@ button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
 .sync-dot.syncing{background:var(--yellow);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .pending-badge{position:fixed;bottom:84px;right:24px;background:var(--yellow);color:#000;border-radius:12px;padding:4px 10px;font-size:12px;font-weight:700;z-index:190;display:none}
+/* ANALYTICS */
+.an-kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px}
+@media(min-width:480px){.an-kpi-grid{grid-template-columns:repeat(4,1fr)}}
+.an-kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.an-kpi-val{font-size:26px;font-weight:800;color:var(--purple-l);line-height:1}
+.an-kpi-sub{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.3}
+.an-kpi.green .an-kpi-val{color:var(--green)}
+.an-kpi.yellow .an-kpi-val{color:var(--yellow)}
+.an-kpi.red .an-kpi-val{color:var(--red)}
+.an-kpi.blue .an-kpi-val{color:#93c5fd}
+.chart-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.chart-title{font-size:12px;font-weight:700;color:var(--purple-l);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.chart-wrap{position:relative}
+.chart-wrap canvas{display:block}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.chart-grid{grid-template-columns:1fr}}
+.an-empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
@@ -164,6 +181,7 @@ button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
   <button class="btn-icon" id="btn-back" onclick="goBack()">←</button>
   <div class="hdr-title" id="hdr-title"></div>
   <span id="sync-dot" class="sync-dot" title="Sincronización"></span>
+  <button class="btn-icon" id="btn-analytics" style="display:none" onclick="navigate('analytics')" title="Análisis">📊</button>
   <button class="btn-icon" id="btn-admin" style="display:none" onclick="navigate('admin')">⚙</button>
   <button class="btn-icon" onclick="doLogout()" title="Salir">↩</button>
 </div>
@@ -521,6 +539,7 @@ async function loadProfile() {
   STATE.profile = own || rows?.[0] || null;
   document.getElementById('btn-admin').style.display =
     STATE.profile?.rol==='admin' ? '' : 'none';
+  document.getElementById('btn-analytics').style.display = '';
 }
 
 // ============================================================
@@ -676,6 +695,7 @@ async function pullFromCloud() {
       if (sess) await idb.put('auth', {...sess, profile: STATE.profile});
       document.getElementById('btn-admin').style.display =
         STATE.profile?.rol==='admin' ? '' : 'none';
+      document.getElementById('btn-analytics').style.display = '';
     }
   } catch(e){}
   // Familias — no sobreescribir registros marcados como eliminados localmente
@@ -869,7 +889,8 @@ const SCREEN_META = {
   familia_t2: {t:'', s:'Registro Tipo 2 — Hogar', back:true},
   familia_t3: {t:'Integrantes', s:'Registro Tipo 3 — Personas', back:true},
   persona:    {t:'', s:'Registro Tipo 3', back:true},
-  export:     {t:'Exportar Archivo', s:'Archivo plano PISIS', back:true}
+  export:     {t:'Exportar Archivo', s:'Archivo plano PISIS', back:true},
+  analytics:  {t:'📊 Análisis', s:'Indicadores y tendencias', back:true}
 };
 
 function navigate(screen, extra={}) {
@@ -884,7 +905,7 @@ function navigate(screen, extra={}) {
 
 function goBack() {
   const backs = {
-    config:'home', admin:'home', export:'home',
+    config:'home', admin:'home', export:'home', analytics:'home',
     familia_t2:'home', familia_t3:'home',
     persona:'familia_t3'
   };
@@ -918,7 +939,8 @@ function render() {
     home: renderHome, config: renderConfig,
     admin: renderAdmin,
     familia_t2: renderT2, familia_t3: renderT3List,
-    persona: renderPersona, export: renderExport
+    persona: renderPersona, export: renderExport,
+    analytics: renderAnalytics
   };
   m.innerHTML = (renders[STATE.screen]||renderHome)();
 }
@@ -1239,6 +1261,7 @@ function renderHome() {
   return userInfo+statsHtml+listHtml+
     `<div style="height:20px"></div>
      <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
+     <button class="btn btn-primary btn-block" onclick="navigate('analytics')">📊 Ver análisis e indicadores</button>
      ${isAdmin()?`<button class="btn btn-secondary btn-block" onclick="navigate('config')">⚙ Configuración del reporte</button>`:''}
      <button class="fab" onclick="nuevaFamilia()">+</button>`;
 }
@@ -1351,17 +1374,45 @@ function renderAdminUsers() {
     `<button class="btn btn-primary btn-block" style="margin-top:8px" onclick="openCreateUser()">+ Crear usuario</button>`;
 }
 
+// ── EBS preset HRNO ──────────────────────────────────────────
+const EBS_PRESET_HRNO = [
+  {num:'001',label:'CAPITANLARGO'},{num:'002',label:'HOYO PILÓN'},
+  {num:'003',label:'LA ESTRELLA'},{num:'004',label:'LA SIERRA'},
+  {num:'005',label:'BRIDIKAYRA'},{num:'006',label:'CAMPO ALEGRE'},
+  {num:'007',label:'CASA BLANCA'},{num:'008',label:'CARTAGENITA'},
+  {num:'009',label:'LA LAGUNA'},{num:'010',label:'CORRONGKAYRA'},
+  {num:'011',label:'GUAMALITO'},{num:'012',label:'SANTA INÉS'},
+  {num:'013',label:'TIERRA AZUL'},{num:'014',label:'ASERRÍO'},
+  {num:'015',label:'LA CECILIA'},{num:'016',label:'SAN JUANCITO'},
+  {num:'017',label:'SAN PABLO'},{num:'018',label:'ESPECIALISTAS ÁBREGO'},
+  {num:'019',label:'ESPECIALISTAS CONVENCIÓN'},
+  {num:'020',label:'ESPECIALISTAS EL CARMEN'},
+  {num:'021',label:'ESPECIALISTAS TEORAMA'}
+];
+
+function ebsCode(e){ return `EBS${e.num}-EBS-${e.label}`; }
+
+async function loadEBSPreset() {
+  if (!confirm('¿Cargar los 21 EBS predeterminados HRNO? Se reemplazará la lista actual.')) return;
+  STATE.ebsList = JSON.parse(JSON.stringify(EBS_PRESET_HRNO));
+  await idb.put('config',{key:'ebs_list', value:STATE.ebsList});
+  try { await sbFetch('/rest/v1/config',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key:'ebs_list',value:STATE.ebsList})}); } catch(e){}
+  toast('21 EBS HRNO cargados','ok'); render();
+}
+
 // ── Admin: Panel EBS ─────────────────────────────────────────
 function renderAdminEBS() {
   const list = STATE.ebsList||[];
   const rows = list.length
-    ? list.map((e,i)=>`<div class="card-row">
-        <span><strong>EBS ${esc(e.num)}</strong> — ${esc(e.label)}</span>
+    ? list.map((e,i)=>`<div class="card-row" style="gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px;color:var(--purple-l)">${esc(ebsCode(e))}</div>
+        </div>
         <button class="btn btn-danger btn-sm" onclick="deleteEBSItem(${i})">🗑</button>
       </div>`).join('')
-    : `<p class="field-note" style="padding:8px 0">Sin EBS configurados. Al estar vacío, los N° de EBS se derivan automáticamente del código asignado a cada usuario.</p>`;
+    : `<p class="field-note" style="padding:8px 0">Sin EBS configurados. Al estar vacío, los N° de EBS se derivan del código de usuario.</p>`;
   return `<div class="card">
-    <div class="card-title">📡 Equipos EBS configurados</div>
+    <div class="card-title">📡 Equipos EBS configurados (${list.length})</div>
     ${rows}
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
       <div style="flex:0 0 80px">
@@ -1369,12 +1420,13 @@ function renderAdminEBS() {
         <input id="ebs-num-in" class="field-input" type="text" maxlength="3" placeholder="001">
       </div>
       <div style="flex:1;min-width:160px">
-        <div class="field-label">Etiqueta <span class="req">*</span></div>
-        <input id="ebs-label-in" class="field-input" type="text" maxlength="100" placeholder="EBS 001 — Ábrego Norte">
+        <div class="field-label">Nombre territorio <span class="req">*</span></div>
+        <input id="ebs-label-in" class="field-input" type="text" maxlength="100" placeholder="CAPITANLARGO">
       </div>
       <button class="btn btn-primary" style="white-space:nowrap" onclick="addEBSItem()">+ Agregar EBS</button>
     </div>
-  </div>`;
+  </div>
+  <button class="btn btn-secondary btn-block" style="margin-top:8px;border-color:var(--yellow);color:var(--yellow)" onclick="loadEBSPreset()">⚡ Cargar 21 EBS predeterminados HRNO</button>`;
 }
 async function addEBSItem() {
   const num = (document.getElementById('ebs-num-in')?.value||'').trim().padStart(3,'0');
@@ -2132,8 +2184,8 @@ function renderT2Step1(d){
   const microOpts= ebsOptsFor(17,21);
   // Si el admin configuró EBS en el panel, usar esa lista; si no, derivar del código de usuario
   const ebsNumOpts=STATE.ebsList?.length
-    ? STATE.ebsList.map(e=>({v:e.num, l:`EBS N° ${parseInt(e.num)} — ${e.label}`}))
-    : ebsOptsFor(24,27, v=>`EBS N° ${parseInt(v)} (${v})`);
+    ? STATE.ebsList.map(e=>({v:e.num, l:ebsCode(e)}))
+    : ebsOptsFor(24,27, v=>`EBS${v}-EBS-(${parseInt(v)})`);
   // Municipios: merge EBS-derived codes + full NS static list, keep sorted
   const muniFromEBS = ebsOptsFor(9,14, v=>`${v} — ${MUNIS_NS[v]||'(Municipio)'}`);
   const muniCodes = new Set(muniFromEBS.map(o=>o.v));
@@ -2619,6 +2671,305 @@ function downloadFile(){
   }catch(e){toast('Error: '+e.message,'err');}
 }
 
+// ============================================================
+// MÓDULO DE ANÁLISIS
+// ============================================================
+let _anTab = 'cobertura'; // 'cobertura' | 'demografia' | 'salud' | 'vivienda'
+let _chartjsLoaded = false;
+const _charts = {};
+
+function loadChartJS() {
+  if (_chartjsLoaded || window.Chart) { _chartjsLoaded=true; return Promise.resolve(); }
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    s.onload=()=>{ _chartjsLoaded=true; res(); };
+    s.onerror=()=>rej(new Error('No se pudo cargar Chart.js. Verifica conexión a internet.'));
+    document.head.appendChild(s);
+  });
+}
+function destroyChart(id){ if(_charts[id]){_charts[id].destroy();delete _charts[id];} }
+
+// Paleta del app
+const AP=['#a855f7','#38c793','#ffb432','#4a6fa5','#e94560','#22d3ee','#fb923c','#f472b6','#818cf8','#2dd4bf','#a3e635','#fbbf24'];
+function chartOpts(extra={}){
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{color:'#e6edf3',font:{size:11},boxWidth:12,padding:10}},
+      tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e'}
+    },
+    scales:{
+      x:{ticks:{color:'#8b949e',font:{size:11}},grid:{color:'#21262d'}},
+      y:{ticks:{color:'#8b949e',font:{size:11}},grid:{color:'#21262d'}}
+    }, ...extra
+  };
+}
+
+// ── Cómputo de indicadores ────────────────────────────────────
+function computeAn() {
+  const myId = STATE.auth?.user?.id;
+  const fams = STATE.familias.filter(f=>!f.deleted_at && (isAdmin()||f.created_by===myId));
+
+  // KPIs
+  let totalFam=fams.length, totalPer=0, totalGest=0;
+  const avgPer = () => totalFam ? (totalPer/totalFam).toFixed(1) : '—';
+
+  // T2 (familia)
+  const byEBS={}, byMuni={}, byTime={}, byZona={}, byVivienda={}, byPared={}, byAgua={}, byTipoFam={};
+  // T3 (persona)
+  const bySexo={}, byGrupo={}, byAfil={}, byNutr={}, byVac={'si':0,'no':0,'nd':0}, byDisc={}, byInterv={};
+
+  const multiCount=(obj,val)=>{
+    const arr=Array.isArray(val)?val:(val?[val]:[]);
+    arr.forEach(v=>{ if(v) obj[v]=(obj[v]||0)+1; });
+  };
+
+  fams.forEach(f=>{
+    const d=f.d2||{};
+    // EBS
+    const en=(d['16']||'').padStart(3,'0')||f.ebs_code?.slice(-3)||'???';
+    byEBS[en]=(byEBS[en]||0)+1;
+    // Municipio
+    const mu=d['5']||''; if(mu) byMuni[MUNIS_NS[mu]||mu]=(byMuni[MUNIS_NS[mu]||mu]||0)+1;
+    // Tiempo
+    const fe=d['25']||''; if(fe.length>=7) byTime[fe.slice(0,7)]=(byTime[fe.slice(0,7)]||0)+1;
+    // Zona
+    const zo={1:'Urbana',2:'Rural dispersa',3:'Rural'}[d['18']]||(d['18']||'S/D');
+    byZona[zo]=(byZona[zo]||0)+1;
+    // Vivienda
+    const vi=(REF.tipoVivienda.find(o=>o.v===d['26'])?.l)||d['26']||'S/D';
+    byVivienda[vi]=(byVivienda[vi]||0)+1;
+    // Material pared
+    const pa=(REF.materialPared.find(o=>o.v===d['28'])?.l)||d['28']||'S/D';
+    if(d['28']) byPared[pa]=(byPared[pa]||0)+1;
+    // Agua
+    const aguaArr=Array.isArray(d['37'])?d['37']:(d['37']?[d['37']]:[]);
+    aguaArr.forEach(a=>{ const l=(REF.fuenteAgua.find(o=>o.v===a)?.l)||a; if(a)byAgua[l]=(byAgua[l]||0)+1; });
+    // Tipo familia
+    const tf=(REF.tipoFamilia.find(o=>o.v===d['54'])?.l)||d['54']||'S/D';
+    if(d['54']) byTipoFam[tf]=(byTipoFam[tf]||0)+1;
+    // Gestante en familia
+    if(d['62']==='1') totalGest++;
+
+    // Personas
+    (f.personas||[]).forEach(p=>{
+      totalPer++;
+      const pd=p.d3||{};
+      // Sexo
+      const sx=(REF.sexo.find(o=>o.v===pd['10'])?.l)||(pd['10']||'S/D');
+      bySexo[sx]=(bySexo[sx]||0)+1;
+      // Grupo poblacional (multi)
+      multiCount(byGrupo, pd['17']);
+      // Régimen
+      const af=(REF.regimen.find(o=>o.v===pd['15'])?.l)||(pd['15']||'S/D');
+      if(pd['15']) byAfil[af]=(byAfil[af]||0)+1;
+      // Diagnóstico nutricional
+      const nu=(REF.pesoTalla.find(o=>o.v===pd['24'])?.l)||(pd['24']||'');
+      if(pd['24']) byNutr[nu]=(byNutr[nu]||0)+1;
+      // Vacunas al día
+      if(pd['30']==='1') byVac.si++; else if(pd['30']==='2') byVac.no++; else byVac.nd++;
+      // Discapacidad (multi)
+      multiCount(byDisc, pd['21']);
+      // Intervenciones pendientes (multi)
+      multiCount(byInterv, pd['28']);
+    });
+  });
+
+  // Resolver byGrupo labels
+  const byGrupoL={};
+  Object.entries(byGrupo).forEach(([v,n])=>{
+    const l=(REF.grupoPoblacional.find(o=>o.v===v)?.l)||v;
+    byGrupoL[l]=(byGrupoL[l]||0)+n;
+  });
+  // Resolver byInterv labels
+  const byIntervL={};
+  Object.entries(byInterv).forEach(([v,n])=>{
+    const l=(REF.intervencionPendiente.find(o=>o.v===v)?.l)||v;
+    byIntervL[l]=(byIntervL[l]||0)+n;
+  });
+  // Resolver byDisc labels
+  const byDiscL={};
+  Object.entries(byDisc).forEach(([v,n])=>{
+    const l=(REF.discapacidad.find(o=>o.v===v)?.l)||v;
+    byDiscL[l]=(byDiscL[l]||0)+n;
+  });
+
+  return {totalFam,totalPer:()=>totalPer,totalGest:()=>totalGest,avgPer,
+    byEBS,byMuni,byTime,byZona,byVivienda,byPared,byAgua,byTipoFam,
+    bySexo,byGrupoL,byAfil,byNutr,byVac,byDiscL,byIntervL};
+}
+
+// ── HTML del módulo ───────────────────────────────────────────
+function renderAnalytics() {
+  const D = computeAn();
+  const scope = isAdmin()
+    ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:12px">👑 Viendo datos de TODOS los usuarios</div>`
+    : `<div style="font-size:11px;color:#93c5fd;margin-bottom:12px">👤 Viendo solo tus datos</div>`;
+
+  // KPIs
+  const vacPct = D.totalPer() ? Math.round(D.byVac.si/(D.byVac.si+D.byVac.no||1)*100) : 0;
+  const gestPct = D.totalFam ? Math.round(D.totalGest()/D.totalFam*100) : 0;
+  const kpis = `<div class="an-kpi-grid">
+    <div class="an-kpi"><div class="an-kpi-val">${D.totalFam}</div><div class="an-kpi-sub">Familias captadas</div></div>
+    <div class="an-kpi green"><div class="an-kpi-val">${D.totalPer()}</div><div class="an-kpi-sub">Personas registradas</div></div>
+    <div class="an-kpi blue"><div class="an-kpi-val">${D.avgPer()}</div><div class="an-kpi-sub">Promedio personas/familia</div></div>
+    <div class="an-kpi yellow"><div class="an-kpi-val">${vacPct}%</div><div class="an-kpi-sub">Vacunación al día</div></div>
+  </div>`;
+
+  // Tabs
+  const tabs = ['cobertura','demografia','salud','vivienda'].map(t=>
+    `<button class="admin-tab ${_anTab===t?'active':''}" onclick="_anTab='${t}';render()">${
+      {cobertura:'📍 Cobertura',demografia:'👥 Demografía',salud:'🏥 Salud',vivienda:'🏠 Vivienda'}[t]
+    }</button>`).join('');
+  const tabBar = `<div class="admin-tabs" style="margin-bottom:16px;border-radius:10px;overflow:hidden">${tabs}</div>`;
+
+  let content='';
+  if(D.totalFam===0){
+    content=`<div class="an-empty">Sin datos para analizar. Registra fichas de familia para ver los indicadores.</div>`;
+  } else {
+    if(_anTab==='cobertura'){
+      content=`
+      <div class="chart-section"><div class="chart-title">Familias captadas por EBS</div>
+        <div class="chart-wrap" style="height:${Math.max(200,Object.keys(D.byEBS).length*30)}px"><canvas id="ch-ebs"></canvas></div></div>
+      <div class="chart-section"><div class="chart-title">Captación en el tiempo (por mes)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="ch-time"></canvas></div></div>
+      <div class="chart-grid">
+        <div class="chart-section"><div class="chart-title">Zona de residencia</div>
+          <div class="chart-wrap" style="height:180px"><canvas id="ch-zona"></canvas></div></div>
+        <div class="chart-section"><div class="chart-title">Tipo de familia</div>
+          <div class="chart-wrap" style="height:180px"><canvas id="ch-tipofam"></canvas></div></div>
+      </div>`;
+    } else if(_anTab==='demografia'){
+      content=`
+      <div class="chart-grid">
+        <div class="chart-section"><div class="chart-title">Distribución por sexo</div>
+          <div class="chart-wrap" style="height:200px"><canvas id="ch-sexo"></canvas></div></div>
+        <div class="chart-section"><div class="chart-title">Régimen de afiliación</div>
+          <div class="chart-wrap" style="height:200px"><canvas id="ch-afil"></canvas></div></div>
+      </div>
+      <div class="chart-section"><div class="chart-title">Grupos poblacionales identificados</div>
+        <div class="chart-wrap" style="height:${Math.max(220,Object.keys(D.byGrupoL).length*30)}px"><canvas id="ch-grupo"></canvas></div></div>
+      <div class="chart-section"><div class="chart-title">Familias por municipio</div>
+        <div class="chart-wrap" style="height:${Math.max(200,Object.keys(D.byMuni).length*30)}px"><canvas id="ch-muni"></canvas></div></div>`;
+    } else if(_anTab==='salud'){
+      content=`
+      <div class="chart-grid">
+        <div class="chart-section"><div class="chart-title">Vacunación al día</div>
+          <div class="chart-wrap" style="height:200px"><canvas id="ch-vac"></canvas></div></div>
+        <div class="chart-section"><div class="chart-title">Diagnóstico nutricional (IMC)</div>
+          <div class="chart-wrap" style="height:200px"><canvas id="ch-nutr"></canvas></div></div>
+      </div>
+      <div class="chart-section"><div class="chart-title">Intervenciones pendientes más frecuentes</div>
+        <div class="chart-wrap" style="height:${Math.max(200,Object.keys(D.byIntervL).length*32)}px"><canvas id="ch-interv"></canvas></div></div>
+      <div class="chart-section"><div class="chart-title">Discapacidad reportada (tipos)</div>
+        <div class="chart-wrap" style="height:${Math.max(200,Object.keys(D.byDiscL).length*32)}px"><canvas id="ch-disc"></canvas></div></div>`;
+    } else { // vivienda
+      content=`
+      <div class="chart-grid">
+        <div class="chart-section"><div class="chart-title">Tipo de vivienda</div>
+          <div class="chart-wrap" style="height:220px"><canvas id="ch-viv"></canvas></div></div>
+        <div class="chart-section"><div class="chart-title">Material de paredes</div>
+          <div class="chart-wrap" style="height:220px"><canvas id="ch-pared"></canvas></div></div>
+      </div>
+      <div class="chart-section"><div class="chart-title">Fuentes de agua para consumo</div>
+        <div class="chart-wrap" style="height:${Math.max(200,Object.keys(D.byAgua).length*32)}px"><canvas id="ch-agua"></canvas></div></div>`;
+    }
+  }
+
+  // Schedule chart drawing after DOM update
+  loadChartJS().then(()=>{
+    if(STATE.screen!=='analytics') return;
+    setTimeout(()=>drawAnalyticsCharts(D),80);
+  }).catch(e=>toast('Chart.js: '+e.message,'err'));
+
+  return scope+kpis+tabBar+content;
+}
+
+// ── Dibujo de gráficas ────────────────────────────────────────
+function mkBar(id,labels,data,colors,horizontal=false){
+  const ctx=document.getElementById(id)?.getContext('2d'); if(!ctx)return;
+  destroyChart(id);
+  const opts=chartOpts(horizontal?{indexAxis:'y',scales:{x:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'}}}}:{});
+  opts.plugins.legend.display=false;
+  _charts[id]=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors||AP.slice(0,data.length),borderRadius:4,borderWidth:0}]},options:opts});
+}
+function mkDoughnut(id,labels,data,colors){
+  const ctx=document.getElementById(id)?.getContext('2d'); if(!ctx)return;
+  destroyChart(id);
+  const opts=chartOpts({scales:{}});
+  opts.plugins.legend.position='bottom';
+  _charts[id]=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors||AP.slice(0,data.length),borderColor:'#0d1117',borderWidth:2,hoverOffset:6}]},options:opts});
+}
+function mkLine(id,labels,data){
+  const ctx=document.getElementById(id)?.getContext('2d'); if(!ctx)return;
+  destroyChart(id);
+  const opts=chartOpts({});
+  opts.plugins.legend.display=false;
+  _charts[id]=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#a855f7',backgroundColor:'rgba(168,85,247,0.15)',fill:true,tension:.4,pointBackgroundColor:'#a855f7',pointRadius:4}]},options:opts});
+}
+
+function sortedEntries(obj,limit=12){
+  return Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,limit);
+}
+
+function drawAnalyticsCharts(D) {
+  if(_anTab==='cobertura'){
+    // EBS bar (horizontal)
+    const ebs=sortedEntries(D.byEBS,21);
+    const ebsLabels=ebs.map(([k])=>{
+      const found=STATE.ebsList?.find(e=>e.num===k);
+      return found?ebsCode(found):('EBS'+k);
+    });
+    mkBar('ch-ebs',ebsLabels,ebs.map(([,v])=>v),AP.slice(0,ebs.length),true);
+    // Tiempo line
+    const times=Object.entries(D.byTime).sort((a,b)=>a[0].localeCompare(b[0]));
+    mkLine('ch-time',times.map(([k])=>k),times.map(([,v])=>v));
+    // Zona donut
+    const zo=Object.entries(D.byZona);
+    mkDoughnut('ch-zona',zo.map(([k])=>k),zo.map(([,v])=>v),['#38c793','#ffb432','#4a6fa5']);
+    // Tipo familia
+    const tf=sortedEntries(D.byTipoFam);
+    mkDoughnut('ch-tipofam',tf.map(([k])=>k),tf.map(([,v])=>v));
+  } else if(_anTab==='demografia'){
+    // Sexo donut
+    const sx=Object.entries(D.bySexo);
+    mkDoughnut('ch-sexo',sx.map(([k])=>k),sx.map(([,v])=>v),['#4a6fa5','#f472b6','#8b949e']);
+    // Afiliación donut
+    const af=Object.entries(D.byAfil);
+    mkDoughnut('ch-afil',af.map(([k])=>k),af.map(([,v])=>v),['#38c793','#a855f7','#4a6fa5','#e94560','#8b949e']);
+    // Grupo poblacional bar horizontal
+    const gp=sortedEntries(D.byGrupoL,13);
+    mkBar('ch-grupo',gp.map(([k])=>k),gp.map(([,v])=>v),AP.slice(0,gp.length),true);
+    // Municipio bar horizontal
+    const mu=sortedEntries(D.byMuni,10);
+    mkBar('ch-muni',mu.map(([k])=>k),mu.map(([,v])=>v),['#a855f7'],true);
+  } else if(_anTab==='salud'){
+    // Vacunación donut
+    mkDoughnut('ch-vac',['Al día','Pendiente','Sin datos'],[D.byVac.si,D.byVac.no,D.byVac.nd],['#38c793','#e94560','#8b949e']);
+    // Nutricional bar
+    const nu=sortedEntries(D.byNutr);
+    const nuColors={'Delgadez severa':'#e94560','Delgadez':'#fb923c','Normal':'#38c793','Posible riesgo de sobrepeso':'#ffb432','Sobrepeso':'#f97316','Obesidad':'#dc2626','No aplica':'#8b949e'};
+    mkBar('ch-nutr',nu.map(([k])=>k),nu.map(([,v])=>v),nu.map(([k])=>nuColors[k]||'#a855f7'));
+    // Intervenciones bar horizontal
+    const iv=sortedEntries(D.byIntervL,10);
+    mkBar('ch-interv',iv.map(([k])=>k),iv.map(([,v])=>v),['#4a6fa5'],true);
+    // Discapacidad bar horizontal
+    const dc=sortedEntries(D.byDiscL,10);
+    mkBar('ch-disc',dc.map(([k])=>k),dc.map(([,v])=>v),['#fb923c'],true);
+  } else { // vivienda
+    // Tipo vivienda donut
+    const vi=sortedEntries(D.byVivienda,8);
+    mkDoughnut('ch-viv',vi.map(([k])=>k),vi.map(([,v])=>v));
+    // Material pared bar
+    const pa=sortedEntries(D.byPared);
+    mkBar('ch-pared',pa.map(([k])=>k.slice(0,20)),pa.map(([,v])=>v),AP.slice(0,pa.length));
+    // Agua bar horizontal
+    const ag=sortedEntries(D.byAgua,10);
+    mkBar('ch-agua',ag.map(([k])=>k),ag.map(([,v])=>v),['#22d3ee'],true);
+  }
+}
+
 // ── Export: JSON ─────────────────────────────────────────────
 function downloadJSON() {
   try {
@@ -2816,6 +3167,7 @@ async function init() {
     STATE.auth = {access_token:sess.access_token, refresh_token:sess.refresh_token, user:sess.user};
     STATE.profile = sess.profile||null;
     document.getElementById('btn-admin').style.display = STATE.profile?.rol==='admin' ? '' : 'none';
+    document.getElementById('btn-analytics').style.display = '';
     // Load data from IDB while trying to refresh online
     await rebuildAppState();
     STATE.screen = 'home';

@@ -6,7 +6,7 @@ const ASSETS = [
   // Leaflet para mapa geopunto (disponible offline después de primera carga)
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-  // SheetJS se carga dinámicamente; se cachea en la primera descarga Excel
+  // Chart.js y SheetJS se cargan dinámicamente; se cachean en el primer uso online
 ];
 
 self.addEventListener('install', e => {
