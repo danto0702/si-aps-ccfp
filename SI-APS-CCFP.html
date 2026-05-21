@@ -2749,6 +2749,18 @@ function renderExport(){
   ${!confOk?`<div class="card" style="border-color:var(--yellow)"><div style="color:var(--yellow)">⚠ Configure primero el NIT y el período de reporte para el archivo PISIS.</div></div>`:''}
   <div class="card"><div class="card-title">Vista previa (archivo plano)</div>
     <div class="preview">${esc(preview||'— sin datos —')}</div></div>
+  <div class="card">
+    <div class="card-title">Formato de exportación</div>
+    <div class="toggle-group" id="export-mode-toggle">
+      <button class="toggle-btn ${_exportMode==='codes'?'active-si':''}" onclick="setExportMode('codes')">🔢 Códigos PISIS</button>
+      <button class="toggle-btn ${_exportMode==='labels'?'active-si':''}" onclick="setExportMode('labels')">📖 Con significado</button>
+    </div>
+    <p id="export-mode-desc" style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4">
+      ${_exportMode==='codes'
+        ? 'Los valores se exportan tal como los requiere el anexo técnico PISIS (códigos numéricos).'
+        : 'Los valores se exportan con su descripción completa (legible para humanos).'}
+    </p>
+  </div>
   <div style="display:flex;flex-direction:column;gap:8px">
     <button class="btn btn-success btn-block" onclick="downloadFile()" ${!confOk?'disabled':''}>⬇ Descargar archivo PISIS (${esc(fileName)})</button>
     <button class="btn btn-primary btn-block" onclick="downloadExcel()">📊 Exportar Excel (T2 + T3)</button>
@@ -3164,34 +3176,43 @@ function drawAnalyticsCharts(D) {
 // ── Export: JSON ─────────────────────────────────────────────
 function downloadJSON() {
   try {
+    const isLabels = _exportMode === 'labels';
     const myId = STATE.auth?.user?.id;
     const fams = STATE.familias.filter(f => !f.deleted_at && (isAdmin() || f.created_by === myId));
     const payload = {
       exportedAt: new Date().toISOString(),
       exportedBy: STATE.profile?.email || myId,
       scope: isAdmin() ? 'all' : 'own',
+      modo: isLabels ? 'etiquetas' : 'codigos',
       config: STATE.config,
-      familias: fams.map(f => ({
-        id: f.id,
-        ebs_code: f.ebs_code,
-        created_by: f.created_by,
-        created_at: f.created_at,
-        updated_at: f.updated_at,
-        d2: f.d2||{},
-        personas: (f.personas||[]).map(p => ({
-          id: p.id,
-          created_at: p.created_at,
-          d3: p.d3||{}
-        }))
-      }))
+      familias: fams.map(f => {
+        const d2 = isLabels ? transformD(f.d2||{}, T2_LABELS, T2_DECODE) : (f.d2||{});
+        return {
+          id: f.id,
+          ebs_code: f.ebs_code,
+          created_by: f.created_by,
+          created_at: f.created_at,
+          updated_at: f.updated_at,
+          [isLabels ? 'datos_familia' : 'd2']: d2,
+          personas: (f.personas||[]).map(p => {
+            const d3 = isLabels ? transformD(p.d3||{}, T3_LABELS, T3_DECODE) : (p.d3||{});
+            return {
+              id: p.id,
+              created_at: p.created_at,
+              [isLabels ? 'datos_persona' : 'd3']: d3
+            };
+          })
+        };
+      })
     };
     const content = JSON.stringify(payload, null, 2);
     const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
     const scope = isAdmin() ? 'TOTAL' : 'PROPIO';
+    const modeTag = isLabels ? 'ETIQUETAS' : 'CODIGOS';
     const blob = new Blob([content], {type:'application/json;charset=utf-8'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `SI-APS-CCFP-${scope}-${date}.json`;
+    a.href = url; a.download = `SI-APS-CCFP-${scope}-${date}-${modeTag}.json`;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
     toast('JSON exportado','ok');
@@ -3250,8 +3271,133 @@ const T3_LABELS = {
   '36':'Recibe atención enfermedad aguda','37':'Motivos no atención enfermedad aguda'
 };
 
+// ── Modo de exportación ───────────────────────────────────────
+let _exportMode = 'codes'; // 'codes' | 'labels'
+
+// Mapas de decodificación: campo → {type, ref?}
+// type: 'sino' | 'ref' | 'multi' | 'ciuo' | 'eapb'
+const T2_DECODE = {
+  '2': {type:'sino'},
+  '26':{type:'ref',ref:'tipoVivienda'},
+  '28':{type:'ref',ref:'materialPared'},
+  '30':{type:'ref',ref:'materialPiso'},
+  '32':{type:'ref',ref:'materialTecho'},
+  '35':{type:'sino'},
+  '36':{type:'multi',ref:'riesgoAccidente'},
+  '37':{type:'multi',ref:'sitiosAcceso'},
+  '38':{type:'multi',ref:'fuentesEnergia'},
+  '39':{type:'sino'},
+  '40':{type:'multi',ref:'obsVivienda'},
+  '42':{type:'sino'},
+  '43':{type:'multi',ref:'animales'},
+  '46':{type:'multi',ref:'fuenteAgua'},
+  '48':{type:'multi',ref:'sistemaExcretas'},
+  '50':{type:'multi',ref:'aguasResiduales'},
+  '52':{type:'multi',ref:'disposicionResiduos'},
+  '54':{type:'ref',ref:'tipoFamilia'},
+  '56':{type:'ref',ref:'familiograma'},
+  '57':{type:'ref',ref:'apgar'},
+  '58':{type:'sino'},
+  '59':{type:'ref',ref:'zarit'},
+  '60':{type:'ref',ref:'ecomapa'},
+  '61':{type:'sino'},
+  '62':{type:'sino'},
+  '63':{type:'sino'},
+  '64':{type:'sino'},
+  '65':{type:'sino'},
+  '66':{type:'sino'},
+  '67':{type:'multi',ref:'enfermedadTransmisible'},
+  '68':{type:'sino'},
+  '69':{type:'sino'},
+  '70':{type:'sino'},
+  '71':{type:'sino'},
+  '73':{type:'multi',ref:'formaAlimentos'},
+  '75':{type:'sino'},
+  '76':{type:'sino'},
+  '77':{type:'sino'},
+  '78':{type:'sino'},
+  '79':{type:'sino'},
+  '80':{type:'sino'},
+  '81':{type:'sino'},
+  '82':{type:'sino'},
+  '83':{type:'sino'},
+};
+const T3_DECODE = {
+  '7': {type:'ref',ref:'tipoIdPersona'},
+  '10':{type:'ref',ref:'sexo'},
+  '11':{type:'sino'},
+  '12':{type:'ref',ref:'rolFamilia'},
+  '13':{type:'ciuo'},
+  '14':{type:'ref',ref:'nivelEducativo'},
+  '15':{type:'ref',ref:'regimen'},
+  '16':{type:'eapb'},
+  '17':{type:'ref',ref:'grupoPoblacional'},
+  '18':{type:'ref',ref:'etnia'},
+  '19':{type:'sino'},
+  '21':{type:'ref',ref:'discapacidad'},
+  '24':{type:'ref',ref:'pesoTalla'},
+  '26':{type:'sino'},
+  '27':{type:'sino'},
+  '28':{type:'ref',ref:'intervencionPendiente'},
+  '29':{type:'ref',ref:'motivoNoAtencionProm'},
+  '30':{type:'sino'},
+  '31':{type:'sino'},
+  '33':{type:'ref',ref:'signosDesnutricion'},
+  '34':{type:'sino'},
+  '36':{type:'sino'},
+};
+
+/**
+ * Decodifica un valor de campo según su descriptor de tipo.
+ * Si no hay descriptor, devuelve el valor crudo (arrays → ', ').
+ */
+function decodeVal(val, d) {
+  if (!d) return Array.isArray(val) ? val.join(', ') : (val||'');
+  if (val==='' || val==null) return '';
+  const lk = (refArr, v) => {
+    const found = (refArr||[]).find(r => r.v === String(v));
+    return found ? found.l : String(v);
+  };
+  if (d.type==='sino')  return val==='1' ? 'Sí' : val==='2' ? 'No' : (val||'');
+  if (d.type==='ciuo')  return lk(REF_CIUO, val);
+  if (d.type==='eapb')  return lk(REF_EAPB, val);
+  if (d.type==='ref' || d.type==='multi') {
+    const a = Array.isArray(val) ? val : [val];
+    return a.map(v => lk(REF[d.ref], v)).join(', ');
+  }
+  return Array.isArray(val) ? val.join(', ') : (val||'');
+}
+
+/**
+ * Transforma un objeto d2/d3 de claves numéricas + valores codificados
+ * a claves de etiqueta + valores decodificados (para JSON legible).
+ */
+function transformD(data, labelsMap, decodeMap) {
+  const out = {};
+  for (const [k, v] of Object.entries(data||{})) {
+    const key = labelsMap[k] || ('campo_'+k);
+    out[key] = decodeVal(v, decodeMap[k]);
+  }
+  return out;
+}
+
+function setExportMode(mode) {
+  _exportMode = mode;
+  // Actualizar toggle sin re-renderizar toda la pantalla
+  const tog = document.getElementById('export-mode-toggle');
+  if (!tog) return;
+  const btns = tog.querySelectorAll('.toggle-btn');
+  btns[0].className = 'toggle-btn' + (mode==='codes' ? ' active-si' : '');
+  btns[1].className = 'toggle-btn' + (mode==='labels' ? ' active-si' : '');
+  const desc = document.getElementById('export-mode-desc');
+  if (desc) desc.textContent = mode==='codes'
+    ? 'Los valores se exportan tal como los requiere el anexo técnico PISIS (códigos numéricos).'
+    : 'Los valores se exportan con su descripción completa (legible para humanos).';
+}
+
 async function downloadExcel() {
   try {
+    const isLabels = _exportMode === 'labels';
     toast('Preparando Excel…','ok');
     await loadSheetJS();
     const XLSX = window.XLSX;
@@ -3269,11 +3415,11 @@ async function downloadExcel() {
       const numFam = calcNumFamilia(d,idx);
       const codFicha = calcCodFicha(d,idx);
       const ebsCode = calcEBS(d);
-      // Helper to resolve array fields
+      // rv: retorna valor crudo o decodificado según modo
       const rv = k => {
         const v = d[k];
-        if (Array.isArray(v)) return v.join(', ');
-        return v||'';
+        if (isLabels) return decodeVal(v, T2_DECODE[k]);
+        return Array.isArray(v) ? v.join(', ') : (v||'');
       };
       t2Rows.push([
         f.id, ebsCode, f.created_by||'', f.created_at||'',
@@ -3301,8 +3447,8 @@ async function downloadExcel() {
         const pd = p.d3||{};
         const rv3 = k => {
           const v = pd[k];
-          if (Array.isArray(v)) return v.join(', ');
-          return v||'';
+          if (isLabels) return decodeVal(v, T3_DECODE[k]);
+          return Array.isArray(v) ? v.join(', ') : (v||'');
         };
         t3Rows.push([
           p.id, f.id, ebsCode, p.created_at||'',
@@ -3323,7 +3469,8 @@ async function downloadExcel() {
     XLSX.utils.book_append_sheet(wb, ws3, 'T3 Personas');
     const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
     const scope = isAdmin() ? 'TOTAL' : 'PROPIO';
-    XLSX.writeFile(wb, `SI-APS-CCFP-${scope}-${date}.xlsx`);
+    const modeTag = isLabels ? 'ETIQUETAS' : 'CODIGOS';
+    XLSX.writeFile(wb, `SI-APS-CCFP-${scope}-${date}-${modeTag}.xlsx`);
     toast('Excel descargado','ok');
   } catch(e) { toast('Error Excel: '+e.message,'err'); }
 }
