@@ -142,6 +142,14 @@ button{cursor:pointer;border:none;font-family:inherit;font-size:14px}
 .sf-code{color:var(--purple-l);font-weight:700;font-size:11px;white-space:nowrap;flex-shrink:0;padding-top:1px}
 .sf-label{color:var(--text);font-size:12px;flex:1;line-height:1.4}
 .sf-selected{font-size:11px;color:var(--green);margin-top:4px}
+/* MAPA GEOPUNTO */
+.map-modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:0;width:100%;max-width:500px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column}
+.map-modal-hdr{padding:14px 16px;font-weight:700;font-size:15px;color:var(--purple-l);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+#geomap{height:320px;width:100%;flex-shrink:0}
+.map-coords{padding:10px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);background:var(--bg)}
+.map-coords strong{color:var(--text)}
+.map-modal-footer{padding:12px 16px;display:flex;gap:8px;border-top:1px solid var(--border)}
+.geo-status{font-size:12px;color:var(--muted);padding:0 16px 8px}
 /* SYNC */
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block}
 .sync-dot.offline{background:var(--red)}
@@ -740,6 +748,9 @@ async function rebuildAppState() {
   } else {
     STATE.fieldConfig = {t2:{}, t3:{}};
   }
+  // Load EBS list
+  const ebsRec = await idb.get('config','ebs_list');
+  STATE.ebsList = ebsRec?.value||[];
 }
 
 function setSyncDot(state) {
@@ -818,8 +829,9 @@ const STATE = {
   adminUsers: [],
   modal: null,
   // Campo configuration: options override + default values for any field
-  fieldConfig: {t2:{}, t3:{}}
-  // shape: {t2: {campo_id: {options:[{v,l}], defaultVal:''} }, t3: {...}}
+  fieldConfig: {t2:{}, t3:{}},
+  // EBS list: [{num:'001', label:'EBS 001 — Municipio'}]. If empty, derived from user codes.
+  ebsList: []
 };
 
 function isAdmin() { return STATE.profile?.rol==='admin'; }
@@ -1125,9 +1137,10 @@ function renderAdmin() {
   const tab = STATE.adminTab||'users';
   return `<div class="admin-tabs">
     <button class="admin-tab ${tab==='users'?'active':''}" onclick="STATE.adminTab='users';render()">👥 Usuarios</button>
-    <button class="admin-tab ${tab==='options'?'active':''}" onclick="STATE.adminTab='options';render()">🔧 Opciones</button>
+    <button class="admin-tab ${tab==='ebs'?'active':''}" onclick="STATE.adminTab='ebs';render()">📡 EBS</button>
+    <button class="admin-tab ${tab==='options'?'active':''}" onclick="STATE.adminTab='options';render()">🔧 Campos</button>
   </div>
-  ${tab==='users' ? renderAdminUsers() : renderAdminOptions()}`;
+  ${tab==='users' ? renderAdminUsers() : tab==='ebs' ? renderAdminEBS() : renderAdminOptions()}`;
 }
 
 // ── Admin: Usuarios ──────────────────────────────────────────
@@ -1164,6 +1177,56 @@ function renderAdminUsers() {
 
   return listHtml +
     `<button class="btn btn-primary btn-block" style="margin-top:8px" onclick="openCreateUser()">+ Crear usuario</button>`;
+}
+
+// ── Admin: Panel EBS ─────────────────────────────────────────
+function renderAdminEBS() {
+  const list = STATE.ebsList||[];
+  const rows = list.length
+    ? list.map((e,i)=>`<div class="card-row">
+        <span><strong>EBS ${esc(e.num)}</strong> — ${esc(e.label)}</span>
+        <button class="btn btn-danger btn-sm" onclick="deleteEBSItem(${i})">🗑</button>
+      </div>`).join('')
+    : `<p class="field-note" style="padding:8px 0">Sin EBS configurados. Al estar vacío, los N° de EBS se derivan automáticamente del código asignado a cada usuario.</p>`;
+  return `<div class="card">
+    <div class="card-title">📡 Equipos EBS configurados</div>
+    ${rows}
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:0 0 80px">
+        <div class="field-label">N° EBS <span class="req">*</span></div>
+        <input id="ebs-num-in" class="field-input" type="text" maxlength="3" placeholder="001">
+      </div>
+      <div style="flex:1;min-width:160px">
+        <div class="field-label">Etiqueta <span class="req">*</span></div>
+        <input id="ebs-label-in" class="field-input" type="text" maxlength="100" placeholder="EBS 001 — Ábrego Norte">
+      </div>
+      <button class="btn btn-primary" style="white-space:nowrap" onclick="addEBSItem()">+ Agregar EBS</button>
+    </div>
+  </div>`;
+}
+async function addEBSItem() {
+  const num = (document.getElementById('ebs-num-in')?.value||'').trim().padStart(3,'0');
+  const label = (document.getElementById('ebs-label-in')?.value||'').trim();
+  if (!num||!label) return toast('Complete número y etiqueta del EBS','err');
+  if ((STATE.ebsList||[]).find(e=>e.num===num)) return toast(`Ya existe EBS ${num}`,'err');
+  STATE.ebsList = [...(STATE.ebsList||[]), {num, label}];
+  STATE.ebsList.sort((a,b)=>a.num.localeCompare(b.num));
+  await idb.put('config',{key:'ebs_list', value: STATE.ebsList});
+  if (STATE.isOnline && STATE.auth) {
+    try { await sbFetch('/rest/v1/config',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key:'ebs_list',value:STATE.ebsList})}); }
+    catch(e){ await addPending('upsert','config',{key:'ebs_list',value:STATE.ebsList}); }
+  }
+  render();
+  toast(`EBS ${num} agregado`,'ok');
+}
+async function deleteEBSItem(idx) {
+  STATE.ebsList.splice(idx,1);
+  await idb.put('config',{key:'ebs_list', value: STATE.ebsList});
+  if (STATE.isOnline && STATE.auth) {
+    try { await sbFetch('/rest/v1/config',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key:'ebs_list',value:STATE.ebsList})}); }
+    catch(e){ await addPending('upsert','config',{key:'ebs_list',value:STATE.ebsList}); }
+  }
+  render();
 }
 
 // ── Admin: Configuración de campos ───────────────────────────
@@ -1569,8 +1632,160 @@ function toggleMulti3(campo,val){
   if(i>=0)arr.splice(i,1);else arr.push(val);
   STATE.draft3[campo]=[...arr];render();
 }
-function setSino2(campo,val){STATE.draft2[campo]=val;render();}
-function setSino3(campo,val){STATE.draft3[campo]=val;render();}
+// ── GEOPUNTO (Leaflet dinámico con caché SW) ──────────────────
+let _geoMap=null, _geoMarker=null;
+function loadLeaflet(){
+  if(window.L)return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    if(!document.getElementById('leaflet-css')){
+      const css=document.createElement('link');
+      css.id='leaflet-css';css.rel='stylesheet';
+      css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(css);
+    }
+    if(!document.getElementById('leaflet-js')){
+      const sc=document.createElement('script');
+      sc.id='leaflet-js';
+      sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      sc.onload=resolve;sc.onerror=reject;
+      document.head.appendChild(sc);
+    } else {
+      if(window.L)resolve(); else document.getElementById('leaflet-js').onload=resolve;
+    }
+  });
+}
+function openGeopunto(){
+  // Crear overlay modal
+  const lat=parseFloat(STATE.draft2['10'])||7.8891;
+  const lon=parseFloat(STATE.draft2['11'])||-72.9756;
+  const hasCoords=STATE.draft2['10']&&STATE.draft2['11'];
+  const ov=document.createElement('div');
+  ov.className='modal-overlay';ov.id='geo-overlay';
+  ov.innerHTML=`<div class="map-modal">
+    <div class="map-modal-hdr"><span>📍 Capturar Geopunto</span><button class="btn-icon" onclick="closeGeopunto()">✕</button></div>
+    <div id="geomap"></div>
+    <div class="map-coords" id="geo-coords">
+      Lat: <strong id="g-lat">${hasCoords?parseFloat(STATE.draft2['10']).toFixed(6):'—'}</strong> &nbsp;
+      Lon: <strong id="g-lon">${hasCoords?parseFloat(STATE.draft2['11']).toFixed(6):'—'}</strong>
+    </div>
+    <div class="geo-status" id="geo-status">Mueve el marcador o usa el botón para capturar tu ubicación actual.</div>
+    <div class="map-modal-footer">
+      <button class="btn btn-secondary" style="flex:1" onclick="gpsCapture()">🛰 Mi ubicación GPS</button>
+      <button class="btn btn-primary" style="flex:1" onclick="confirmGeopunto()">✓ Confirmar punto</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  loadLeaflet().then(()=>{
+    _geoMap=L.map('geomap').setView([lat,lon],15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© OpenStreetMap',maxZoom:19
+    }).addTo(_geoMap);
+    _geoMarker=L.marker([lat,lon],{draggable:true}).addTo(_geoMap);
+    _geoMarker.bindPopup('Arrastra para ajustar').openPopup();
+    _geoMarker.on('dragend',()=>{
+      const p=_geoMarker.getLatLng();
+      document.getElementById('g-lat').textContent=p.lat.toFixed(6);
+      document.getElementById('g-lon').textContent=p.lng.toFixed(6);
+    });
+    _geoMap.on('click',e=>{
+      _geoMarker.setLatLng(e.latlng);
+      document.getElementById('g-lat').textContent=e.latlng.lat.toFixed(6);
+      document.getElementById('g-lon').textContent=e.latlng.lng.toFixed(6);
+    });
+    setTimeout(()=>_geoMap.invalidateSize(),200);
+  }).catch(()=>{
+    document.getElementById('geomap').innerHTML=
+      '<div style="padding:24px;text-align:center;color:var(--muted)">Sin conexión — el mapa no puede cargarse.<br>Usa el botón GPS o ingresa las coordenadas manualmente.</div>';
+    document.getElementById('geo-status').textContent='Modo offline: solo captura GPS disponible.';
+  });
+}
+function gpsCapture(){
+  const st=document.getElementById('geo-status');
+  if(st)st.textContent='Obteniendo ubicación GPS…';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude,lon=pos.coords.longitude;
+    if(st)st.textContent=`GPS obtenido (precisión ±${Math.round(pos.coords.accuracy)}m). Puedes mover el marcador para ajustar.`;
+    document.getElementById('g-lat').textContent=lat.toFixed(6);
+    document.getElementById('g-lon').textContent=lon.toFixed(6);
+    if(_geoMap&&_geoMarker){
+      _geoMarker.setLatLng([lat,lon]);
+      _geoMap.setView([lat,lon],17);
+    }
+  },err=>{
+    if(st)st.textContent='Error GPS: '+err.message+'. Mueve el marcador manualmente.';
+  },{enableHighAccuracy:true,timeout:15000});
+}
+function confirmGeopunto(){
+  const latEl=document.getElementById('g-lat');
+  const lonEl=document.getElementById('g-lon');
+  if(!latEl||latEl.textContent==='—')return toast('Primero captura o mueve el marcador','err');
+  const lat=latEl.textContent, lon=lonEl.textContent;
+  STATE.draft2['10']=lat; STATE.draft2['11']=lon;
+  // Actualizar inputs en el formulario sin re-render completo
+  const li=document.getElementById('geo-lat');
+  const lo=document.getElementById('geo-lon');
+  if(li)li.value=lat;
+  if(lo)lo.value=lon;
+  closeGeopunto();
+  toast('Geopunto registrado ✓','ok');
+}
+function closeGeopunto(){
+  if(_geoMap){_geoMap.remove();_geoMap=null;_geoMarker=null;}
+  const ov=document.getElementById('geo-overlay');
+  if(ov)ov.remove();
+}
+
+function setSino2(campo,val){STATE.draft2[campo]=(STATE.draft2[campo]===val)?'':val;render();}
+function setSino3(campo,val){STATE.draft3[campo]=(STATE.draft3[campo]===val)?'':val;render();}
+
+// ── IMC AUTO-CÁLCULO (campo 24, adultos ≥ 18 años) ───────────
+function calcIMC3(){
+  const dob=STATE.draft3['9'];
+  if(!dob)return;
+  const birth=new Date(dob);
+  const ageYr=(Date.now()-birth.getTime())/(365.25*24*3600*1000);
+  if(ageYr<18)return; // Solo adultos — niños/adolescentes: selección manual
+  const peso=parseFloat(STATE.draft3['22']);
+  const talla=parseFloat(STATE.draft3['23']);
+  if(!peso||!talla||talla<50)return;
+  const tallam=talla/100;
+  const imc=peso/(tallam*tallam);
+  let diag='';
+  if(imc<16)diag='1';           // Delgadez severa
+  else if(imc<18.5)diag='2';    // Delgadez
+  else if(imc<25)diag='3';      // Normal
+  else if(imc<27.5)diag='4';    // Posible riesgo de sobrepeso
+  else if(imc<30)diag='5';      // Sobrepeso
+  else diag='6';                  // Obesidad
+  STATE.draft3['24']=diag;
+  const sel24=document.getElementById('f3-24');
+  if(sel24)sel24.value=diag;
+  const imcEl=document.getElementById('imc-info');
+  if(imcEl){
+    const lab=(REF.pesoTalla.find(o=>o.v===diag)||{}).l||'';
+    imcEl.innerHTML=`IMC: <strong style="color:var(--green)">${imc.toFixed(1)} kg/m²</strong> → ${esc(lab)}`;
+  }
+}
+
+// ── CAMPO 28 CON OPCIONES EXTRA DEL ADMIN ────────────────────
+// Opciones estándar → stored in d['28'] → exportadas en archivo plano
+// Opciones admin extra → stored in d['28_obs'] → NO exportadas
+function multi3WithExtra(refKey, id, extraId, val, extraVal, req){
+  const stdOpts=REF[refKey]||[];
+  const extraOpts=STATE.fieldConfig?.t3?.[id]?.options||[];
+  const stdHtml=stdOpts.map(o=>{
+    const sel=(val||[]).includes(o.v);
+    return `<div class="mc-item${sel?' selected':''}" onclick="toggleMulti3('${id}','${o.v}')"><div class="mc-box">${sel?'✓':''}</div><div class="mc-label"><span class="mc-code">${o.v}.</span>${esc(o.l)}</div></div>`;
+  }).join('');
+  const extraHtml=extraOpts.length
+    ?`<div class="field-note" style="color:var(--yellow);margin-top:10px;margin-bottom:4px">★ Opciones adicionales — no se incluyen en el archivo plano</div>
+      <div class="mc-grid">`+extraOpts.map(o=>{
+        const sel=(extraVal||[]).includes(o.v);
+        return `<div class="mc-item${sel?' selected':''}" style="border:1px dashed var(--yellow)" onclick="toggleMulti3('${extraId}','${o.v}')"><div class="mc-box">${sel?'✓':''}</div><div class="mc-label" style="color:var(--yellow)">★ ${esc(o.l)}</div></div>`;
+      }).join('')+`</div>`:''
+  ;
+  return `<div class="field">${fl(id,req,'3')}<div class="mc-grid">${stdHtml}</div>${extraHtml}</div>`;
+}
 
 // ── BUSCADOR INLINE (T3) — sin re-render completo, solo actualiza el div ──
 function searchField3(id, data, val, req){
@@ -1589,6 +1804,8 @@ function searchField3(id, data, val, req){
     <div id="${resultsId}" class="sf-results" style="display:none"></div>
   </div>`;
 }
+// Almacén temporal de resultados para sfSelect3 (evita romper atributos HTML con JSON.stringify)
+const _sfRes = {};
 function sfSearch3(id, resultsId, query){
   const data=id==='13'?REF_CIUO:id==='16'?REF_EAPB:[];
   // Si el texto ya tiene el formato "CODIGO — NOMBRE", buscar solo por el código
@@ -1596,16 +1813,19 @@ function sfSearch3(id, resultsId, query){
   const q=rawQ.includes(' — ')?rawQ.split(' — ')[0].trim().toLowerCase():rawQ.toLowerCase();
   const results=q.length<1?data.slice(0,10)
     :data.filter(r=>r.v.toLowerCase().includes(q)||r.l.toLowerCase().includes(q)).slice(0,15);
+  _sfRes[resultsId]=results; // guardar por clave para recuperar en sfSelect3
   const el=document.getElementById(resultsId);
   if(!el)return;
   if(!results.length){el.style.display='none';return;}
   el.style.display='block';
-  el.innerHTML=results.map(r=>`<div class="sf-item" onmousedown="sfSelect3('${id}','${resultsId}','${esc(r.v)}',${JSON.stringify(r.l)})"><span class="sf-code">${esc(r.v)}</span><span class="sf-label">${esc(r.l)}</span></div>`).join('');
+  el.innerHTML=results.map((r,i)=>`<div class="sf-item" onmousedown="sfSelect3('${id}','${resultsId}',${i})"><span class="sf-code">${esc(r.v)}</span><span class="sf-label">${esc(r.l)}</span></div>`).join('');
 }
-function sfSelect3(id, resultsId, val, label){
-  STATE.draft3[id]=val;
+function sfSelect3(id, resultsId, idx){
+  const r=(_sfRes[resultsId]||[])[idx];
+  if(!r)return;
+  STATE.draft3[id]=r.v;
   const inputEl=document.getElementById(`sf3-in-${id}`);
-  if(inputEl)inputEl.value=val+' — '+label;
+  if(inputEl)inputEl.value=r.v+' — '+r.l;
   const el=document.getElementById(resultsId);
   if(el)el.style.display='none';
 }
@@ -1676,7 +1896,7 @@ function nuevaFamilia(){
   // Apply configured defaultVals from fieldConfig.t2 (before EBS override so EBS wins)
   const fc2 = STATE.fieldConfig?.t2||{};
   Object.entries(fc2).forEach(([id,cfg])=>{
-    if(cfg.defaultVal && STATE.draft2[id]===undefined) STATE.draft2[id]=cfg.defaultVal;
+    if(cfg.defaultVal && !STATE.draft2[id]) STATE.draft2[id]=cfg.defaultVal;
   });
   // Pre-fill geo/EBS codes from user's assigned EBS code (these always override)
   if (ebsDefault.length>=27) {
@@ -1738,7 +1958,10 @@ function renderT2Step1(d){
   const uzpeOpts = ebsOptsFor(2,9);
   const terrOpts = ebsOptsFor(14,17);
   const microOpts= ebsOptsFor(17,21);
-  const ebsNumOpts=ebsOptsFor(24,27, v=>`EBS N° ${parseInt(v)} (${v})`);
+  // Si el admin configuró EBS en el panel, usar esa lista; si no, derivar del código de usuario
+  const ebsNumOpts=STATE.ebsList?.length
+    ? STATE.ebsList.map(e=>({v:e.num, l:`EBS N° ${parseInt(e.num)} — ${e.label}`}))
+    : ebsOptsFor(24,27, v=>`EBS N° ${parseInt(v)} (${v})`);
   // Municipios: merge EBS-derived codes + full NS static list, keep sorted
   const muniFromEBS = ebsOptsFor(9,14, v=>`${v} — ${MUNIS_NS[v]||'(Municipio)'}`);
   const muniCodes = new Set(muniFromEBS.map(o=>o.v));
@@ -1769,7 +1992,16 @@ function renderT2Step1(d){
     </div>
     ${txt('8',d['8']||'',200,true,'Nombre del corregimiento, vereda, barrio...')}
     ${txt('9',d['9']||'',200,false,'Dirección (opcional)')}
-    <div class="grid-2">${dec('10',d['10']||'')}${dec('11',d['11']||'')}</div>
+    <div class="field">
+      <div class="field-label"><span class="field-num">10/11</span>Geopunto — Latitud / Longitud</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="geo-lat" class="field-input" type="number" step="0.000001" placeholder="Latitud" style="flex:1;min-width:120px"
+          value="${esc(d['10']||'')}" oninput="setDraft2('10',this.value)">
+        <input id="geo-lon" class="field-input" type="number" step="0.000001" placeholder="Longitud" style="flex:1;min-width:120px"
+          value="${esc(d['11']||'')}" oninput="setDraft2('11',this.value)">
+        <button class="btn btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="openGeopunto()">📍 Capturar en mapa</button>
+      </div>
+    </div>
     ${txt('12',d['12']||'',200,false,'Descripción de ubicación sin nomenclatura')}
   </div>
   <div class="card">
@@ -1862,7 +2094,7 @@ function renderT2Step5(d){
   return `<div class="card">
     <div class="card-title">Paso 5 — Familia, Instrumentos y Condiciones</div>
     <div class="grid-2">${sel(REF.tipoFamilia,'54',d['54']||'',true)}${num('55',d['55']||'',true,1,99)}</div>
-    ${multi('familiograma','56',d['56']||[],true)}
+    ${multi('familiograma','56',d['56']||[],false)}
     ${sel(REF.apgar,'57',d['57']||'',true)}
     ${sino('58',d['58']||'',true)}
     ${sZarit?sel(REF.zarit,'59',d['59']||'',false):''}
@@ -1945,11 +2177,12 @@ function renderT3List(){
 
 function nuevaPersona(famId){
   STATE.editFamId=famId; STATE.editPerId=null;
-  STATE.draft3={'15':'1','18':'07','21':['8']};
+  // Pre-populate selects with defaults so validation doesn't fail on unchanged selects
+  STATE.draft3={'7':'CC','10':'','15':'1','18':'07','21':['8']};
   // Apply configured defaultVals from fieldConfig.t3
   const fc3 = STATE.fieldConfig?.t3||{};
   Object.entries(fc3).forEach(([id,cfg])=>{
-    if(cfg.defaultVal && STATE.draft3[id]===undefined) STATE.draft3[id]=cfg.defaultVal;
+    if(cfg.defaultVal && !STATE.draft3[id]) STATE.draft3[id]=cfg.defaultVal;
   });
   navigate('persona');
 }
@@ -2002,10 +2235,25 @@ function renderPersona(){
   <div class="card">
     <div class="card-title">Condiciones de Salud</div>
     ${multi3('discapacidad','21',d['21']||['8'],true)}
-    <div class="grid-2">${dec3('22',d['22']||'')}${dec3('23',d['23']||'')}</div>
-    ${sel3(REF.pesoTalla,'24',d['24']||'',false)}${dec3('25',d['25']||'')}
+    <div class="grid-2">
+      <div class="field">${fl('22',false,'3')}<input class="field-input" type="number" step="0.01" placeholder="kg" value="${esc(d['22']||'')}" oninput="setDraft3('22',this.value);calcIMC3()"></div>
+      <div class="field">${fl('23',false,'3')}<input class="field-input" type="number" step="0.01" placeholder="cm" value="${esc(d['23']||'')}" oninput="setDraft3('23',this.value);calcIMC3()"></div>
+    </div>
+    <div class="field">
+      ${fl('24',false,'3')}
+      <select id="f3-24" class="field-select" onchange="setDraftSel3('24',this.value)">
+        <option value="">Seleccione...</option>
+        ${REF.pesoTalla.map(o=>`<option value="${o.v}" ${(d['24']||'')==o.v?'selected':''}>${esc(o.l)}</option>`).join('')}
+      </select>
+      <div id="imc-info" class="field-note" style="margin-top:4px;color:var(--muted)">${(()=>{
+        const p=parseFloat(d['22']),t=parseFloat(d['23']);
+        if(p&&t&&t>=50){const imc=p/((t/100)**2);const lab=(REF.pesoTalla.find(o=>o.v===(d['24']||''))||{}).l||'';return `IMC: <strong style="color:var(--green)">${imc.toFixed(1)} kg/m²</strong> → ${esc(lab)}`;}
+        return '';
+      })()}</div>
+    </div>
+    ${dec3('25',d['25']||'')}
     ${sino3('26',d['26']||'',true)}${sino3('27',d['27']||'',false)}
-    ${multi3('intervencionPendiente','28',d['28']||[],false)}
+    ${multi3WithExtra('intervencionPendiente','28','28_obs',d['28']||[],d['28_obs']||[],false)}
     ${multi3('motivoNoAtencionProm','29',d['29']||[],false)}
     ${sino3('30',d['30']||'',false)}
     <div class="field"><div class="field-note">Campos 31-32 aplican solo si el integrante es menor de 2 años</div></div>

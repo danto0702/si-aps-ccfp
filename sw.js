@@ -1,8 +1,11 @@
-/* Service Worker — SI-APS CCFP v1.0 */
-const CACHE = 'siaps-ccfp-v1';
+/* Service Worker — SI-APS CCFP v2.0 */
+const CACHE = 'siaps-ccfp-v2';
 const ASSETS = [
   './SI-APS-CCFP.html',
-  './manifest.json'
+  './manifest.json',
+  // Leaflet para mapa geopunto (disponible offline después de primera carga)
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
 self.addEventListener('install', e => {
@@ -23,6 +26,20 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  // Tiles de OpenStreetMap: red primero, caché de respaldo
+  if (e.request.url.includes('tile.openstreetmap.org')) {
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        if (resp && resp.status === 200) {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return resp;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+  // Resto: caché primero, red de respaldo
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
