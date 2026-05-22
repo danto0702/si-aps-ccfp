@@ -413,7 +413,7 @@ const REF = {
   apgar:[{v:'1',l:'Normal (17-20 puntos)'},{v:'2',l:'Disfunción leve (13-16 puntos)'},{v:'3',l:'Disfunción moderada (10-12 puntos)'},{v:'4',l:'Disfunción severa (≤ 9 puntos)'}],
   zarit:[{v:'1',l:'Ausencia de sobrecarga (≤ 46)'},{v:'2',l:'Sobrecarga ligera (47-55)'},{v:'3',l:'Sobrecarga intensa (≥ 56)'}],
   ecomapa:[{v:'1',l:'Positivo'},{v:'2',l:'Tenue'},{v:'3',l:'Estresante'},{v:'4',l:'Fluye'},{v:'5',l:'Intenso'}],
-  enfermedadTransmisible:[{v:'1',l:'TB (Tuberculosis)'},{v:'2',l:'Lepra'},{v:'3',l:'Escabiosis, enfermedades infecciosas de la piel'},{v:'4',l:'Malaria'},{v:'5',l:'Dengue'},{v:'6',l:'Chagas'},{v:'7',l:'Hepatitis A'},{v:'8',l:'Alguna enfermedad inmunoprevenible'}],
+  enfermedadTransmisible:[{v:'1',l:'TB (Tuberculosis)'},{v:'2',l:'Lepra'},{v:'3',l:'Escabiosis, enfermedades infecciosas de la piel u otras'},{v:'4',l:'Malaria'},{v:'5',l:'Dengue'},{v:'6',l:'Chagas'},{v:'7',l:'Hepatitis A'},{v:'8',l:'Alguna enfermedad inmunoprevenible (varicela, parotiditis, otra)'},{v:'9',l:'Otras'},{v:'10',l:'Ninguna'}],
   formaAlimentos:[{v:'1',l:'Cultiva'},{v:'2',l:'Cría de animales'},{v:'3',l:'Cacería'},{v:'4',l:'Recolección de alimentos'},{v:'5',l:'Trueque o intercambio'},{v:'6',l:'Compra'},{v:'7',l:'Asistencia del Estado'},{v:'8',l:'Ayuda humanitaria'},{v:'9',l:'Otro'}],
   sexo:[{v:'1',l:'Hombre'},{v:'2',l:'Mujer'},{v:'3',l:'Indeterminado'}],
   rolFamilia:[{v:'1',l:'Jefe(a) de hogar'},{v:'2',l:'Cónyuge/Compañero(a)'},{v:'3',l:'Hijo(a)'},{v:'4',l:'Nieto(a)'},{v:'5',l:'Padre/Madre'},{v:'6',l:'Suegro(a)'},{v:'7',l:'Hermano(a)'},{v:'8',l:'Yerno/Nuera'},{v:'9',l:'Otro pariente'},{v:'10',l:'Empleado(a) doméstico(a)'},{v:'11',l:'Pensionista'},{v:'12',l:'Otro no pariente'}],
@@ -423,9 +423,9 @@ const REF = {
   etnia:[{v:'01',l:'Indígena'},{v:'02',l:'ROM'},{v:'03',l:'Raizal'},{v:'04',l:'Palenquero'},{v:'05',l:'Afrocolombiano'},{v:'06',l:'Otro'},{v:'07',l:'Ninguno'}],
   agenteMedTradicional:[{v:'1',l:'Médico tradicional'},{v:'2',l:'Partera'},{v:'3',l:'Tegua o empírico'},{v:'4',l:'Curandero'},{v:'5',l:'Sobandero'},{v:'6',l:'Yerbatero'},{v:'7',l:'Otro'}],
   discapacidad:[{v:'1',l:'Visual'},{v:'2',l:'Auditiva'},{v:'3',l:'Voz y habla'},{v:'4',l:'Física'},{v:'5',l:'Mental o psicosocial'},{v:'6',l:'Intelectual o cognitiva'},{v:'7',l:'Múltiple'},{v:'8',l:'Ninguna'}],
-  pesoTalla:[{v:'1',l:'Delgadez severa'},{v:'2',l:'Delgadez'},{v:'3',l:'Normal'},{v:'4',l:'Posible riesgo de sobrepeso'},{v:'5',l:'Sobrepeso'},{v:'6',l:'Obesidad'},{v:'7',l:'No aplica (gestante o > 5 años)'}],
-  intervencionPendiente:[{v:'1',l:'Control de crecimiento y desarrollo'},{v:'2',l:'Vacunación'},{v:'3',l:'Salud Oral'},{v:'4',l:'Atención prenatal'},{v:'5',l:'Planificación familiar'},{v:'6',l:'Citología'},{v:'7',l:'Control adulto mayor'},{v:'8',l:'Ninguna'}],
-  motivoNoAtencionProm:[{v:'1',l:'No hay servicio disponible en el territorio'},{v:'2',l:'Falta de dinero para desplazarse'},{v:'3',l:'No le dan cita'},{v:'4',l:'No ha sentido la necesidad'},{v:'5',l:'Usa medicina tradicional o alternativa'},{v:'6',l:'Dificultad de desplazamiento (distancia/terreno)'},{v:'7',l:'Orden público/seguridad'},{v:'8',l:'Otro'}],
+  pesoTalla:[{v:'1',l:'Obesidad'},{v:'2',l:'Sobrepeso'},{v:'3',l:'Riesgo de Sobrepeso'},{v:'4',l:'Peso adecuado para la talla'},{v:'5',l:'Riesgo de Desnutrición Aguda'},{v:'6',l:'Desnutrición Aguda Moderada'},{v:'7',l:'Desnutrición Aguda Severa'},{v:'8',l:'No aplica (> 5 años o gestante)'}],
+  intervencionPendiente:[{v:'1',l:'Valoración integral para PYMS'},{v:'2',l:'Valoración integral por profesional en odontología para PYMS'},{v:'3',l:'Promoción y apoyo a la lactancia materna'},{v:'4',l:'Aplicación de fluor'},{v:'5',l:'Profilaxis y remoción de placa bacteriana'},{v:'6',l:'Vacunación de acuerdo con el esquema'},{v:'7',l:'Fortificación casera con micronutrientes en polvo'},{v:'8',l:'Suplementación con micronutrientes'},{v:'9',l:'Desparasitación antihelmíntica'},{v:'10',l:'Tamizaje para anemia – Hemoglobina y Hematocrito'},{v:'11',l:'Planificación Familiar y anticoncepción'},{v:'12',l:'Tamizaje de Riesgo Cardiovascular'},{v:'13',l:'Tamizaje para ITS'},{v:'14',l:'Tamizaje para cáncer de cuello uterino'},{v:'15',l:'Tamizaje para cáncer de mama'},{v:'16',l:'Tamizaje para cáncer de próstata'},{v:'17',l:'Tamizaje para cáncer de colon y recto'},{v:'18',l:'Atención para el cuidado preconcepcional'},{v:'19',l:'Atención para el cuidado prenatal – Controles Prenatales'},{v:'20',l:'Curso de preparación para la maternidad y paternidad'},{v:'21',l:'Interrupción Voluntaria del Embarazo'},{v:'22',l:'Atención del Puerperio'},{v:'23',l:'Atención para el seguimiento del recién nacido'},{v:'24',l:'Preparación para la maternidad y la paternidad'},{v:'25',l:'Educación para la salud'},{v:'26',l:'Ninguna'}],
+  motivoNoAtencionProm:[{v:'1',l:'Lugar de atención lejano, cerrado o ausencia del profesional de salud'},{v:'2',l:'Horarios de atención restringidos'},{v:'3',l:'Largos tiempos de espera'},{v:'4',l:'No había disponibilidad de la tecnología'},{v:'5',l:'Desconocimiento de derecho a las intervenciones DTPE'},{v:'6',l:'Desconocimiento de que las intervenciones son gratuitas'},{v:'7',l:'Persona Enferma'},{v:'8',l:'Persona hospitalizada'},{v:'9',l:'Orden Médica por enfermedad'},{v:'10',l:'Falta de Tiempo del Cuidador'},{v:'11',l:'Rechazo de la atención por tradición o cultura'},{v:'12',l:'No afiliado'}],
   signosDesnutricion:[{v:'1',l:'Cabello quebradizo o decolorado'},{v:'2',l:'Cara de luna llena'},{v:'3',l:'Palidez generalizada'},{v:'4',l:'Edema bilateral en piernas'},{v:'5',l:'Delgadez extrema'},{v:'6',l:'Distensión abdominal'},{v:'7',l:'Úlceras en la comisura de los labios'},{v:'8',l:'Ninguno'}],
   motivoNoAtencionAguda:[{v:'1',l:'No hay servicio disponible en el territorio'},{v:'2',l:'Falta de dinero para desplazarse'},{v:'3',l:'No le dan cita'},{v:'4',l:'No ha considerado necesario'},{v:'5',l:'Usa medicina tradicional o alternativa'},{v:'6',l:'Dificultad de desplazamiento'},{v:'7',l:'Orden público/seguridad'},{v:'8',l:'Otro'}]
 };
@@ -438,7 +438,7 @@ const CAMPOS_CUSTOM = {
   fuenteAgua:'Fuente de agua',sistemaExcretas:'Sistema de excretas',aguasResiduales:'Aguas residuales',
   disposicionResiduos:'Disposición residuos',tipoFamilia:'Tipo de familia',
   enfermedadTransmisible:'Enfermedades transmisibles',formaAlimentos:'Forma de obtención de alimentos',
-  grupoPoblacional:'Grupo poblacional',intervencionPendiente:'Intervenciones pendientes',
+  grupoPoblacional:'Grupo poblacional',intervencionPendiente:'Intervenciones pendientes de promoción y mantenimiento de la salud',
   motivoNoAtencionProm:'Motivos no atención prom.',signosDesnutricion:'Signos de desnutrición',
   motivoNoAtencionAguda:'Motivos no atención aguda',discapacidad:'Discapacidad'
 };
@@ -465,6 +465,15 @@ REF.tipoPrestador = [
   {v:'4',l:'Gobernación'},
   {v:'5',l:'Alcaldía'},
   {v:'6',l:'Entidad Territorial (Sec. Salud)'}
+];
+
+REF.estrato = [
+  {v:'1',l:'1 — Bajo-Bajo'},
+  {v:'2',l:'2 — Bajo'},
+  {v:'3',l:'3 — Medio-Bajo'},
+  {v:'4',l:'4 — Medio'},
+  {v:'5',l:'5 — Medio-Alto'},
+  {v:'6',l:'6 — Alto'},
 ];
 
 REF.perfilAcademico = [
@@ -502,6 +511,7 @@ const ALL_FIELDS_T2 = [
   {step:2, label:'Paso 2 — EBS, Encuestador y Fechas', fields:[
     {id:'17', label:'N° de integrantes del EBS',          type:'num'},
     {id:'20', label:'NIT prestador',                      type:'text'},
+    {id:'84', label:'Nombre Prestador Primario',          type:'text'},
     {id:'21', label:'Tipo de identificación responsable', type:'sel'},
     {id:'22', label:'N° identificación responsable',      type:'text'},
     {id:'23', label:'Perfil académico',                   type:'sel'},
@@ -518,6 +528,9 @@ const ALL_FIELDS_T2 = [
     {id:'33', label:'Descripción material techo (Otro)',  type:'text'},
     {id:'34', label:'Número de dormitorios',              type:'num'},
     {id:'35', label:'Hacinamiento',                       type:'sino'},
+    {id:'85', label:'Estrato socioeconómico',             type:'sel',   refKey:'estrato'},
+    {id:'86', label:'Número de hogares en la vivienda',   type:'num'},
+    {id:'87', label:'Número de personas en la vivienda',  type:'num'},
   ]},
   {step:4, label:'Paso 4 — Entorno y Servicios', fields:[
     {id:'36', label:'Riesgo de accidente',                type:'multi', refKey:'riesgoAccidente'},
@@ -543,6 +556,7 @@ const ALL_FIELDS_T2 = [
     {id:'54', label:'Tipo de familia',                    type:'sel',   refKey:'tipoFamilia'},
     {id:'55', label:'N° de integrantes de la familia',    type:'num'},
     {id:'56', label:'Hallazgos del familiograma',         type:'sel',   refKey:'familiograma'},
+    {id:'88', label:'Observaciones del familiograma',     type:'text'},
     {id:'57', label:'APGAR familiar',                     type:'sel',   refKey:'apgar'},
     {id:'58', label:'¿Hay cuidador de adulto mayor?',     type:'sino'},
     {id:'59', label:'Escala ZARIT',                       type:'sel',   refKey:'zarit'},
@@ -550,14 +564,16 @@ const ALL_FIELDS_T2 = [
     {id:'61', label:'¿Niños menores de 5 años?',          type:'sino'},
     {id:'62', label:'¿Mujeres gestantes?',                type:'sino'},
     {id:'63', label:'¿Adultos mayores (≥60)?',            type:'sino'},
+    {id:'89', label:'Familia con población de Infancia y Adolescencia', type:'sino'},
     {id:'64', label:'¿Víctimas del conflicto armado?',    type:'sino'},
     {id:'65', label:'¿Personas con discapacidad?',        type:'sino'},
-    {id:'66', label:'¿Personas con enfermedad crónica?',  type:'sino'},
+    {id:'66', label:'¿Personas con enfermedad crónica, terminal o huérfana?', type:'sino'},
     {id:'67', label:'Enfermedades transmisibles',         type:'multi', refKey:'enfermedadTransmisible'},
-    {id:'68', label:'¿Sucesos vitales o crisis?',         type:'sino'},
-    {id:'69', label:'¿Situaciones vulnerabilidad social?',type:'sino'},
-    {id:'70', label:'¿Prácticas de cuidado críticas?',    type:'sino'},
-    {id:'71', label:'¿Antecedentes crónicos?',            type:'sino'},
+    {id:'68', label:'Familia con vivencia de sucesos vitales normativos y no normativos (eventos significativos que inciden de manera positiva o negativa en la persona y familia: ingreso de niños a estudiar, muerte familiar, accidente que genera discapacidad, separación de pareja, entre otros)', type:'sino'},
+    {id:'69', label:'Familia en situación de vulnerabilidad social (consumo de SPA/alcohol, explotación sexual, trabajo infantil, conflictos interpersonales, violencia intrafamiliar, trastorno mental, entre otras)', type:'sino'},
+    {id:'70', label:'Familias con prácticas de cuidado de salud críticas de varios de sus integrantes que ponen en riesgo o han afectado la salud (hábitos alimentarios, situaciones de abandono)', type:'sino'},
+    {id:'71', label:'Familia con integrantes con antecedentes de Ca, HTA, Diabetes, Asma, Enfermedad cardiaca u otra', type:'sino'},
+    {id:'90', label:'¿Algún integrante recibe tratamiento para sus antecedentes crónicos?', type:'sino'},
     {id:'72', label:'Descripción antecedentes crónicos',  type:'text'},
     {id:'73', label:'Forma de obtención de alimentos',    type:'multi', refKey:'formaAlimentos'},
     {id:'74', label:'Descripción otra obtención alimentos',type:'text'},
@@ -598,9 +614,11 @@ const ALL_FIELDS_T3 = [
     {id:'23', label:'Talla (cm)',                         type:'dec'},
     {id:'24', label:'Diagnóstico nutricional P/T',        type:'sel',   refKey:'pesoTalla'},
     {id:'25', label:'Perímetro braquial (cm)',            type:'dec'},
+    {id:'38', label:'Perímetro cefálico (cm)',            type:'dec'},
+    {id:'39', label:'Perímetro abdominal (cm)',           type:'dec'},
     {id:'26', label:'¿Condiciones de salud crónica?',     type:'sino'},
     {id:'27', label:'¿Esquema de atenciones promoción?',  type:'sino'},
-    {id:'28', label:'Intervenciones pendientes',          type:'sel',   refKey:'intervencionPendiente'},
+    {id:'28', label:'Intervenciones pendientes de promoción y mantenimiento de la salud', type:'sel', refKey:'intervencionPendiente'},
     {id:'29', label:'Motivos no atención de promoción',   type:'sel',   refKey:'motivoNoAtencionProm'},
     {id:'30', label:'¿Practica deporte o ejercicio?',     type:'sino'},
     {id:'31', label:'¿Lactancia materna exclusiva 6m?',   type:'sino'},
@@ -3255,7 +3273,14 @@ const T2_LABELS = {
   '72':'Actividad física','73':'Actividad prevención','74':'Hábitos alimentarios',
   '75':'Consumo cigarrillo','76':'Consumo alcohol','77':'Consumo SPA','78':'Violencia intrafamiliar',
   '79':'Percepción salud','80':'Necesidades familia','81':'Acción pendiente','82':'Próxima visita',
-  '83':'Observaciones'
+  '83':'Observaciones',
+  '84':'Nombre Prestador Primario',
+  '85':'Estrato socioeconómico',
+  '86':'N° hogares en vivienda',
+  '87':'N° personas en vivienda',
+  '88':'Observaciones familiograma',
+  '89':'Familia con Infancia y Adolescencia',
+  '90':'¿Recibe tratamiento antecedentes crónicos?'
 };
 const T3_LABELS = {
   '3':'Primer nombre','4':'Segundo nombre','5':'Primer apellido','6':'Segundo apellido',
@@ -3264,8 +3289,10 @@ const T3_LABELS = {
   '14':'Nivel educativo','15':'Régimen de afiliación','16':'Código EAPB','17':'Grupo poblacional especial',
   '18':'Pertenencia étnica','19':'Agente medicina tradicional','20':'Código pueblo indígena',
   '21':'Condición de discapacidad','22':'Peso (kg)','23':'Talla (cm)','24':'Diagnóstico nutricional P/T',
-  '25':'Perímetro braquial (cm)','26':'Condición de salud crónica','27':'Esquema de atenciones de promoción',
-  '28':'Intervenciones pendientes de promoción','29':'Motivos no atención de promoción',
+  '25':'Perímetro braquial (cm)','38':'Perímetro cefálico (cm)','39':'Perímetro abdominal (cm)',
+  '26':'Condición de salud crónica','27':'Esquema de atenciones de promoción',
+  '28':'Intervenciones pendientes de promoción y mantenimiento de la salud',
+  '29':'Motivos no atención de promoción',
   '30':'Practica deporte o ejercicio','31':'Lactancia materna exclusiva 6m','32':'Meses de lactancia materna',
   '33':'Signos desnutrición aguda','34':'Enfermedad aguda último mes','35':'Descripción enfermedad aguda',
   '36':'Recibe atención enfermedad aguda','37':'Motivos no atención enfermedad aguda'
@@ -3321,6 +3348,9 @@ const T2_DECODE = {
   '81':{type:'sino'},
   '82':{type:'sino'},
   '83':{type:'sino'},
+  '85':{type:'ref',ref:'estrato'},
+  '89':{type:'sino'},
+  '90':{type:'sino'},
 };
 const T3_DECODE = {
   '7': {type:'ref',ref:'tipoIdPersona'},
@@ -3433,7 +3463,8 @@ async function downloadExcel() {
         rv('58'),rv('59'),rv('60'),rv('61'),rv('62'),rv('63'),rv('64'),rv('65'),
         rv('66'),rv('67'),rv('68'),rv('69'),rv('70'),rv('71'),rv('72'),rv('73'),
         rv('74'),rv('75'),rv('76'),rv('77'),rv('78'),rv('79'),rv('80'),rv('81'),
-        rv('82'),rv('83')
+        rv('82'),rv('83'),
+        rv('84'),rv('85'),rv('86'),rv('87'),rv('88'),rv('89'),rv('90')
       ]);
     });
 
@@ -3455,7 +3486,7 @@ async function downloadExcel() {
           rv3('3'),rv3('4'),rv3('5'),rv3('6'),rv3('7'),rv3('8'),rv3('9'),rv3('10'),
           rv3('11'),rv3('12'),rv3('13'),rv3('14'),rv3('15'),rv3('16'),rv3('17'),
           rv3('18'),rv3('19'),rv3('20'),rv3('21'),rv3('22'),rv3('23'),rv3('24'),
-          rv3('25'),rv3('26'),rv3('27'),rv3('28'),rv3('29'),rv3('30'),rv3('31'),
+          rv3('25'),rv3('38'),rv3('39'),rv3('26'),rv3('27'),rv3('28'),rv3('29'),rv3('30'),rv3('31'),
           rv3('32'),rv3('33'),rv3('34'),rv3('35'),rv3('36'),rv3('37')
         ]);
       });
