@@ -32,6 +32,19 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  // HTML principal: red primero para garantizar actualizaciones inmediatas
+  if (e.request.url.endsWith('SI-APS-CCFP.html') || e.request.url.endsWith('/si-aps-ccfp/') || e.request.url.endsWith('/si-aps-ccfp')) {
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        if (resp && resp.status === 200) {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return resp;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
   // Tiles de OpenStreetMap: red primero, caché de respaldo
   if (e.request.url.includes('tile.openstreetmap.org')) {
     e.respondWith(

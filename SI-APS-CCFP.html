@@ -1430,7 +1430,8 @@ function renderHome() {
         <div style="font-size:11px;color:var(--muted)">${isAdmin()?'Administrador':'Usuario de campo'}
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
-      <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0">
+      <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.4</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
       </div>
