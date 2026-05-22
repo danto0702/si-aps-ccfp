@@ -2398,6 +2398,10 @@ function renderT2Step1(d){
   const ebsCode=calcEBS(d),numViv=calcNumVivienda(d,idx),numFam=calcNumFamilia(d,idx),codFicha=calcCodFicha(d,idx);
   // Build dropdown options from user's assigned EBS codes
   const uzpeOpts = ebsOptsFor(2,9);
+  // Si hay UZPE configurado en el panel y no está en la lista, agregarlo como primera opción
+  if (STATE.config.uzpe && !uzpeOpts.some(o => o.v === STATE.config.uzpe)) {
+    uzpeOpts.unshift({v: STATE.config.uzpe, l: STATE.config.uzpe});
+  }
   const terrOpts = ebsOptsFor(14,17);
   const microOpts= ebsOptsFor(17,21);
   // Si el admin configuró EBS en el panel, usar esa lista; si no, derivar del código de usuario
