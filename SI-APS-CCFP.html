@@ -2479,6 +2479,7 @@ function renderT2Step2(d){
   ${num('17',d['17']||'1',true,1,99)}
   ${ro('18',d['18']||'—','N° de la ficha — autogenerado al crear nueva familia')}
   ${txt('20',d['20']||STATE.config.nit||'',9,true,'NIT sin dígito de verificación')}
+  ${txt('84',d['84']||'',60,false,'Nombre del prestador primario de salud')}
   ${sel(REF.tipoIdPersona,'21',d['21']||'CC',true)}
   ${txt('22',d['22']||'',20,true,'Número de identificación')}
   ${sel(REF.perfilAcademico,'23',d['23']||'',true)}
@@ -2498,6 +2499,8 @@ function renderT2Step3(d){
     ${sel(REF.materialTecho,'32',d['32']||'',true)}
     ${s33?txt('33',d['33']||'',30,false,'Especifique el material del techo'):''}
     <div class="grid-2">${num('34',d['34']||'',true,0,99)}${sino('35',d['35']||'',true)}</div>
+    ${sel(REF.estrato,'85',d['85']||'',false)}
+    <div class="grid-2">${num('86',d['86']||'',false,0,99)}${num('87',d['87']||'',false,0,99)}</div>
   </div>`;}
 
 function renderT2Step4(d){
@@ -2533,16 +2536,19 @@ function renderT2Step5(d){
     <div class="card-title">Paso 5 — Familia, Instrumentos y Condiciones</div>
     <div class="grid-2">${sel(REF.tipoFamilia,'54',d['54']||'',true)}${num('55',d['55']||'',true,1,99)}</div>
     ${multi('familiograma','56',d['56']||[],false)}
+    ${txt('88',d['88']||'',200,false,'Observaciones del familiograma')}
     ${sel(REF.apgar,'57',d['57']||'',true)}
     ${sino('58',d['58']||'',true)}
     ${sZarit?sel(REF.zarit,'59',d['59']||'',false):''}
     ${sel(REF.ecomapa,'60',d['60']||'',true)}
     <div class="grid-2">${sino('61',d['61']||'',true)}${sino('62',d['62']||'',true)}</div>
-    <div class="grid-2">${sino('63',d['63']||'',true)}${sino('64',d['64']||'',true)}</div>
-    <div class="grid-2">${sino('65',d['65']||'',true)}${sino('66',d['66']||'',true)}</div>
+    <div class="grid-2">${sino('63',d['63']||'',true)}${sino('89',d['89']||'',false)}</div>
+    <div class="grid-2">${sino('64',d['64']||'',true)}${sino('65',d['65']||'',true)}</div>
+    ${sino('66',d['66']||'',true)}
     ${sTransm?multi('enfermedadTransmisible','67',d['67']||[],false):''}
     ${sino('68',d['68']||'',true)}${sino('69',d['69']||'',true)}
     ${sino('70',d['70']||'',true)}${sino('71',d['71']||'',true)}
+    ${sino('90',d['90']||'',false)}
     ${sDescAnt?txt('72',d['72']||'',200,false,'Describa los antecedentes crónicos'):''}
     ${multi('formaAlimentos','73',d['73']||[],true)}
     ${sDescAl?txt('74',d['74']||'',100,false,'Especifique la otra forma de obtención de alimentos'):''}
@@ -2694,6 +2700,7 @@ function renderPersona(){
       })()}</div>
     </div>
     ${dec3('25',d['25']||'')}
+    <div class="grid-2">${dec3('38',d['38']||'')}${dec3('39',d['39']||'')}</div>
     ${sino3('26',d['26']||'',true)}${sino3('27',d['27']||'',false)}
     ${multi3WithExtra('intervencionPendiente','28','28_obs',d['28']||[],d['28_obs']||[],false)}
     ${multi3('motivoNoAtencionProm','29',d['29']||[],false)}
