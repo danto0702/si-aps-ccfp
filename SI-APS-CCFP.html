@@ -364,6 +364,57 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:480px){.chart-grid{grid-template-columns:1fr}}
 .an-empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:13px}
+
+/* ── Herramientas: APGAR · Zarit · Familiograma · Ecomapa ─── */
+.tool-block{background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}
+.tool-block-title{font-size:11px;font-weight:700;color:var(--purple-l);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.tool-result-chip{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:8px;padding:10px 12px;margin-top:8px;border:1px solid var(--border)}
+.tool-score-big{font-size:30px;font-weight:900;line-height:1;flex-shrink:0}
+.tool-result-text{flex:1;min-width:0}
+.tool-result-label{font-size:13px;font-weight:700;line-height:1.3}
+.tool-result-sub{font-size:11px;color:var(--muted);margin-top:2px}
+/* Botones de opción de escala (APGAR / Zarit) */
+.scale-opts{display:grid;gap:6px;margin-top:8px}
+.scale-opts-3{grid-template-columns:1fr 1fr 1fr}
+.scale-opts-5{grid-template-columns:1fr 1fr 1fr 1fr 1fr}
+@media(max-width:380px){.scale-opts-5{grid-template-columns:1fr 1fr}}
+.scale-btn{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:8px;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;cursor:pointer;touch-action:manipulation;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:.1s;-webkit-user-select:none;user-select:none}
+.scale-btn:active{opacity:.75}
+.scale-btn.sel-ok{border-color:var(--green);background:#0d2318;color:var(--green)}
+.scale-btn .sv{font-size:18px;font-weight:900}
+/* Pregunta de instrumento */
+.ins-q{border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px}
+.ins-q:last-child{border-bottom:none}
+/* Barra de progreso */
+.prog-bar{height:4px;background:var(--border);border-radius:4px;margin-bottom:14px}
+.prog-fill{height:4px;border-radius:4px;background:var(--purple-l);transition:width .3s}
+/* Resultado destacado */
+.score-panel{text-align:center;background:#0a0c10;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.score-panel .snum{font-size:48px;font-weight:900;line-height:1}
+.score-panel .slbl{font-size:14px;font-weight:700;margin-top:6px}
+.score-panel .ssub{font-size:11px;color:var(--muted);margin-top:4px}
+/* Familiograma: miembros */
+.fam-member-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+.fam-member-row:last-child{border-bottom:none}
+.fam-sym{width:36px;height:36px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;border:2px solid transparent}
+.fam-sym.M{border-color:var(--blue);background:#1a2a3d}
+.fam-sym.F{border-color:#e879f9;background:#2d1a3a;border-radius:50%}
+.fam-sym.N{border-color:var(--muted);background:#1a1f27}
+/* SVG familiograma */
+.fam-svg-box{background:#0a0c10;border:1px solid var(--border);border-radius:8px;overflow:auto;margin:12px 0;display:flex;justify-content:center}
+/* Ecomapa */
+.eco-node-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.eco-node{border:1px solid var(--border);border-radius:8px;padding:10px 8px;text-align:center;cursor:pointer;touch-action:manipulation;transition:.1s;-webkit-user-select:none;user-select:none}
+.eco-node:active{opacity:.75}
+.eco-node .eco-icon{font-size:22px;display:block;margin-bottom:4px}
+.eco-node .eco-name{font-size:11px;font-weight:700;color:var(--text)}
+.eco-node .eco-rel{font-size:10px;margin-top:3px;font-weight:600}
+.eco-node.rel-0{border-color:var(--border)}
+.eco-node.rel-1{border-color:var(--green);background:#0d2318}.eco-node .eco-rel.rel-1{color:var(--green)}
+.eco-node.rel-2{border-color:var(--muted);background:#1a1f27}.eco-node .eco-rel.rel-2{color:var(--muted)}
+.eco-node.rel-3{border-color:var(--red);background:#3d1a1a}.eco-node .eco-rel.rel-3{color:var(--red)}
+.eco-node.rel-4{border-color:var(--blue);background:#1a2a3d}.eco-node .eco-rel.rel-4{color:#93c5fd}
+.eco-node.rel-5{border-color:var(--yellow);background:#2d2000}.eco-node .eco-rel.rel-5{color:var(--yellow)}
 </style>
 </head>
 <body>
@@ -410,7 +461,7 @@ const REF = {
   disposicionResiduos:[{v:'1',l:'Recolección por servicio de aseo distrital o municipal'},{v:'2',l:'Enterramiento'},{v:'3',l:'Quema a campo abierto'},{v:'4',l:'Disposición en fuentes de agua cercana'},{v:'5',l:'Disposición a campo abierto'},{v:'6',l:'Otro'}],
   tipoFamilia:[{v:'1',l:'Nuclear biparental'},{v:'2',l:'Nuclear monoparental'},{v:'3',l:'Extenso biparental'},{v:'4',l:'Extenso monoparental'},{v:'5',l:'Compuesto biparental'},{v:'6',l:'Compuesto monoparental'},{v:'7',l:'Unipersonal'}],
   familiograma:[{v:'1',l:'Biológicos'},{v:'2',l:'Psicológicos'},{v:'3',l:'Sociales'}],
-  apgar:[{v:'1',l:'Normal (17-20 puntos)'},{v:'2',l:'Disfunción leve (13-16 puntos)'},{v:'3',l:'Disfunción moderada (10-12 puntos)'},{v:'4',l:'Disfunción severa (≤ 9 puntos)'}],
+  apgar:[{v:'1',l:'Alta funcionalidad (7-10 pts)'},{v:'2',l:'Disfunción moderada (4-6 pts)'},{v:'3',l:'Disfunción severa (0-3 pts)'}],
   zarit:[{v:'1',l:'Ausencia de sobrecarga (≤ 46)'},{v:'2',l:'Sobrecarga ligera (47-55)'},{v:'3',l:'Sobrecarga intensa (≥ 56)'}],
   ecomapa:[{v:'1',l:'Positivo'},{v:'2',l:'Tenue'},{v:'3',l:'Estresante'},{v:'4',l:'Fluye'},{v:'5',l:'Intenso'}],
   enfermedadTransmisible:[{v:'1',l:'TB (Tuberculosis)'},{v:'2',l:'Lepra'},{v:'3',l:'Escabiosis, enfermedades infecciosas de la piel u otras'},{v:'4',l:'Malaria'},{v:'5',l:'Dengue'},{v:'6',l:'Chagas'},{v:'7',l:'Hepatitis A'},{v:'8',l:'Alguna enfermedad inmunoprevenible (varicela, parotiditis, otra)'},{v:'9',l:'Otras'},{v:'10',l:'Ninguna'}],
@@ -2036,6 +2087,495 @@ async function deleteOption(dbId, campoId, codigo) {
 function closeModal() { document.getElementById('modal-root').innerHTML=''; }
 
 // ============================================================
+// ██  APGAR FAMILIAR
+// ============================================================
+const APGAR_PREGUNTAS = [
+  '¿Está satisfecho(a) con la ayuda que recibe de su familia cuando tiene algún problema?',
+  '¿Conversan entre ustedes los problemas que tienen en casa?',
+  '¿Las decisiones importantes se toman en conjunto en la familia?',
+  '¿Los fines de semana son compartidos por todos en casa?',
+  '¿Siente que su familia lo/la quiere?'
+];
+const APGAR_OPTS = [{v:0,l:'Casi nunca'},{v:1,l:'A veces'},{v:2,l:'Casi siempre'}];
+
+function _apgarInterp(s){
+  if(s>=7) return {cat:'1',label:'Alta funcionalidad familiar',color:'var(--green)'};
+  if(s>=4) return {cat:'2',label:'Disfunción familiar moderada',color:'var(--yellow)'};
+  return {cat:'3',label:'Disfunción familiar severa',color:'var(--red)'};
+}
+
+function openModalAPGAR(){
+  const prev=STATE.draft2['57_answers']||[];
+  STATE._apgarAns=prev.length===5?[...prev]:new Array(5).fill(null);
+  const rows=APGAR_PREGUNTAS.map((p,i)=>`
+    <div class="ins-q">
+      <div class="field-label" style="margin-bottom:8px"><span class="field-num">${i+1}</span>${esc(p)}</div>
+      <div class="scale-opts scale-opts-3">
+        ${APGAR_OPTS.map(o=>`
+          <button type="button" class="scale-btn apgar-btn${STATE._apgarAns[i]===o.v?' sel-ok':''}"
+            data-qi="${i}" data-v="${o.v}" onclick="apgarPick(${i},${o.v})">
+            <span class="sv">${o.v}</span>${esc(o.l)}
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-title">📊 APGAR Familiar</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        5 preguntas · <b>Casi nunca = 0 · A veces = 1 · Casi siempre = 2</b><br>
+        Interpretación: 0-3 Disfunción severa · 4-6 Moderada · 7-10 Alta funcionalidad
+      </p>
+      <div class="prog-bar"><div class="prog-fill" id="ap-bar" style="width:${(STATE._apgarAns.filter(x=>x!==null).length/5*100).toFixed(0)}%"></div></div>
+      ${rows}
+      <div id="ap-res" style="display:${STATE._apgarAns.every(x=>x!==null)?'block':'none'}" class="score-panel">
+        <div style="font-size:11px;color:var(--muted)">PUNTAJE TOTAL</div>
+        <div class="snum" id="ap-num"></div>
+        <div class="slbl" id="ap-lbl"></div>
+        <div class="ssub">0-3 Disfunción severa · 4-6 Moderada · 7-10 Alta funcionalidad</div>
+      </div>
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="ap-save" style="flex:1;display:${STATE._apgarAns.every(x=>x!==null)?'flex':'none'}" onclick="guardarAPGAR()">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+  if(STATE._apgarAns.every(x=>x!==null)) _apgarUpdate();
+}
+
+function apgarPick(qi,v){
+  STATE._apgarAns[qi]=v;
+  document.querySelectorAll(`.apgar-btn[data-qi="${qi}"]`).forEach(b=>{
+    b.classList.toggle('sel-ok', parseInt(b.dataset.v)===v);
+  });
+  _apgarUpdate();
+}
+
+function _apgarUpdate(){
+  const ans=STATE._apgarAns;
+  const done=ans.filter(x=>x!==null).length;
+  const el=document.getElementById('ap-bar');
+  if(el) el.style.width=(done/5*100).toFixed(0)+'%';
+  if(done===0) return;
+  const score=ans.filter(x=>x!==null).reduce((s,x)=>s+x,0);
+  const all=done===5;
+  const r=_apgarInterp(score);
+  const res=document.getElementById('ap-res');
+  if(res){
+    res.style.display='block';
+    const numEl=document.getElementById('ap-num');
+    const lblEl=document.getElementById('ap-lbl');
+    if(numEl){numEl.textContent=all?score:score+'+'; numEl.style.color=r.color;}
+    if(lblEl){lblEl.textContent=r.label; lblEl.style.color=r.color;}
+    const saveBtn=document.getElementById('ap-save');
+    if(saveBtn) saveBtn.style.display=all?'flex':'none';
+  }
+}
+
+function guardarAPGAR(){
+  const ans=STATE._apgarAns;
+  if(ans.filter(x=>x!==null).length<5) return toast('Complete las 5 preguntas','err');
+  const score=ans.reduce((s,x)=>s+x,0);
+  const r=_apgarInterp(score);
+  STATE.draft2['57_answers']=[...ans];
+  STATE.draft2['57_score']=score;
+  STATE.draft2['57']=r.cat;
+  delete STATE._apgarAns;
+  closeModal();
+  toast('APGAR guardado — '+score+' pts · '+r.label,'ok');
+  render();
+}
+
+// ============================================================
+// ██  ESCALA DE ZARIT
+// ============================================================
+const ZARIT_PREGUNTAS = [
+  '¿Piensa que su familiar solicita más ayuda de la que realmente necesita?',
+  '¿Piensa que debido al tiempo que dedica a su familiar ya no dispone de tiempo suficiente para usted?',
+  '¿Se siente agobiado(a) por intentar compatibilizar el cuidado de su familiar con otras responsabilidades (trabajo, familia)?',
+  '¿Se siente avergonzado(a) por la conducta de su familiar?',
+  '¿Se siente enfadado(a) cuando está cerca de su familiar?',
+  '¿Cree que la situación actual afecta negativamente la relación que usted tiene con otros miembros de su familia?',
+  '¿Tiene miedo por el futuro de su familiar?',
+  '¿Piensa que su familiar depende de usted?',
+  '¿Piensa que su salud ha empeorado debido a tener que cuidar a su familiar?',
+  '¿Se siente tenso(a) cuando está cerca de su familiar?',
+  '¿Piensa que no tiene tanta intimidad como le gustaría debido a tener que cuidar a su familiar?',
+  '¿Siente que su vida social se ha visto afectada negativamente por tener que cuidar a su familiar?',
+  '¿Se siente incómodo(a) por distanciarse de sus amistades debido a tener que cuidar de su familiar?',
+  '¿Piensa que su familiar le considera a usted la única persona que le puede cuidar?',
+  '¿Piensa que no tiene suficientes ingresos económicos para los gastos de cuidar a su familiar, además de sus otros gastos?',
+  '¿Piensa que no será capaz de cuidar a su familiar por mucho más tiempo?',
+  '¿Siente que ha perdido el control de su vida desde que comenzó la enfermedad de su familiar?',
+  '¿Desearía poder dejar el cuidado de su familiar a otra persona?',
+  '¿Se siente indeciso(a) sobre qué hacer con su familiar?',
+  '¿Piensa que debería hacer más por su familiar?',
+  '¿Piensa que podría cuidar mejor a su familiar?',
+  'Globalmente, ¿qué grado de "carga" experimenta por el hecho de cuidar a su familiar?'
+];
+const ZARIT_OPTS=[{v:1,l:'Nunca'},{v:2,l:'Rara vez'},{v:3,l:'Algunas veces'},{v:4,l:'Bastantes veces'},{v:5,l:'Casi siempre'}];
+
+function _zaritInterp(s){
+  if(s<=46) return {cat:'1',label:'Ausencia de sobrecarga',color:'var(--green)'};
+  if(s<=55) return {cat:'2',label:'Sobrecarga ligera',color:'var(--yellow)'};
+  return {cat:'3',label:'Sobrecarga intensa',color:'var(--red)'};
+}
+
+function openModalZarit(){
+  const prev=STATE.draft2['59_answers']||[];
+  STATE._zaritAns=prev.length===22?[...prev]:new Array(22).fill(null);
+  const done=STATE._zaritAns.filter(x=>x!==null).length;
+  const rows=ZARIT_PREGUNTAS.map((p,i)=>`
+    <div class="ins-q">
+      <div class="field-label" style="margin-bottom:8px"><span class="field-num">${i+1}</span>${esc(p)}</div>
+      <div class="scale-opts scale-opts-5">
+        ${ZARIT_OPTS.map(o=>`
+          <button type="button" class="scale-btn zarit-btn${STATE._zaritAns[i]===o.v?' sel-ok':''}"
+            data-qi="${i}" data-v="${o.v}" onclick="zaritPick(${i},${o.v})">
+            <span class="sv">${o.v}</span>${esc(o.l)}
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-title">📋 Escala de Zarit — Sobrecarga del Cuidador</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">
+        22 preguntas · Escala 1–5 · Total: 22–110 pts<br>
+        <b>≤46</b> Sin sobrecarga &nbsp;·&nbsp; <b>47-55</b> Sobrecarga ligera &nbsp;·&nbsp; <b>≥56</b> Sobrecarga intensa
+      </p>
+      <div class="prog-bar"><div class="prog-fill" id="zt-bar" style="width:${(done/22*100).toFixed(0)}%"></div></div>
+      ${rows}
+      <div id="zt-res" style="display:${done===22?'block':'none'}" class="score-panel">
+        <div style="font-size:11px;color:var(--muted)">PUNTAJE TOTAL</div>
+        <div class="snum" id="zt-num"></div>
+        <div class="slbl" id="zt-lbl"></div>
+        <div class="ssub">≤46 Sin sobrecarga · 47-55 Ligera · ≥56 Intensa</div>
+      </div>
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="zt-save" style="flex:1;display:${done===22?'flex':'none'}" onclick="guardarZarit()">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+  if(done===22) _zaritUpdate();
+}
+
+function zaritPick(qi,v){
+  STATE._zaritAns[qi]=v;
+  document.querySelectorAll(`.zarit-btn[data-qi="${qi}"]`).forEach(b=>{
+    b.classList.toggle('sel-ok', parseInt(b.dataset.v)===v);
+  });
+  _zaritUpdate();
+}
+
+function _zaritUpdate(){
+  const ans=STATE._zaritAns;
+  const done=ans.filter(x=>x!==null).length;
+  const score=ans.filter(x=>x!==null).reduce((s,x)=>s+x,0);
+  const bar=document.getElementById('zt-bar');
+  if(bar) bar.style.width=(done/22*100).toFixed(0)+'%';
+  const resEl=document.getElementById('zt-res');
+  if(resEl){
+    resEl.style.display=done>0?'block':'none';
+    const r=_zaritInterp(score);
+    const numEl=document.getElementById('zt-num');
+    const lblEl=document.getElementById('zt-lbl');
+    if(numEl){numEl.textContent=done===22?score:score+'+'; numEl.style.color=r.color;}
+    if(lblEl){lblEl.textContent=r.label; lblEl.style.color=r.color;}
+    const saveBtn=document.getElementById('zt-save');
+    if(saveBtn) saveBtn.style.display=done===22?'flex':'none';
+  }
+}
+
+function guardarZarit(){
+  const ans=STATE._zaritAns;
+  if(ans.filter(x=>x!==null).length<22) return toast('Complete las 22 preguntas','err');
+  const score=ans.reduce((s,x)=>s+x,0);
+  const r=_zaritInterp(score);
+  STATE.draft2['59_answers']=[...ans];
+  STATE.draft2['59_score']=score;
+  STATE.draft2['59']=r.cat;
+  delete STATE._zaritAns;
+  closeModal();
+  toast('Zarit guardado — '+score+' pts · '+r.label,'ok');
+  render();
+}
+
+// ============================================================
+// ██  FAMILIOGRAMA
+// ============================================================
+const FAM_ROLES=['Jefe(a) de hogar','Cónyuge/Compañero(a)','Hijo(a)','Nieto(a)','Padre/Madre','Abuelo(a)','Hermano(a)','Tío(a)','Otro pariente','Fallecido(a)'];
+const FAM_SEX=[{v:'M',l:'Hombre ■'},{v:'F',l:'Mujer ●'},{v:'N',l:'No definido ◆'}];
+
+function openModalFamiliograma(){
+  STATE._famData=[...(STATE.draft2['56_data']||[])];
+  STATE._famHall=[...(STATE.draft2['56']||[])];
+  STATE._famObs=STATE.draft2['88']||'';
+  _famRender();
+}
+
+function _famRender(){
+  const members=STATE._famData;
+  const hallOpts=REF.familiograma.map(o=>`
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);min-height:44px;cursor:pointer">
+      <input type="checkbox" ${(STATE._famHall||[]).includes(o.v)?'checked':''} onchange="famToggleHall('${o.v}',this.checked)"
+        style="width:20px;height:20px;accent-color:var(--purple-l);flex-shrink:0">
+      <span style="font-size:14px">${esc(o.l)}</span>
+    </label>`).join('');
+  const memberList=members.length===0
+    ?`<div style="color:var(--muted);font-size:13px;padding:12px 0;text-align:center">Sin miembros. Agregue usando el formulario.</div>`
+    :members.map((m,i)=>`
+      <div class="fam-member-row">
+        <div class="fam-sym ${m.sex}">${m.sex==='M'?'■':m.sex==='F'?'●':'◆'}${m.fallecido?'<span style="position:absolute;font-size:12px;color:var(--red);top:-2px;left:50%;transform:translateX(-50%)">✕</span>':''}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${esc(m.nombre||'Sin nombre')}</div>
+          <div style="font-size:11px;color:var(--muted)">${esc(m.rol||'')}${m.edad?' · '+m.edad+' años':''}</div>
+        </div>
+        <button class="btn-icon btn-sm" onclick="famRemove(${i})" style="color:var(--red)">✕</button>
+      </div>`).join('');
+  const svgHtml=_famGenSVG(members);
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-title">👨‍👩‍👧 Familiograma</div>
+
+      <!-- SVG Preview -->
+      <div class="fam-svg-box">${svgHtml}</div>
+
+      <!-- Lista de miembros -->
+      <div class="card-title" style="margin-bottom:8px">Integrantes del familiograma</div>
+      <div id="fam-list" style="margin-bottom:12px">${memberList}</div>
+
+      <!-- Formulario agregar miembro -->
+      <details style="margin-bottom:14px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--purple-l);padding:8px 0;-webkit-user-select:none;user-select:none">+ Agregar miembro</summary>
+        <div style="padding:12px 0 0">
+          <div class="grid-2" style="gap:8px;margin-bottom:8px">
+            <div class="field">
+              <div class="field-label">Nombre / Rol</div>
+              <input id="fn-nombre" class="field-input" placeholder="Ej: Abuela materna" style="font-size:14px">
+            </div>
+            <div class="field">
+              <div class="field-label">Edad (años)</div>
+              <input id="fn-edad" class="field-input" type="number" min="0" max="120" placeholder="—" style="font-size:14px">
+            </div>
+          </div>
+          <div class="grid-2" style="gap:8px;margin-bottom:8px">
+            <div class="field">
+              <div class="field-label">Sexo</div>
+              <select id="fn-sex" class="field-select" style="font-size:14px">
+                <option value="">Seleccione...</option>
+                ${FAM_SEX.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <div class="field-label">Rol familiar</div>
+              <select id="fn-rol" class="field-select" style="font-size:14px">
+                <option value="">Seleccione...</option>
+                ${FAM_ROLES.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="fn-fallecido" style="width:18px;height:18px;accent-color:var(--red)">
+            Miembro fallecido
+          </label>
+          <button class="btn btn-primary btn-block" onclick="famAgregar()">Agregar al familiograma</button>
+        </div>
+      </details>
+
+      <!-- Hallazgos -->
+      <div class="card-title" style="margin-bottom:4px">Hallazgos identificados</div>
+      <div style="margin-bottom:14px">${hallOpts}</div>
+
+      <!-- Observaciones -->
+      <div class="field" style="margin-bottom:16px">
+        <div class="field-label">Observaciones del familiograma</div>
+        <textarea id="fam-obs" class="field-input" rows="3" maxlength="300" placeholder="Describa los hallazgos relevantes..." style="min-height:80px;resize:vertical;font-size:14px">${esc(STATE._famObs)}</textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="guardarFamiliograma()">Guardar familiograma</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _famGenSVG(members){
+  if(members.length===0) return `<svg width="300" height="80" xmlns="http://www.w3.org/2000/svg"><text x="150" y="44" text-anchor="middle" fill="#8b949e" font-size="13" font-family="sans-serif">Sin miembros registrados</text></svg>`;
+  const W=Math.max(300, members.length*80+60);
+  const H=120;
+  const shapes=members.map((m,i)=>{
+    const x=40+i*80, y=40;
+    const clr=m.sex==='M'?'#4a6fa5':m.sex==='F'?'#e879f9':'#8b949e';
+    const bdrClr=m.fallecido?'#e94560':clr;
+    const shape=m.sex==='M'
+      ?`<rect x="${x-18}" y="${y-18}" width="36" height="36" rx="4" fill="#161b22" stroke="${bdrClr}" stroke-width="2.5"/>`
+      :m.sex==='F'
+      ?`<circle cx="${x}" cy="${y}" r="18" fill="#161b22" stroke="${bdrClr}" stroke-width="2.5"/>`
+      :`<polygon points="${x},${y-20} ${x+18},${y+14} ${x-18},${y+14}" fill="#161b22" stroke="${bdrClr}" stroke-width="2.5"/>`;
+    const cross=m.fallecido?`<line x1="${x-10}" y1="${y-10}" x2="${x+10}" y2="${y+10}" stroke="#e94560" stroke-width="2"/><line x1="${x+10}" y1="${y-10}" x2="${x-10}" y2="${y+10}" stroke="#e94560" stroke-width="2"/>`:'';
+    const lbl=m.nombre?m.nombre.slice(0,8):'';
+    const age=m.edad?m.edad+'a':'';
+    return `${shape}${cross}<text x="${x}" y="${y+36}" text-anchor="middle" fill="#8b949e" font-size="9" font-family="sans-serif">${esc(lbl)}</text><text x="${x}" y="${y+46}" text-anchor="middle" fill="#8b949e" font-size="8" font-family="sans-serif">${esc(age)}</text>`;
+  }).join('');
+  return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${shapes}</svg>`;
+}
+
+function famAgregar(){
+  const nombre=document.getElementById('fn-nombre')?.value.trim()||'';
+  const edad=document.getElementById('fn-edad')?.value||'';
+  const sex=document.getElementById('fn-sex')?.value||'N';
+  const rol=document.getElementById('fn-rol')?.value||'';
+  const fallecido=document.getElementById('fn-fallecido')?.checked||false;
+  STATE._famData.push({nombre,edad,sex,rol,fallecido});
+  _famRender();
+}
+
+function famRemove(i){
+  STATE._famData.splice(i,1);
+  _famRender();
+}
+
+function famToggleHall(v,checked){
+  if(!STATE._famHall) STATE._famHall=[];
+  if(checked){if(!STATE._famHall.includes(v)) STATE._famHall.push(v);}
+  else{STATE._famHall=STATE._famHall.filter(x=>x!==v);}
+}
+
+function guardarFamiliograma(){
+  STATE._famObs=document.getElementById('fam-obs')?.value||'';
+  STATE.draft2['56_data']=[...STATE._famData];
+  STATE.draft2['56']=[...(STATE._famHall||[])];
+  STATE.draft2['88']=STATE._famObs;
+  delete STATE._famData; delete STATE._famHall; delete STATE._famObs;
+  closeModal();
+  toast('Familiograma guardado','ok');
+  render();
+}
+
+// ============================================================
+// ██  ECOMAPA
+// ============================================================
+const ECO_NODES=[
+  {name:'Trabajo/Estudio', icon:'💼'},
+  {name:'Servicios de Salud', icon:'🏥'},
+  {name:'Familia extensa', icon:'👨‍👩‍👧‍👦'},
+  {name:'Iglesia/Espiritual', icon:'⛪'},
+  {name:'Amigos', icon:'🤝'},
+  {name:'Recreación', icon:'⚽'},
+  {name:'Servicios sociales', icon:'🏛️'},
+  {name:'Escuela', icon:'📚'}
+];
+const ECO_RELS=[
+  {v:0, l:'Sin relación', color:'var(--muted)', css:'eco-node rel-0'},
+  {v:1, l:'Positivo',     color:'var(--green)', css:'eco-node rel-1'},
+  {v:2, l:'Tenue',        color:'var(--muted)', css:'eco-node rel-2'},
+  {v:3, l:'Estresante',   color:'var(--red)',   css:'eco-node rel-3'},
+  {v:4, l:'Fluye',        color:'#93c5fd',      css:'eco-node rel-4'},
+  {v:5, l:'Intenso',      color:'var(--yellow)','css':'eco-node rel-5'}
+];
+
+function openModalEcomapa(){
+  STATE._ecoData={...(STATE.draft2['60_data']||{})};
+  _ecoRender();
+}
+
+function _ecoRender(){
+  const nodes=ECO_NODES.map((n,i)=>{
+    const rel=STATE._ecoData[i]||0;
+    const r=ECO_RELS[rel];
+    return `<div class="${r.css}" onclick="ecoNext(${i})" style="cursor:pointer;-webkit-user-select:none;user-select:none">
+      <span class="eco-icon">${n.icon}</span>
+      <div class="eco-name">${esc(n.name)}</div>
+      <div class="eco-rel ${r.css.split(' ')[1]}" style="color:${r.color}">${rel===0?'Toque para asignar':r.l}</div>
+    </div>`;
+  }).join('');
+
+  const svgHtml=_ecoGenSVG(STATE._ecoData);
+
+  const leyenda=ECO_RELS.slice(1).map(r=>`
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px">
+      <span style="display:inline-block;width:24px;height:3px;background:${r.color};border-radius:2px"></span>
+      <span style="color:var(--muted)">${r.l}</span>
+    </div>`).join('');
+
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-title">🕸️ Ecomapa</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        Toque cada sistema para asignar el tipo de relación. Vuelva a tocar para cambiar.
+      </p>
+
+      <!-- Nodos en grilla -->
+      <div class="eco-node-grid" id="eco-grid">${nodes}</div>
+
+      <!-- Leyenda -->
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:10px;background:var(--input-bg);border-radius:8px;border:1px solid var(--border)">${leyenda}</div>
+
+      <!-- SVG Preview -->
+      <div class="fam-svg-box" style="margin-bottom:14px">${svgHtml}</div>
+
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="guardarEcomapa()">Guardar ecomapa</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ecoNext(i){
+  const cur=STATE._ecoData[i]||0;
+  STATE._ecoData[i]=(cur+1)%ECO_RELS.length;
+  _ecoRender();
+}
+
+function _ecoGenSVG(data){
+  const CX=180, CY=140, R=90, W=360, H=280;
+  const famCircle=`<circle cx="${CX}" cy="${CY}" r="36" fill="#161b22" stroke="#7c1d6f" stroke-width="2.5"/>
+    <text x="${CX}" y="${CY}" text-anchor="middle" dominant-baseline="middle" fill="#a855f7" font-size="10" font-weight="700" font-family="sans-serif">FAMILIA</text>`;
+  const lines=ECO_NODES.map((n,i)=>{
+    const rel=data[i]||0;
+    if(rel===0) return '';
+    const angle=(i/ECO_NODES.length)*2*Math.PI - Math.PI/2;
+    const nx=CX+R*Math.cos(angle), ny=CY+R*Math.sin(angle);
+    const nx2=CX+(R+54)*Math.cos(angle), ny2=CY+(R+54)*Math.sin(angle);
+    const r=ECO_RELS[rel];
+    let lineEl='';
+    if(rel===1)  lineEl=`<line x1="${nx}" y1="${ny}" x2="${nx2}" y2="${ny2}" stroke="#38c793" stroke-width="3"/>`;
+    else if(rel===2) lineEl=`<line x1="${nx}" y1="${ny}" x2="${nx2}" y2="${ny2}" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+    else if(rel===3) lineEl=`<line x1="${nx}" y1="${ny}" x2="${nx2}" y2="${ny2}" stroke="#e94560" stroke-width="2" stroke-dasharray="2,2"/>`;
+    else if(rel===4) lineEl=`<line x1="${nx}" y1="${ny}" x2="${nx2}" y2="${ny2}" stroke="#93c5fd" stroke-width="2"/><polygon points="${nx2},${ny2} ${nx2-6*Math.cos(angle)-4*Math.sin(angle)},${ny2-6*Math.sin(angle)+4*Math.cos(angle)} ${nx2-6*Math.cos(angle)+4*Math.sin(angle)},${ny2-6*Math.sin(angle)-4*Math.cos(angle)}" fill="#93c5fd"/>`;
+    else if(rel===5) lineEl=`<line x1="${nx}" y1="${ny}" x2="${nx2}" y2="${ny2}" stroke="#ffb432" stroke-width="4"/><line x1="${nx+2*Math.sin(angle)}" y1="${ny-2*Math.cos(angle)}" x2="${nx2+2*Math.sin(angle)}" y2="${ny2-2*Math.cos(angle)}" stroke="#ffb432" stroke-width="1.5"/>`;
+    const lx=CX+(R+68)*Math.cos(angle), ly=CY+(R+68)*Math.sin(angle);
+    const nodeCircle=`<circle cx="${nx2}" cy="${ny2}" r="12" fill="#161b22" stroke="${r.color}" stroke-width="1.5"/>`;
+    return `${lineEl}${nodeCircle}<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#8b949e" font-size="8" font-family="sans-serif">${esc(n.name.slice(0,8))}</text>`;
+  }).join('');
+  return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">${lines}${famCircle}</svg>`;
+}
+
+function guardarEcomapa(){
+  // Determinar resultado global (tipo de relación más frecuente o predominante)
+  const vals=Object.values(STATE._ecoData).filter(v=>v>0);
+  let resCat='';
+  if(vals.length>0){
+    // El resultado del campo 60 refleja la relación más frecuente
+    const freq=vals.reduce((acc,v)=>{acc[v]=(acc[v]||0)+1;return acc},{});
+    const dominant=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0];
+    resCat=String(dominant);
+  }
+  STATE.draft2['60_data']={...STATE._ecoData};
+  STATE.draft2['60']=resCat;
+  delete STATE._ecoData;
+  closeModal();
+  toast('Ecomapa guardado','ok');
+  render();
+}
+
+// ============================================================
 // HELPERS: IDs automáticos
 // ============================================================
 function calcEBS(d) {
@@ -2544,15 +3084,105 @@ function renderT2Step4(d){
 function renderT2Step5(d){
   const sZarit=d['58']==='1';
   const sDescAnt=d['71']==='1',sDescAl=(d['73']||[]).includes('9');
+
+  /* ── Bloque Familiograma ── */
+  const famData=d['56_data']||[];
+  const famHallazgos=d['56']||[];
+  const famObs=d['88']||'';
+  const famLabel=famData.length>0?`${famData.length} miembro(s) registrado(s)`:'Sin datos';
+  const famHall=famHallazgos.map(v=>REF.familiograma.find(o=>o.v===v)?.l||v).join(', ')||'—';
+  const famResultHtml=famData.length>0?`
+    <div class="tool-result-chip">
+      <span style="font-size:28px">👨‍👩‍👧</span>
+      <div class="tool-result-text">
+        <div class="tool-result-label" style="color:var(--purple-l)">${esc(famLabel)}</div>
+        <div class="tool-result-sub">Hallazgos: ${esc(famHall)}</div>
+        ${famObs?`<div class="tool-result-sub" style="margin-top:2px;font-style:italic">"${esc(famObs.slice(0,60))}${famObs.length>60?'…':''}"</div>`:''}
+      </div>
+    </div>`:'';
+
+  /* ── Bloque APGAR ── */
+  const apgarScore=d['57_score'];
+  const apgarCat=REF.apgar.find(o=>o.v===d['57']);
+  const apgarColor=apgarScore>=7?'var(--green)':apgarScore>=4?'var(--yellow)':'var(--red)';
+  const apgarResultHtml=(apgarScore!=null)?`
+    <div class="tool-result-chip">
+      <div class="tool-score-big" style="color:${apgarColor}">${apgarScore}</div>
+      <div class="tool-result-text">
+        <div class="tool-result-label" style="color:${apgarColor}">${esc(apgarCat?.l||'')}</div>
+        <div class="tool-result-sub">Puntaje sobre 10 pts</div>
+      </div>
+    </div>`:'';
+
+  /* ── Bloque Zarit ── */
+  const zaritScore=d['59_score'];
+  const zaritCat=REF.zarit.find(o=>o.v===d['59']);
+  const zaritColor=zaritScore<=46?'var(--green)':zaritScore<=55?'var(--yellow)':'var(--red)';
+  const zaritResultHtml=(zaritScore!=null)?`
+    <div class="tool-result-chip">
+      <div class="tool-score-big" style="color:${zaritColor}">${zaritScore}</div>
+      <div class="tool-result-text">
+        <div class="tool-result-label" style="color:${zaritColor}">${esc(zaritCat?.l||'')}</div>
+        <div class="tool-result-sub">Puntaje sobre 110 pts</div>
+      </div>
+    </div>`:'';
+
+  /* ── Bloque Ecomapa ── */
+  const ecoData=d['60_data']||{};
+  const ECO_NODES=['Trabajo/Estudio','Salud','Familia extensa','Iglesia','Amigos','Recreación','Servicios soc.','Escuela'];
+  const ECO_REL_L=['Sin relación','Positivo','Tenue','Estresante','Fluye','Intenso'];
+  const ecoConexiones=ECO_NODES.filter((_,i)=>ecoData[i]>0).map((_,i)=>ECO_REL_L[ecoData[i]]+': '+ECO_NODES[i]).join(', ')||'—';
+  const ecoCount=ECO_NODES.filter((_,i)=>ecoData[i]>0).length;
+  const ecoResultHtml=ecoCount>0?`
+    <div class="tool-result-chip">
+      <span style="font-size:28px">🕸️</span>
+      <div class="tool-result-text">
+        <div class="tool-result-label" style="color:var(--blue)">${ecoCount} conexión(es) mapeada(s)</div>
+        <div class="tool-result-sub">${esc(ecoConexiones.slice(0,80))}${ecoConexiones.length>80?'…':''}</div>
+      </div>
+    </div>`:'';
+
   return `<div class="card">
     <div class="card-title">Paso 5 — Familia, Instrumentos y Condiciones</div>
     <div class="grid-2">${sel(REF.tipoFamilia,'54',d['54']||'',true)}${num('55',d['55']||'',true,1,99)}</div>
-    ${multi('familiograma','56',d['56']||[],false)}
-    ${txt('88',d['88']||'',200,false,'Observaciones del familiograma')}
-    ${sel(REF.apgar,'57',d['57']||'',true)}
+
+    <!-- ══ FAMILIOGRAMA ══ -->
+    <div class="tool-block">
+      <div class="tool-block-title">Familiograma</div>
+      <button class="btn btn-secondary btn-block" onclick="openModalFamiliograma()">
+        👨‍👩‍👧 ${famData.length>0?'Editar familiograma':'Abrir constructor de familiograma'}
+      </button>
+      ${famResultHtml}
+    </div>
+
+    <!-- ══ APGAR FAMILIAR ══ -->
+    <div class="tool-block">
+      <div class="tool-block-title">APGAR Familiar <span style="color:var(--red)">*</span></div>
+      <button class="btn btn-secondary btn-block" onclick="openModalAPGAR()">
+        📊 ${apgarScore!=null?'Editar APGAR (puntaje: '+apgarScore+'/10)':'Completar APGAR Familiar (5 preguntas)'}
+      </button>
+      ${apgarResultHtml}
+    </div>
+
     ${sino('58',d['58']||'',true)}
-    ${sZarit?sel(REF.zarit,'59',d['59']||'',false):''}
-    ${sel(REF.ecomapa,'60',d['60']||'',true)}
+
+    <!-- ══ ZARIT (solo si hay cuidador) ══ -->
+    ${sZarit?`<div class="tool-block">
+      <div class="tool-block-title">Escala de Zarit — Sobrecarga del Cuidador</div>
+      <button class="btn btn-secondary btn-block" onclick="openModalZarit()">
+        📋 ${zaritScore!=null?'Editar Zarit (puntaje: '+zaritScore+'/110)':'Completar Escala de Zarit (22 preguntas)'}
+      </button>
+      ${zaritResultHtml}
+    </div>`:''}
+
+    <!-- ══ ECOMAPA ══ -->
+    <div class="tool-block">
+      <div class="tool-block-title">Ecomapa <span style="color:var(--red)">*</span></div>
+      <button class="btn btn-secondary btn-block" onclick="openModalEcomapa()">
+        🕸️ ${ecoCount>0?'Editar ecomapa ('+ecoCount+' conexiones)':'Abrir constructor de ecomapa'}
+      </button>
+      ${ecoResultHtml}
+    </div>
     <div class="grid-2">${sino('61',d['61']||'',true)}${sino('62',d['62']||'',true)}</div>
     <div class="grid-2">${sino('63',d['63']||'',true)}${sino('89',d['89']||'',false)}</div>
     <div class="grid-2">${sino('64',d['64']||'',true)}${sino('65',d['65']||'',true)}</div>
