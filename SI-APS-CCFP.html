@@ -11,7 +11,8 @@
 <meta name="format-detection" content="telephone=no,address=no,email=no">
 <title>SI-APS CCFP</title>
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png">
+<link rel="icon" type="image/jpeg" href="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg">
+<link rel="apple-touch-icon" href="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg">
 <style>
 /* ── Variables y reset ─────────────────────────────────────── */
 :root{
@@ -62,6 +63,26 @@ input,select,textarea{touch-action:manipulation}
 .conn-banner{display:none;text-align:center;padding:6px;font-size:12px;font-weight:600}
 .conn-banner.offline{display:block;background:#7c2d2d;color:#fca5a5}
 .conn-banner.syncing{display:block;background:#1a3a5c;color:#93c5fd}
+
+/* ── Banner institucional (pantalla inicio) ── */
+.home-banner{
+  width:calc(100% + 28px);margin:-14px -14px 14px;
+  overflow:hidden;line-height:0;
+}
+.home-banner img{
+  width:100%;height:auto;max-height:120px;object-fit:cover;
+  object-position:center center;display:block;
+}
+@media(max-width:479px){.home-banner img{max-height:80px}}
+@media(min-width:800px){.home-banner img{max-height:150px}}
+
+/* ── Logo en navbar ── */
+.hdr-logo{height:32px;width:auto;max-width:140px;object-fit:contain;display:block}
+
+/* ── Logo en pantalla de login ── */
+.login-banner{width:100%;max-width:380px;border-radius:12px;overflow:hidden;margin-bottom:10px;line-height:0}
+.login-banner img{width:100%;height:auto;max-height:100px;object-fit:cover;display:block}
+.login-logo-img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--purple);margin-bottom:8px;display:block}
 
 /* ── Contenido principal ── */
 #main{
@@ -1192,7 +1213,11 @@ function render() {
   let title  = meta.t;
   if (STATE.screen==='familia_t2') title = STATE.editFamId ? 'Editar Familia' : 'Nueva Familia';
   if (STATE.screen==='persona')    title = STATE.editPerId ? 'Editar Persona' : 'Agregar Persona';
-  bt.innerHTML   = `${esc(title)}<div class="hdr-sub">${meta.s}</div>`;
+  if (STATE.screen === 'home') {
+    bt.innerHTML = `<img class="hdr-logo" src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg" alt="SI-APS CCFP" loading="eager">`;
+  } else {
+    bt.innerHTML = `${esc(title)}<div class="hdr-sub">${meta.s}</div>`;
+  }
   back.style.display = meta.back ? '' : 'none';
 
   const renders = {
@@ -1254,7 +1279,8 @@ function renderLogin() {
   // ── Login / Registro ─────────────────────────────────────
   const isSignup = _loginMode === 'signup';
   return `<div class="login-wrap">
-    <div class="login-logo">🏥</div>
+    <div class="login-banner"><img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1747672929/cold_smooth_tasty._1_nmosnc.png" alt="ESE Hospital Regional Noroccidental" loading="eager"></div>
+    <img class="login-logo-img" src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg" alt="Logo SI-APS" loading="eager">
     <div class="login-title">SI-APS CCFP</div>
     <div class="login-sub">Caracterización Familia y Persona<br>ESE Hospital Regional Noroccidental</div>
     <div class="login-card">
@@ -1520,7 +1546,9 @@ function renderHome() {
         </div>`;
       }).join('');
 
-  return userInfo+statsHtml+listHtml+
+  const bannerHtml = `<div class="home-banner"><img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1747672929/cold_smooth_tasty._1_nmosnc.png" alt="ESE Hospital Regional Noroccidental — Salud Pública" loading="eager"></div>`;
+
+  return bannerHtml+userInfo+statsHtml+listHtml+
     `<div style="height:20px"></div>
      <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
      <button class="btn btn-primary btn-block" onclick="navigate('analytics')">📊 Ver análisis e indicadores</button>
@@ -4788,11 +4816,21 @@ function imprimirCaracterizacion(famId) {
 </style>
 </head>
 <body>
+<!-- Banner institucional -->
+<div style="width:calc(100% + 40px);margin:-16px -20px 12px;line-height:0;overflow:hidden">
+  <img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1747672929/cold_smooth_tasty._1_nmosnc.png"
+       alt="ESE Hospital Regional Noroccidental"
+       style="width:100%;height:auto;max-height:85px;object-fit:cover;object-position:center;display:block">
+</div>
 <div class="header">
-  <div class="header-left">
-    <h1>Caracterización Familiar y Personal</h1>
-    <h2>${esc(config.nit ? 'NIT: '+config.nit+' · '+d2['84'] : (d2['84']||'ESE Hospital Regional Noroccidental'))}</h2>
-    <h2>Período: ${config.fechaInicio||'—'} al ${config.fechaFin||'—'}</h2>
+  <div class="header-left" style="display:flex;align-items:center;gap:10px">
+    <img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg"
+         alt="Logo" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #c49fd0;flex-shrink:0">
+    <div>
+      <h1>Caracterización Familiar y Personal</h1>
+      <h2>${esc(config.nit ? 'NIT: '+config.nit+' · '+d2['84'] : (d2['84']||'ESE Hospital Regional Noroccidental'))}</h2>
+      <h2>Período: ${config.fechaInicio||'—'} al ${config.fechaFin||'—'}</h2>
+    </div>
   </div>
   <div class="header-right">
     <div class="ficha-num">Ficha: ${codFicha}</div>
