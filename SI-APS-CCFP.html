@@ -2469,91 +2469,122 @@ function _famGenSVG(members){
   if(!members||members.length===0) return `<svg width="320" height="80" xmlns="http://www.w3.org/2000/svg"><text x="160" y="44" text-anchor="middle" fill="#8b949e" font-size="13" font-family="sans-serif">Sin miembros registrados</text></svg>`;
   const SLOT=90, SYM=20;
   const GY={1:70,2:190,3:310};
-  // Copiar y agrupar por generación
+
+  // ── HELPERS ──────────────────────────────────────────────────────────
+  // Lookup bidireccional: encuentra la pareja de m en el arreglo arr
+  // sin importar quién tiene parejaDe apuntando a quién
+  const getPair=(m,arr)=>{
+    if(m.parejaDe) return arr.find(p=>p.id===m.parejaDe)||null;
+    return arr.find(p=>p.parejaDe===m.id)||null;
+  };
+  // Tipo de unión: tomar del miembro que lo tenga definido
+  const unionType=(m,partner)=>m.tipoPareja||partner.tipoPareja||'casados';
+  // Clave canónica para identificar un par (sin importar el orden)
+  const pairKey=(a,b)=>[a.id,b.id].sort().join('§');
+
+  // ── AGRUPAR Y COPIAR ──────────────────────────────────────────────────
   const bg={1:[],2:[],3:[]};
   members.forEach(m=>{const g=parseInt(m.generacion)||2;bg[g].push({...m,generacion:g});});
+
   // Ordenar para que las parejas queden adyacentes
   const orderG=arr=>{
     const done=new Set(),out=[];
     arr.forEach(m=>{
       if(done.has(m.id))return;
       out.push(m);done.add(m.id);
-      if(m.parejaDe){const p=arr.find(x=>x.id===m.parejaDe);if(p&&!done.has(p.id)){out.push(p);done.add(p.id);}}
+      // Jalar a la pareja inmediatamente después (busca en ambas direcciones)
+      const partner=m.parejaDe
+        ?arr.find(x=>x.id===m.parejaDe)
+        :arr.find(x=>x.parejaDe===m.id);
+      if(partner&&!done.has(partner.id)){out.push(partner);done.add(partner.id);}
     });
     return out;
   };
   bg[1]=orderG(bg[1]);bg[2]=orderG(bg[2]);bg[3]=orderG(bg[3]);
-  // Asignar posición X
+
+  // ── POSICIÓN X (G1 y G2: secuencial) ─────────────────────────────────
   bg[1].forEach((m,i)=>{m._x=60+i*SLOT;});
   bg[2].forEach((m,i)=>{m._x=60+i*SLOT;});
-  // Gen3: centrar debajo de sus padres
+
+  // ── POSICIÓN X (G3: centrar bajo la pareja parental) ─────────────────
+  // Normalizar: los hijos de un mismo par (A o B) van al mismo grupo
   const assigned3=new Set();
-  const pGroups={};
+  const pGroups={}; // key → {par, partner|null, children[]}
   bg[3].forEach(m=>{
     if(!m.hijosDe)return;
     const par=bg[2].find(p=>p.id===m.hijosDe);if(!par)return;
-    if(!pGroups[par.id])pGroups[par.id]=[];
-    pGroups[par.id].push(m);
+    const partner=getPair(par,bg[2]);
+    const key=partner?pairKey(par,partner):par.id;
+    if(!pGroups[key])pGroups[key]={par,partner:partner||null,children:[]};
+    pGroups[key].children.push(m);
   });
-  Object.entries(pGroups).forEach(([pid,children])=>{
-    const par=bg[2].find(p=>p.id===pid);if(!par)return;
-    const prt=par.parejaDe?bg[2].find(p=>p.id===par.parejaDe):null;
-    const cx=prt?(par._x+prt._x)/2:par._x;
+  Object.values(pGroups).forEach(({par,partner,children})=>{
+    const cx=partner?(par._x+partner._x)/2:par._x;
     const n=children.length;
-    children.forEach((c,i)=>{c._x=cx+(i-(n-1)/2)*SLOT*0.8;assigned3.add(c.id);});
+    children.forEach((c,i)=>{c._x=cx+(i-(n-1)/2)*SLOT*0.85;assigned3.add(c.id);});
   });
+  // Huérfanos (sin hijosDe o padre no en G2): colocar a la derecha
   const ass3xs=bg[3].filter(m=>assigned3.has(m.id)).map(m=>m._x);
   let orphX=ass3xs.length?Math.max(...ass3xs)+SLOT:60;
   bg[3].filter(m=>!assigned3.has(m.id)).forEach(m=>{m._x=orphX;orphX+=SLOT;});
-  // Dimensiones SVG
+
+  // ── DIMENSIONES SVG ───────────────────────────────────────────────────
   const allM=[...bg[1],...bg[2],...bg[3]];
-  const maxX=allM.length?Math.max(...allM.map(m=>m._x)):200;
-  const W=Math.max(320,maxX+80);
+  const xVals=allM.map(m=>m._x).filter(x=>x!==undefined&&!isNaN(x));
+  const W=Math.max(320,(xVals.length?Math.max(...xVals):200)+80);
   const usedGens=[1,2,3].filter(g=>bg[g].length>0);
   const maxG=usedGens.length?Math.max(...usedGens):2;
   const H=GY[maxG]+SYM+55;
   let L='',S='';
-  // Dibujar líneas de pareja y vínculos parentales
+
+  // ── LÍNEAS DE PAREJA Y VÍNCULOS PARENTALES ────────────────────────────
+  // Bug corregido: usa lookup bidireccional + set drawnPairs para evitar
+  // dibujar dos veces cuando A.parejaDe=null y B.parejaDe=A.id
   const drawLinks=(gk,ck)=>{
-    const done=new Set();
-    // Parejas con línea horizontal
+    const drawnPairs=new Set();
     bg[gk].forEach(m=>{
-      if(!m.parejaDe||done.has(m.id))return;
-      const par=bg[gk].find(p=>p.id===m.parejaDe);if(!par)return;
-      done.add(m.id);done.add(par.id);
-      const lx=m._x<par._x?m:par, rx=m._x<par._x?par:m;
-      const x1=lx._x+SYM, x2=rx._x-SYM, y=GY[gk], mx=(m._x+par._x)/2;
-      const da=m.tipoPareja==='union'?'stroke-dasharray="8,4"':'';
-      L+=`<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#8b949e" stroke-width="2" ${da}/>`;
-      if(m.tipoPareja==='separados'){
-        L+=`<line x1="${mx-7}" y1="${y-10}" x2="${mx+7}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
-      }else if(m.tipoPareja==='divorciados'){
-        L+=`<line x1="${mx-12}" y1="${y-10}" x2="${mx-2}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
-        L+=`<line x1="${mx+2}" y1="${y-10}" x2="${mx+12}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
-      }
-      // Hijos de esta pareja
-      const kids=bg[ck].filter(c=>c.hijosDe===m.id||c.hijosDe===par.id);
-      if(kids.length){
+      const partner=getPair(m,bg[gk]);
+      if(partner){
+        // ── Pareja ──
+        const key=pairKey(m,partner);
+        if(!drawnPairs.has(key)){
+          drawnPairs.add(key);
+          const ut=unionType(m,partner);
+          const lxv=Math.min(m._x,partner._x), rxv=Math.max(m._x,partner._x);
+          const x1=lxv+SYM, x2=rxv-SYM, y=GY[gk], mx=(m._x+partner._x)/2;
+          const da=ut==='union'?'stroke-dasharray="8,4"':'';
+          L+=`<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#8b949e" stroke-width="2" ${da}/>`;
+          if(ut==='separados'){
+            L+=`<line x1="${mx-7}" y1="${y-10}" x2="${mx+7}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
+          }else if(ut==='divorciados'){
+            L+=`<line x1="${mx-12}" y1="${y-10}" x2="${mx-2}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
+            L+=`<line x1="${mx+2}" y1="${y-10}" x2="${mx+12}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
+          }
+          // Hijos de esta pareja (vinculados a cualquiera de los dos)
+          const kids=bg[ck].filter(c=>c.hijosDe===m.id||c.hijosDe===partner.id);
+          if(kids.length){
+            const dy=GY[gk]+SYM+22, cy2=GY[ck]-SYM;
+            L+=`<line x1="${mx}" y1="${y}" x2="${mx}" y2="${dy}" stroke="#8b949e" stroke-width="1.5"/>`;
+            if(kids.length>1){const xs=kids.map(c=>c._x);L+=`<line x1="${Math.min(...xs)}" y1="${dy}" x2="${Math.max(...xs)}" y2="${dy}" stroke="#8b949e" stroke-width="1.5"/>`;}
+            kids.forEach(c=>{const da2=c.tipoHijo==='adoptado'?'stroke-dasharray="5,3"':'';L+=`<line x1="${c._x}" y1="${dy}" x2="${c._x}" y2="${cy2}" stroke="#8b949e" stroke-width="1.5" ${da2}/>`;});
+          }
+        }
+      }else{
+        // ── Padre/madre sin pareja ──
+        const kids=bg[ck].filter(c=>c.hijosDe===m.id);
+        if(!kids.length)return;
         const dy=GY[gk]+SYM+22, cy2=GY[ck]-SYM;
-        L+=`<line x1="${mx}" y1="${y}" x2="${mx}" y2="${dy}" stroke="#8b949e" stroke-width="1.5"/>`;
+        L+=`<line x1="${m._x}" y1="${GY[gk]}" x2="${m._x}" y2="${dy}" stroke="#8b949e" stroke-width="1.5"/>`;
         if(kids.length>1){const xs=kids.map(c=>c._x);L+=`<line x1="${Math.min(...xs)}" y1="${dy}" x2="${Math.max(...xs)}" y2="${dy}" stroke="#8b949e" stroke-width="1.5"/>`;}
         kids.forEach(c=>{const da2=c.tipoHijo==='adoptado'?'stroke-dasharray="5,3"':'';L+=`<line x1="${c._x}" y1="${dy}" x2="${c._x}" y2="${cy2}" stroke="#8b949e" stroke-width="1.5" ${da2}/>`;});
       }
     });
-    // Padres sin pareja
-    bg[gk].forEach(m=>{
-      if(m.parejaDe)return;
-      const kids=bg[ck].filter(c=>c.hijosDe===m.id);if(!kids.length)return;
-      const dy=GY[gk]+SYM+22, cy2=GY[ck]-SYM;
-      L+=`<line x1="${m._x}" y1="${GY[gk]}" x2="${m._x}" y2="${dy}" stroke="#8b949e" stroke-width="1.5"/>`;
-      if(kids.length>1){const xs=kids.map(c=>c._x);L+=`<line x1="${Math.min(...xs)}" y1="${dy}" x2="${Math.max(...xs)}" y2="${dy}" stroke="#8b949e" stroke-width="1.5"/>`;}
-      kids.forEach(c=>{const da2=c.tipoHijo==='adoptado'?'stroke-dasharray="5,3"':'';L+=`<line x1="${c._x}" y1="${dy}" x2="${c._x}" y2="${cy2}" stroke="#8b949e" stroke-width="1.5" ${da2}/>`;});
-    });
   };
   drawLinks(1,2);drawLinks(2,3);
-  // Dibujar símbolos de cada miembro
+
+  // ── SÍMBOLOS ──────────────────────────────────────────────────────────
   allM.forEach(m=>{
-    if(m._x===undefined)return;
+    if(m._x===undefined||isNaN(m._x))return;
     const x=m._x, y=GY[m.generacion];
     const mc=m.sex==='M'?'#4a6fa5':m.sex==='F'?'#c084fc':'#8b949e';
     const bw=m.esIdentificado?4:2;
@@ -2572,16 +2603,13 @@ function _famGenSVG(members){
       S+=`<polygon points="${x},${y-SYM} ${x+SYM},${y} ${x},${y+SYM} ${x-SYM},${y}" fill="#161b22" stroke="${mc}" stroke-width="${bw}"/>`;
       if(m.esIdentificado)S+=`<polygon points="${x},${y-SYM-6} ${x+SYM+6},${y} ${x},${y+SYM+6} ${x-SYM-6},${y}" fill="none" stroke="${mc}" stroke-width="2"/>`;
     }
-    // Cruz de fallecido
     if(m.fallecido&&m.tipoHijo!=='aborto'){const d=SYM*0.65;S+=`<line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}" stroke="#e94560" stroke-width="2.5"/><line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}" stroke="#e94560" stroke-width="2.5"/>`;}
-    // Etiqueta
     if(m.tipoHijo!=='aborto'){
       const lb=esc((m.nombre||'').slice(0,10));
       S+=`<text x="${x}" y="${y+SYM+15}" text-anchor="middle" fill="#c9d1d9" font-size="10" font-family="sans-serif">${lb}</text>`;
       if(m.edad)S+=`<text x="${x}" y="${y+SYM+27}" text-anchor="middle" fill="#8b949e" font-size="9" font-family="sans-serif">${m.edad}a</text>`;
     }
   });
-  // Etiquetas de generación
   let GL='';
   usedGens.forEach(g=>{GL+=`<text x="4" y="${GY[g]+5}" fill="#6e7681" font-size="10" font-family="sans-serif" font-style="italic">G${g}</text>`;});
   return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${L}${S}${GL}</svg>`;
