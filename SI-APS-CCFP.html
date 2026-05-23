@@ -4562,13 +4562,84 @@ function imprimirCaracterizacion(famId) {
       ${fila(lbl2('53'), d2['53'])}
     </table>`;
 
+  // ── SVG helpers: adaptar colores oscuros para impresión ──────────
+  const svgParaImpresion = (svgStr) => svgStr
+    .replace(/fill="#161b22"/g,  'fill="white"')
+    .replace(/fill="#0d1117"/g,  'fill="white"')
+    .replace(/fill="#1c2128"/g,  'fill="white"')
+    .replace(/fill="#c9d1d9"/g,  'fill="#1a1a2e"')
+    .replace(/fill="#8b949e"/g,  'fill="#555"')
+    .replace(/stroke="#8b949e"/g,'stroke="#777"')
+    .replace(/fill="#6e7681"/g,  'fill="#444"')
+    .replace(/fill="#a855f7"/g,  'fill="#7c1d6f"');
+
+  // ── Familiograma SVG ──────────────────────────────────────────────
+  const famMembers = d2['56_data'] || [];
+  const famRelsOrig = STATE._famRels; // guardar estado original
+  STATE._famRels = d2['56_rels'] || [];
+  const famSVGraw = _famGenSVG(famMembers);
+  STATE._famRels = famRelsOrig; // restaurar
+  const famSVG = svgParaImpresion(famSVGraw);
+
+  const famHallazgosLabel = (d2['56'] || [])
+    .map(v => REF.familiograma.find(o => o.v === v)?.l || v).join(', ') || '—';
+
+  const secFamiliograma = `
+    <h3 class="sec-title">🌳 Familiograma</h3>
+    <div class="svg-wrap">
+      <div class="svg-inner">${famSVG}</div>
+      <div class="svg-leyenda">
+        <div class="ley-title">Convenciones</div>
+        <div class="ley-grid">
+          <span class="ley-item"><svg width="16" height="16"><rect x="1" y="1" width="14" height="14" rx="2" fill="none" stroke="#4a6fa5" stroke-width="2"/></svg> Masculino</span>
+          <span class="ley-item"><svg width="16" height="16"><circle cx="8" cy="8" r="7" fill="none" stroke="#c084fc" stroke-width="2"/></svg> Femenino</span>
+          <span class="ley-item"><svg width="16" height="16"><line x1="2" y1="2" x2="14" y2="14" stroke="#e94560" stroke-width="2"/><line x1="14" y1="2" x2="2" y2="14" stroke="#e94560" stroke-width="2"/></svg> Fallecido</span>
+          <span class="ley-item"><svg width="16" height="16"><line x1="2" y1="8" x2="14" y2="8" stroke="#777" stroke-width="1.5"/></svg> Vínculo</span>
+          <span class="ley-item"><svg width="16" height="16"><line x1="2" y1="8" x2="14" y2="8" stroke="#777" stroke-width="1.5" stroke-dasharray="4,3"/></svg> Unión libre</span>
+          <span class="ley-item"><svg width="16" height="16"><line x1="2" y1="8" x2="14" y2="8" stroke="#e94560" stroke-width="1.5" stroke-dasharray="4,3"/></svg> Separados</span>
+        </div>
+        <div style="margin-top:6px;font-size:10px"><strong>Hallazgos:</strong> ${famHallazgosLabel}</div>
+        ${d2['88'] ? `<div style="margin-top:4px;font-size:10px"><strong>Observaciones:</strong> ${esc(d2['88'])}</div>` : ''}
+      </div>
+    </div>`;
+
+  // ── Ecomapa SVG ───────────────────────────────────────────────────
+  const ecoData = d2['60_data'] || {};
+  const ecoSVGraw = _ecoGenSVG(ecoData);
+  const ecoSVG = svgParaImpresion(ecoSVGraw);
+
+  const ECO_NODE_NAMES = ECO_NODES.map(n => n.name);
+  const ECO_REL_LABELS = ['Sin relación','Positivo','Tenue','Estresante','Fluye','Intenso'];
+  const ECO_REL_COLORS = ['','#38c793','#777','#e94560','#93c5fd','#ffb432'];
+  const ecoConexiones = ECO_NODE_NAMES
+    .filter((_, i) => ecoData[i] > 0)
+    .map((n, i) => `${n}: <strong style="color:${ECO_REL_COLORS[ecoData[i]] || '#333'}">${ECO_REL_LABELS[ecoData[i]] || '—'}</strong>`)
+    .join(' · ') || 'Sin conexiones registradas';
+
+  const secEcomapa = `
+    <h3 class="sec-title">🕸️ Ecomapa</h3>
+    <div class="svg-wrap">
+      <div class="svg-inner">${ecoSVG}</div>
+      <div class="svg-leyenda">
+        <div class="ley-title">Convenciones</div>
+        <div class="ley-grid">
+          <span class="ley-item"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#38c793" stroke-width="3"/></svg> Positivo</span>
+          <span class="ley-item"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#777" stroke-width="1.5" stroke-dasharray="4,3"/></svg> Tenue</span>
+          <span class="ley-item"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#e94560" stroke-width="2" stroke-dasharray="2,2"/></svg> Estresante</span>
+          <span class="ley-item"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#93c5fd" stroke-width="2"/></svg> Fluye</span>
+          <span class="ley-item"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#ffb432" stroke-width="4"/></svg> Intenso</span>
+        </div>
+        <div style="margin-top:8px;font-size:10px;line-height:1.8">${ecoConexiones}</div>
+      </div>
+    </div>`;
+
   // ── Bloque FAMILIA (campos 54–90) ────────────────────────────────
   const secFamilia = `
     <h3 class="sec-title">👨‍👩‍👧 Composición y Dinámica Familiar</h3>
     <table class="tbl">
       ${fila(lbl2('54'), dv2('54'))}
       ${fila(lbl2('55'), d2['55'])}
-      ${fila(lbl2('56'), dv2('56'))}
+      ${fila(lbl2('56'), famHallazgosLabel)}
       ${fila(lbl2('57'), dv2('57'))}
       ${fila(lbl2('58'), dv2('58'))}
       ${fila(lbl2('59'), dv2('59'))}
@@ -4699,11 +4770,19 @@ function imprimirCaracterizacion(famId) {
   .ubic-bloque table { width:100%; }
   .ubic-bloque td { padding:2px 6px; font-size:10px; }
   .ubic-bloque td:first-child { color:#7c1d6f; font-weight:600; width:50%; }
+  .svg-wrap { display:flex; gap:14px; align-items:flex-start; margin:6px 0 12px; border:1px solid #e0d0eb; border-radius:4px; padding:10px; background:#faf7fc; page-break-inside:avoid; }
+  .svg-inner { flex:1; min-width:0; overflow:hidden; background:#fff; border-radius:4px; border:1px solid #e8e0f0; }
+  .svg-inner svg { max-width:100%; height:auto; display:block; }
+  .svg-leyenda { width:180px; flex-shrink:0; font-size:10px; color:#333; }
+  .ley-title { font-weight:700; color:#7c1d6f; font-size:10.5px; margin-bottom:6px; border-bottom:1px solid #e0d0eb; padding-bottom:3px; }
+  .ley-grid { display:flex; flex-direction:column; gap:4px; }
+  .ley-item { display:flex; align-items:center; gap:5px; font-size:9.5px; }
   @page { size: A4; margin: 15mm 12mm; }
   @media print {
     body { padding:0; font-size:10px; }
     .no-print { display:none !important; }
     .persona-bloque { page-break-inside: avoid; }
+    .svg-wrap { page-break-inside: avoid; }
     .sec-title { break-after: avoid; }
   }
 </style>
@@ -4752,6 +4831,8 @@ function imprimirCaracterizacion(famId) {
 
 ${secVivienda}
 ${secFamilia}
+${famMembers.length > 0 ? secFamiliograma : ''}
+${Object.values(ecoData).some(v => v > 0) ? secEcomapa : ''}
 ${secRecursos}
 
 ${personas.length>0 ? `<h2 style="font-size:13px;color:#4a6fa5;margin:16px 0 6px;border-bottom:2px solid #4a6fa5;padding-bottom:4px">Caracterización Individual — ${personas.length} integrante(s)</h2>${secPersonas}` : '<p style="color:#888;margin-top:12px;font-style:italic">Sin integrantes registrados.</p>'}
