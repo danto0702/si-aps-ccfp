@@ -4849,12 +4849,18 @@ ${personas.length>0 ? `<h2 style="font-size:13px;color:#4a6fa5;margin:16px 0 6px
 </body>
 </html>`;
 
-  const win = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
-  if (!win) { toast('Permita ventanas emergentes para imprimir','err'); return; }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
+  // Usar Blob URL para evitar bloqueo de popups por document.write
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank', 'width=960,height=750,scrollbars=yes');
+  if (!win) {
+    // Fallback: abrir en la misma pestaña si los popups están bloqueados
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+  // Revocar la URL de blob después de 60 s para liberar memoria
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ============================================================
