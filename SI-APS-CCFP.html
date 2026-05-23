@@ -1512,9 +1512,10 @@ function renderHome() {
             <div class="familia-meta">Mun: ${d['5']||'—'} · EBS: ${esc(ebsCode.slice(-6))} · ${np} persona(s) · ${d['25']||'—'}</div>
           </div>
           <div class="familia-actions">
-            <button class="btn btn-secondary btn-sm" onclick="editFamilia('${f.id}')">✏</button>
-            <button class="btn btn-secondary btn-sm" onclick="navigate('familia_t3',{editFamId:'${f.id}'})">👥</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteFamilia('${f.id}')">🗑</button>
+            <button class="btn btn-secondary btn-sm" onclick="editFamilia('${f.id}')" title="Editar familia">✏</button>
+            <button class="btn btn-secondary btn-sm" onclick="navigate('familia_t3',{editFamId:'${f.id}'})" title="Integrantes">👥</button>
+            <button class="btn btn-secondary btn-sm" onclick="imprimirCaracterizacion('${f.id}')" title="Imprimir / PDF">🖨</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteFamilia('${f.id}')" title="Eliminar">🗑</button>
           </div>
         </div>`;
       }).join('');
@@ -4482,6 +4483,297 @@ async function downloadExcel() {
     XLSX.writeFile(wb, `SI-APS-CCFP-${scope}-${date}-${modeTag}.xlsx`);
     toast('Excel descargado','ok');
   } catch(e) { toast('Error Excel: '+e.message,'err'); }
+}
+
+// ============================================================
+// IMPRIMIR CARACTERIZACIÓN COMPLETA (PDF)
+// ============================================================
+function imprimirCaracterizacion(famId) {
+  const fam = STATE.familias.find(f => f.id === famId);
+  if (!fam) { toast('Familia no encontrada','err'); return; }
+
+  const d2 = fam.d2 || {};
+  const personas = fam.personas || [];
+  const idx = STATE.familias.filter(f=>!f.deleted_at).findIndex(f=>f.id===famId);
+  const ebsCode = calcEBS(d2);
+  const numFam  = calcNumFamilia(d2, idx);
+  const codFicha = calcCodFicha(d2, idx);
+  const config  = STATE.config;
+
+  // ── Decodificador inline (usa T2_DECODE / T3_DECODE + REF) ───────
+  const dv = (val, decode) => decodeVal(val, decode);
+  const dv2 = (id) => dv(d2[id], T2_DECODE[id]);
+  const lbl2 = (id) => fieldLabel2(id);
+  const lbl3 = (id) => fieldLabel3(id);
+
+  // ── Helper: fila de dato ─────────────────────────────────────────
+  const fila = (label, valor, highlight=false) => {
+    if (valor===''||valor==null||valor===undefined) return '';
+    const strVal = Array.isArray(valor) ? valor.join(', ') : String(valor);
+    if (!strVal.trim()) return '';
+    return `<tr${highlight?' class="hl"':''}>
+      <td class="td-lbl">${label}</td>
+      <td class="td-val">${strVal.replace(/</g,'&lt;')}</td>
+    </tr>`;
+  };
+  const fila2 = (id) => fila(lbl2(id), dv2(id) || d2[id]);
+  const filaRaw2 = (id) => fila(lbl2(id), d2[id]);
+
+  // ── Nombre completo persona ───────────────────────────────────────
+  const nombrePersona = (d3) => {
+    const n = [d3['3'],d3['4'],d3['5'],d3['6']].filter(Boolean).join(' ');
+    return n || '(sin nombre)';
+  };
+
+  // ── Bloque VIVIENDA (campos 26–53) ───────────────────────────────
+  const secVivienda = `
+    <h3 class="sec-title">🏠 Vivienda y Entorno</h3>
+    <table class="tbl">
+      ${fila(lbl2('26'), dv2('26'))}
+      ${fila(lbl2('27'), d2['27'])}
+      ${fila(lbl2('28'), dv2('28'))}
+      ${fila(lbl2('29'), d2['29'])}
+      ${fila(lbl2('30'), dv2('30'))}
+      ${fila(lbl2('31'), d2['31'])}
+      ${fila(lbl2('32'), dv2('32'))}
+      ${fila(lbl2('33'), d2['33'])}
+      ${fila(lbl2('34'), d2['34'])}
+      ${fila(lbl2('35'), dv2('35'))}
+      ${fila(lbl2('85'), dv2('85'))}
+      ${fila(lbl2('86'), d2['86'])}
+      ${fila(lbl2('87'), d2['87'])}
+      ${fila(lbl2('36'), dv2('36'))}
+      ${fila(lbl2('37'), dv2('37'))}
+      ${fila(lbl2('38'), dv2('38'))}
+      ${fila(lbl2('39'), dv2('39'))}
+      ${fila(lbl2('40'), dv2('40'))}
+      ${fila(lbl2('41'), d2['41'])}
+      ${fila(lbl2('42'), dv2('42'))}
+      ${fila(lbl2('43'), dv2('43'))}
+      ${fila(lbl2('44'), d2['44'])}
+      ${fila(lbl2('45'), d2['45'])}
+      ${fila(lbl2('46'), dv2('46'))}
+      ${fila(lbl2('47'), d2['47'])}
+      ${fila(lbl2('48'), dv2('48'))}
+      ${fila(lbl2('49'), d2['49'])}
+      ${fila(lbl2('50'), dv2('50'))}
+      ${fila(lbl2('51'), d2['51'])}
+      ${fila(lbl2('52'), dv2('52'))}
+      ${fila(lbl2('53'), d2['53'])}
+    </table>`;
+
+  // ── Bloque FAMILIA (campos 54–90) ────────────────────────────────
+  const secFamilia = `
+    <h3 class="sec-title">👨‍👩‍👧 Composición y Dinámica Familiar</h3>
+    <table class="tbl">
+      ${fila(lbl2('54'), dv2('54'))}
+      ${fila(lbl2('55'), d2['55'])}
+      ${fila(lbl2('56'), dv2('56'))}
+      ${fila(lbl2('57'), dv2('57'))}
+      ${fila(lbl2('58'), dv2('58'))}
+      ${fila(lbl2('59'), dv2('59'))}
+      ${fila(lbl2('60'), dv2('60'))}
+      ${fila(lbl2('88'), d2['88'])}
+      ${fila(lbl2('61'), dv2('61'))}
+      ${fila(lbl2('62'), dv2('62'))}
+      ${fila(lbl2('63'), dv2('63'))}
+      ${fila(lbl2('89'), dv2('89'))}
+      ${fila(lbl2('64'), dv2('64'))}
+      ${fila(lbl2('65'), dv2('65'))}
+      ${fila(lbl2('66'), dv2('66'))}
+      ${fila(lbl2('67'), dv2('67'))}
+      ${fila(lbl2('68'), dv2('68'))}
+      ${fila(lbl2('69'), dv2('69'))}
+      ${fila(lbl2('70'), dv2('70'))}
+      ${fila(lbl2('71'), dv2('71'))}
+      ${fila(lbl2('72'), d2['72'])}
+      ${fila(lbl2('90'), dv2('90'))}
+    </table>`;
+
+  // ── Bloque ALIMENTACIÓN/RECURSOS (campos 73–83) ──────────────────
+  const secRecursos = `
+    <h3 class="sec-title">🌱 Alimentación y Recursos de Salud</h3>
+    <table class="tbl">
+      ${fila(lbl2('73'), dv2('73'))}
+      ${fila(lbl2('74'), d2['74'])}
+      ${fila(lbl2('75'), dv2('75'))}
+      ${fila(lbl2('76'), dv2('76'))}
+      ${fila(lbl2('77'), dv2('77'))}
+      ${fila(lbl2('78'), dv2('78'))}
+      ${fila(lbl2('79'), dv2('79'))}
+      ${fila(lbl2('80'), dv2('80'))}
+      ${fila(lbl2('81'), dv2('81'))}
+      ${fila(lbl2('82'), dv2('82'))}
+      ${fila(lbl2('83'), dv2('83'))}
+    </table>`;
+
+  // ── Bloque por integrante ─────────────────────────────────────────
+  const secPersonas = personas.map((p, pi) => {
+    const d3 = p.d3 || {};
+    const dvp = (id) => dv(d3[id], T3_DECODE[id]);
+    const edad = d3['9'] ? (() => {
+      const ms = Date.now() - new Date(d3['9']).getTime();
+      const yr = Math.floor(ms / (1000*60*60*24*365.25));
+      return yr >= 0 ? `${yr} años` : '';
+    })() : '';
+    return `
+    <div class="persona-bloque">
+      <h3 class="sec-title persona-titulo">
+        👤 Integrante ${pi+1}: ${nombrePersona(d3)}
+        ${edad ? `<span class="persona-edad">${edad}</span>` : ''}
+      </h3>
+      <table class="tbl">
+        ${fila(lbl3('7'), dvp('7'))}
+        ${fila(lbl3('8'), d3['8'])}
+        ${fila(lbl3('9'), d3['9'])}
+        ${fila(lbl3('10'), dvp('10'))}
+        ${fila(lbl3('11'), dvp('11'))}
+        ${fila(lbl3('12'), dvp('12'))}
+        ${fila(lbl3('14'), dvp('14'))}
+        ${fila(lbl3('15'), dvp('15'))}
+        ${fila(lbl3('16'), dvp('16'))}
+        ${fila(lbl3('17'), dvp('17'))}
+        ${fila(lbl3('18'), dvp('18'))}
+        ${fila(lbl3('13'), dvp('13'))}
+        ${fila(lbl3('19'), dvp('19'))}
+        ${fila(lbl3('20'), d3['20'])}
+        ${fila(lbl3('21'), dvp('21'))}
+      </table>
+      <h4 class="sub-title">📏 Antropometría y Nutrición</h4>
+      <table class="tbl">
+        ${fila(lbl3('22'), d3['22'] ? d3['22']+' kg' : '')}
+        ${fila(lbl3('23'), d3['23'] ? d3['23']+' cm' : '')}
+        ${fila(lbl3('38'), d3['38'] ? d3['38']+' cm' : '')}
+        ${fila(lbl3('39'), d3['39'] ? d3['39']+' cm' : '')}
+        ${fila(lbl3('25'), d3['25'] ? d3['25']+' cm' : '')}
+        ${fila(lbl3('24'), dvp('24'))}
+        ${fila(lbl3('33'), dvp('33'))}
+        ${fila(lbl3('31'), dvp('31'))}
+        ${fila(lbl3('32'), d3['32'] ? d3['32']+' meses' : '')}
+      </table>
+      <h4 class="sub-title">🏥 Atención en Salud</h4>
+      <table class="tbl">
+        ${fila(lbl3('26'), dvp('26'))}
+        ${fila(lbl3('27'), dvp('27'))}
+        ${fila(lbl3('28'), dvp('28'))}
+        ${fila(lbl3('29'), dvp('29'))}
+        ${fila(lbl3('30'), dvp('30'))}
+        ${fila(lbl3('34'), dvp('34'))}
+        ${fila(lbl3('35'), d3['35'])}
+        ${fila(lbl3('36'), dvp('36'))}
+        ${fila(lbl3('37'), d3['37'])}
+      </table>
+    </div>`;
+  }).join('');
+
+  // ── HTML completo del documento ───────────────────────────────────
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caracterización Familiar — ${numFam}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a2e; background: #fff; padding: 16px 20px; }
+  .header { display:flex; align-items:flex-start; justify-content:space-between; border-bottom: 3px solid #7c1d6f; padding-bottom:10px; margin-bottom:14px; }
+  .header-left h1 { font-size:15px; font-weight:700; color:#7c1d6f; line-height:1.2; }
+  .header-left h2 { font-size:11px; color:#555; font-weight:400; margin-top:3px; }
+  .header-right { text-align:right; font-size:10px; color:#444; }
+  .header-right .ficha-num { font-size:12px; font-weight:700; color:#7c1d6f; }
+  .badge-grid { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  .badge { background:#f0e6f6; border:1px solid #c49fd0; border-radius:4px; padding:4px 8px; font-size:10px; }
+  .badge strong { color:#7c1d6f; }
+  .sec-title { font-size:12px; font-weight:700; color:#fff; background:#7c1d6f; padding:5px 10px; margin:12px 0 4px; border-radius:3px; }
+  .persona-titulo { background:#4a6fa5; display:flex; align-items:center; gap:8px; }
+  .persona-edad { font-size:10px; font-weight:400; background:rgba(255,255,255,.2); border-radius:3px; padding:1px 6px; margin-left:auto; }
+  .sub-title { font-size:11px; font-weight:700; color:#4a6fa5; border-left:3px solid #4a6fa5; padding-left:6px; margin:8px 0 3px; }
+  .tbl { width:100%; border-collapse:collapse; font-size:10.5px; }
+  .tbl tr:nth-child(even) { background:#faf7fc; }
+  .tbl tr.hl { background:#fff3cd; }
+  .td-lbl { width:45%; padding:3px 6px; color:#555; font-weight:500; vertical-align:top; border-bottom:1px solid #e8e0f0; }
+  .td-val { width:55%; padding:3px 6px; font-weight:600; color:#1a1a2e; vertical-align:top; border-bottom:1px solid #e8e0f0; }
+  .persona-bloque { margin-top:6px; border:1px solid #c49fd0; border-radius:4px; overflow:hidden; page-break-inside:avoid; }
+  .footer { margin-top:18px; border-top:1px solid #ccc; padding-top:8px; font-size:9px; color:#888; display:flex; justify-content:space-between; }
+  .ubic-bloque { background:#f8f4fc; border:1px solid #e0d0eb; border-radius:4px; padding:8px 12px; margin-bottom:12px; }
+  .ubic-bloque table { width:100%; }
+  .ubic-bloque td { padding:2px 6px; font-size:10px; }
+  .ubic-bloque td:first-child { color:#7c1d6f; font-weight:600; width:50%; }
+  @page { size: A4; margin: 15mm 12mm; }
+  @media print {
+    body { padding:0; font-size:10px; }
+    .no-print { display:none !important; }
+    .persona-bloque { page-break-inside: avoid; }
+    .sec-title { break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-left">
+    <h1>Caracterización Familiar y Personal</h1>
+    <h2>${esc(config.nit ? 'NIT: '+config.nit+' · '+d2['84'] : (d2['84']||'ESE Hospital Regional Noroccidental'))}</h2>
+    <h2>Período: ${config.fechaInicio||'—'} al ${config.fechaFin||'—'}</h2>
+  </div>
+  <div class="header-right">
+    <div class="ficha-num">Ficha: ${codFicha}</div>
+    <div>EBS: ${ebsCode}</div>
+    <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v2.4</div>
+  </div>
+</div>
+
+<div class="badge-grid">
+  <div class="badge"><strong>Municipio:</strong> ${d2['5']||'—'}</div>
+  <div class="badge"><strong>Vereda/Barrio:</strong> ${esc(d2['8']||'—')}</div>
+  <div class="badge"><strong>Dirección:</strong> ${esc(d2['9']||'—')}</div>
+  <div class="badge"><strong>Subregión:</strong> ${d2['4']||'—'}</div>
+  <div class="badge"><strong>N° Integrantes:</strong> ${personas.length}</div>
+  <div class="badge"><strong>Consentimiento:</strong> ${d2['2']==='1'?'Sí':'No'}</div>
+</div>
+
+<div class="ubic-bloque">
+  <table>
+    <tr>
+      <td>N° Vivienda:</td><td>${calcNumVivienda(d2,idx)}</td>
+      <td>N° Familia:</td><td>${numFam}</td>
+    </tr>
+    <tr>
+      <td>Código Ficha:</td><td>${codFicha}</td>
+      <td>Código EBS:</td><td>${ebsCode}</td>
+    </tr>
+    <tr>
+      <td>Encuestador:</td><td>${d2['22']||'—'}</td>
+      <td>Perfil:</td><td>${d2['23']||'—'}</td>
+    </tr>
+    ${d2['10']&&d2['11']?`<tr><td>Geopunto:</td><td colspan="3">Lat: ${d2['10']} · Lon: ${d2['11']}</td></tr>`:''}
+  </table>
+</div>
+
+${secVivienda}
+${secFamilia}
+${secRecursos}
+
+${personas.length>0 ? `<h2 style="font-size:13px;color:#4a6fa5;margin:16px 0 6px;border-bottom:2px solid #4a6fa5;padding-bottom:4px">Caracterización Individual — ${personas.length} integrante(s)</h2>${secPersonas}` : '<p style="color:#888;margin-top:12px;font-style:italic">Sin integrantes registrados.</p>'}
+
+<div class="footer">
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · Sistema SI-APS CCFP</span>
+  <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
+</div>
+
+<div class="no-print" style="text-align:center;margin-top:20px">
+  <button onclick="window.print()" style="background:#7c1d6f;color:#fff;border:none;padding:10px 28px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600">🖨 Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:#444;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-size:14px;cursor:pointer;margin-left:8px">✕ Cerrar</button>
+</div>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
+  if (!win) { toast('Permita ventanas emergentes para imprimir','err'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
 }
 
 // ============================================================
