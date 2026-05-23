@@ -17,3 +17,7 @@ pdf_content.txt
 
 # Carpeta interna de Claude
 .claude/
+
+# Scripts de desarrollo y utilidades locales
+leer_fam.py
+*.py
