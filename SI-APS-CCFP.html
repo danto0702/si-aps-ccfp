@@ -2327,11 +2327,24 @@ function guardarZarit(){
 //   parejaDe:id|null, tipoPareja:'casados'|'union'|'separados'|'divorciados',
 //   hijosDe:id|null, tipoHijo:'biologico'|'adoptado'|'embarazo'|'aborto'}
 
+// Tipos de relación emocional (convenciones genograma / GenoPro)
+const FAM_REL_TIPOS=[
+  {v:'cercana',    l:'Cercana',     color:'#38c793'},  // doble línea verde
+  {v:'muycercana', l:'Muy cercana', color:'#22c55e'},  // triple línea verde
+  {v:'fusionada',  l:'Fusionada',   color:'#16a34a'},  // línea verde muy gruesa
+  {v:'distante',   l:'Distante',    color:'#8b949e'},  // línea gris discontinua
+  {v:'cortada',    l:'Cortada',     color:'#6e7681'},  // línea con barras transversales
+  {v:'conflictiva',l:'Conflictiva', color:'#e94560'},  // zigzag rojo
+  {v:'hostil',     l:'Hostil',      color:'#dc2626'},  // línea roja gruesa
+  {v:'violenta',   l:'Violencia',   color:'#7c1d6f'},  // zigzag + flecha
+];
+
 function openModalFamiliograma(){
   // Migrar datos viejos: asignar id si no tienen
   STATE._famData=(STATE.draft2['56_data']||[]).map((m,i)=>({id:m.id||('m'+Date.now()+i),...m}));
   STATE._famHall=[...(STATE.draft2['56']||[])];
   STATE._famObs=STATE.draft2['88']||'';
+  STATE._famRels=[...(STATE.draft2['56_rels']||[])];
   _famRender();
 }
 
@@ -2362,9 +2375,11 @@ function _famRender(){
         <div class="modal-title" style="margin-bottom:0">👨‍👩‍👧 Familiograma</div>
       </div>
       <div style="flex:1;overflow-y:auto;padding:16px 20px">
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:8px;background:var(--bg);border-radius:8px;font-size:11px;color:var(--muted)">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:8px;background:var(--bg);border-radius:8px;font-size:10px;color:var(--muted)">
           <span>■ Hombre</span><span>● Mujer</span><span>◆ Indet.</span><span>✕ Fallecido</span><span>★ Identificado</span>
           <span>— Casados</span><span>⋯ Unión libre</span><span>—/ Sep.</span><span>—// Div.</span><span>△ Embarazo</span>
+          <span style="width:100%;border-top:1px solid var(--border);padding-top:4px;font-weight:600;color:var(--text)">Relaciones emocionales:</span>
+          ${FAM_REL_TIPOS.map(t=>`<span style="color:${t.color}">● ${t.l}</span>`).join('')}
         </div>
         <div class="fam-svg-box" style="overflow-x:auto;margin-bottom:14px">${svgHtml}</div>
         <div class="card-title" style="margin-bottom:8px">Integrantes registrados</div>
@@ -2450,6 +2465,47 @@ function _famRender(){
             <button class="btn btn-primary btn-block" onclick="famAgregar()" style="margin-top:4px">Agregar al familiograma</button>
           </div>
         </details>
+        <details style="margin-bottom:14px">
+          <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#38c793;padding:8px 0;user-select:none">± Relaciones emocionales</summary>
+          <div style="padding:10px 0 0;display:flex;flex-direction:column;gap:8px">
+            ${(STATE._famRels||[]).length===0
+              ?`<div style="color:var(--muted);font-size:12px;text-align:center;padding:4px 0">Sin relaciones emocionales definidas. Agregue una abajo.</div>`
+              :(STATE._famRels||[]).map((r,i)=>{
+                  const ti=FAM_REL_TIPOS.find(t=>t.v===r.tipo)||{l:r.tipo,color:'#fff'};
+                  const mA=STATE._famData.find(m=>m.id===r.fromId);
+                  const mB=STATE._famData.find(m=>m.id===r.toId);
+                  return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg);border-radius:6px">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ti.color};flex-shrink:0"></span>
+                    <span style="font-size:12px;flex:1;line-height:1.4">${esc(mA?.nombre||'?')} ↔ ${esc(mB?.nombre||'?')}<br><span style="color:${ti.color};font-size:10px">${ti.l}</span></span>
+                    <button class="btn-icon btn-sm" onclick="famRemoveRel(${i})" style="color:var(--red);min-width:32px">✕</button>
+                  </div>`;
+                }).join('')
+            }
+            ${members.length>=2?`
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+              <div class="field">
+                <div class="field-label">Miembro A</div>
+                <select id="fn-rel-a" class="field-select" style="font-size:13px">
+                  <option value="">-- Seleccione --</option>${memberOpts}
+                </select>
+              </div>
+              <div class="field">
+                <div class="field-label">Miembro B</div>
+                <select id="fn-rel-b" class="field-select" style="font-size:13px">
+                  <option value="">-- Seleccione --</option>${memberOpts}
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">Tipo de relación emocional</div>
+              <select id="fn-rel-tipo" class="field-select" style="font-size:13px">
+                ${FAM_REL_TIPOS.map(t=>`<option value="${t.v}">${t.l}</option>`).join('')}
+              </select>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="famAgregarRel()" style="background:#16a34a;border-color:#16a34a;margin-top:2px">Agregar relación emocional</button>
+            `:`<div style="color:var(--muted);font-size:12px;text-align:center;padding:4px 0">Necesita al menos 2 miembros registrados.</div>`}
+          </div>
+        </details>
         <div class="card-title" style="margin-bottom:4px">Hallazgos identificados</div>
         <div style="margin-bottom:14px">${hallOpts}</div>
         <div class="field">
@@ -2470,46 +2526,34 @@ function _famGenSVG(members){
   const SLOT=90, SYM=20;
   const GY={1:70,2:190,3:310};
 
-  // ── HELPERS ──────────────────────────────────────────────────────────
-  // Lookup bidireccional: encuentra la pareja de m en el arreglo arr
-  // sin importar quién tiene parejaDe apuntando a quién
+  // ── HELPERS ESTRUCTURALES ─────────────────────────────────────────────
   const getPair=(m,arr)=>{
     if(m.parejaDe) return arr.find(p=>p.id===m.parejaDe)||null;
     return arr.find(p=>p.parejaDe===m.id)||null;
   };
-  // Tipo de unión: tomar del miembro que lo tenga definido
   const unionType=(m,partner)=>m.tipoPareja||partner.tipoPareja||'casados';
-  // Clave canónica para identificar un par (sin importar el orden)
   const pairKey=(a,b)=>[a.id,b.id].sort().join('§');
 
-  // ── AGRUPAR Y COPIAR ──────────────────────────────────────────────────
+  // ── AGRUPAR Y ORDENAR ─────────────────────────────────────────────────
   const bg={1:[],2:[],3:[]};
   members.forEach(m=>{const g=parseInt(m.generacion)||2;bg[g].push({...m,generacion:g});});
-
-  // Ordenar para que las parejas queden adyacentes
   const orderG=arr=>{
     const done=new Set(),out=[];
     arr.forEach(m=>{
       if(done.has(m.id))return;
       out.push(m);done.add(m.id);
-      // Jalar a la pareja inmediatamente después (busca en ambas direcciones)
-      const partner=m.parejaDe
-        ?arr.find(x=>x.id===m.parejaDe)
-        :arr.find(x=>x.parejaDe===m.id);
+      const partner=m.parejaDe?arr.find(x=>x.id===m.parejaDe):arr.find(x=>x.parejaDe===m.id);
       if(partner&&!done.has(partner.id)){out.push(partner);done.add(partner.id);}
     });
     return out;
   };
   bg[1]=orderG(bg[1]);bg[2]=orderG(bg[2]);bg[3]=orderG(bg[3]);
 
-  // ── POSICIÓN X (G1 y G2: secuencial) ─────────────────────────────────
+  // ── POSICIONES X ──────────────────────────────────────────────────────
   bg[1].forEach((m,i)=>{m._x=60+i*SLOT;});
   bg[2].forEach((m,i)=>{m._x=60+i*SLOT;});
-
-  // ── POSICIÓN X (G3: centrar bajo la pareja parental) ─────────────────
-  // Normalizar: los hijos de un mismo par (A o B) van al mismo grupo
   const assigned3=new Set();
-  const pGroups={}; // key → {par, partner|null, children[]}
+  const pGroups={};
   bg[3].forEach(m=>{
     if(!m.hijosDe)return;
     const par=bg[2].find(p=>p.id===m.hijosDe);if(!par)return;
@@ -2523,7 +2567,6 @@ function _famGenSVG(members){
     const n=children.length;
     children.forEach((c,i)=>{c._x=cx+(i-(n-1)/2)*SLOT*0.85;assigned3.add(c.id);});
   });
-  // Huérfanos (sin hijosDe o padre no en G2): colocar a la derecha
   const ass3xs=bg[3].filter(m=>assigned3.has(m.id)).map(m=>m._x);
   let orphX=ass3xs.length?Math.max(...ass3xs)+SLOT:60;
   bg[3].filter(m=>!assigned3.has(m.id)).forEach(m=>{m._x=orphX;orphX+=SLOT;});
@@ -2535,17 +2578,14 @@ function _famGenSVG(members){
   const usedGens=[1,2,3].filter(g=>bg[g].length>0);
   const maxG=usedGens.length?Math.max(...usedGens):2;
   const H=GY[maxG]+SYM+55;
-  let L='',S='';
+  let L='',RL='',S='';
 
-  // ── LÍNEAS DE PAREJA Y VÍNCULOS PARENTALES ────────────────────────────
-  // Bug corregido: usa lookup bidireccional + set drawnPairs para evitar
-  // dibujar dos veces cuando A.parejaDe=null y B.parejaDe=A.id
+  // ── LÍNEAS DE VÍNCULO (pareja + filiación) ────────────────────────────
   const drawLinks=(gk,ck)=>{
     const drawnPairs=new Set();
     bg[gk].forEach(m=>{
       const partner=getPair(m,bg[gk]);
       if(partner){
-        // ── Pareja ──
         const key=pairKey(m,partner);
         if(!drawnPairs.has(key)){
           drawnPairs.add(key);
@@ -2554,13 +2594,8 @@ function _famGenSVG(members){
           const x1=lxv+SYM, x2=rxv-SYM, y=GY[gk], mx=(m._x+partner._x)/2;
           const da=ut==='union'?'stroke-dasharray="8,4"':'';
           L+=`<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#8b949e" stroke-width="2" ${da}/>`;
-          if(ut==='separados'){
-            L+=`<line x1="${mx-7}" y1="${y-10}" x2="${mx+7}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
-          }else if(ut==='divorciados'){
-            L+=`<line x1="${mx-12}" y1="${y-10}" x2="${mx-2}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
-            L+=`<line x1="${mx+2}" y1="${y-10}" x2="${mx+12}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
-          }
-          // Hijos de esta pareja (vinculados a cualquiera de los dos)
+          if(ut==='separados'){L+=`<line x1="${mx-7}" y1="${y-10}" x2="${mx+7}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;
+          }else if(ut==='divorciados'){L+=`<line x1="${mx-12}" y1="${y-10}" x2="${mx-2}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;L+=`<line x1="${mx+2}" y1="${y-10}" x2="${mx+12}" y2="${y+10}" stroke="#e94560" stroke-width="2.5"/>`;}
           const kids=bg[ck].filter(c=>c.hijosDe===m.id||c.hijosDe===partner.id);
           if(kids.length){
             const dy=GY[gk]+SYM+22, cy2=GY[ck]-SYM;
@@ -2570,7 +2605,6 @@ function _famGenSVG(members){
           }
         }
       }else{
-        // ── Padre/madre sin pareja ──
         const kids=bg[ck].filter(c=>c.hijosDe===m.id);
         if(!kids.length)return;
         const dy=GY[gk]+SYM+22, cy2=GY[ck]-SYM;
@@ -2581,6 +2615,74 @@ function _famGenSVG(members){
     });
   };
   drawLinks(1,2);drawLinks(2,3);
+
+  // ── LÍNEAS DE RELACIÓN EMOCIONAL ──────────────────────────────────────
+  // Punto de control del arco: sube si misma generación, va al lado si diferente
+  const _emCtrl=(x1,y1,x2,y2)=>{
+    const midX=(x1+x2)/2,midY=(y1+y2)/2;
+    if(Math.abs(y1-y2)<40){
+      const arcH=42+Math.abs(x2-x1)*0.18;
+      return [midX,midY-arcH];
+    }
+    const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy)||1;
+    return [midX-dy/len*38,midY+dx/len*38];
+  };
+  // Curvas paralelas (cercana / muy cercana / fusionada)
+  const _emParallel=(x1,y1,x2,y2,cx,cy,color,count)=>{
+    const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=-dy/len,ny=dx/len,gap=3.5;
+    const offs=count===2?[-gap/2,gap/2]:count===3?[-gap,0,gap]:[-gap*1.5,-gap/2,gap/2,gap*1.5];
+    return offs.map(d=>`<path d="M${(x1+nx*d).toFixed(1)},${(y1+ny*d).toFixed(1)} Q${(cx+nx*d).toFixed(1)},${(cy+ny*d).toFixed(1)} ${(x2+nx*d).toFixed(1)},${(y2+ny*d).toFixed(1)}" fill="none" stroke="${color}" stroke-width="1.6"/>`).join('');
+  };
+  // Línea cortada: arco con 2 barras transversales
+  const _emCortada=(x1,y1,x2,y2,cx,cy)=>{
+    let r=`<path d="M${x1},${y1} Q${cx},${cy} ${x2},${y2}" fill="none" stroke="#6e7681" stroke-width="1.5"/>`;
+    [0.33,0.67].forEach(t=>{
+      const bx=(1-t)*(1-t)*x1+2*t*(1-t)*cx+t*t*x2;
+      const by=(1-t)*(1-t)*y1+2*t*(1-t)*cy+t*t*y2;
+      const tdx=2*(1-t)*(cx-x1)+2*t*(x2-cx);
+      const tdy=2*(1-t)*(cy-y1)+2*t*(y2-cy);
+      const tl=Math.sqrt(tdx*tdx+tdy*tdy)||1;
+      const tnx=-tdy/tl,tny=tdx/tl;
+      r+=`<line x1="${(bx+tnx*7).toFixed(1)}" y1="${(by+tny*7).toFixed(1)}" x2="${(bx-tnx*7).toFixed(1)}" y2="${(by-tny*7).toFixed(1)}" stroke="#6e7681" stroke-width="2.2"/>`;
+    });
+    return r;
+  };
+  // Zigzag (conflictiva / violenta)
+  const _emZigzag=(x1,y1,x2,y2,color,sw,amp,arrow)=>{
+    const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy)||1;
+    const ux=dx/len,uy=dy/len,nx=-uy,ny=ux;
+    const segs=Math.max(4,Math.floor(len/16));
+    let pts=[[x1,y1]];
+    for(let i=1;i<segs;i++){const t=i/segs;pts.push([x1+dx*t+(i%2?1:-1)*amp*nx,y1+dy*t+(i%2?1:-1)*amp*ny]);}
+    pts.push([x2,y2]);
+    const d=pts.map((p,i)=>(i===0?`M${p[0].toFixed(1)},${p[1].toFixed(1)}`:`L${p[0].toFixed(1)},${p[1].toFixed(1)}`)).join('');
+    let r=`<path d="${d}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    if(arrow){const al=10,aw=5;r+=`<polygon points="${x2},${y2} ${(x2-ux*al+nx*aw).toFixed(1)},${(y2-uy*al+ny*aw).toFixed(1)} ${(x2-ux*al-nx*aw).toFixed(1)},${(y2-uy*al-ny*aw).toFixed(1)}" fill="${color}"/>`;}
+    return r;
+  };
+
+  // Mapa rápido id→miembro (con _x calculado)
+  const midByMap={};allM.forEach(m=>{midByMap[m.id]=m;});
+  const rels=STATE._famRels||[];
+  rels.forEach(rel=>{
+    const mA=midByMap[rel.fromId],mB=midByMap[rel.toId];
+    if(!mA||!mB||mA._x===undefined||mB._x===undefined)return;
+    const x1=mA._x,y1=GY[mA.generacion],x2=mB._x,y2=GY[mB.generacion];
+    const [cx,cy]=_emCtrl(x1,y1,x2,y2);
+    switch(rel.tipo){
+      case'cercana':    RL+=_emParallel(x1,y1,x2,y2,cx,cy,'#38c793',2);break;
+      case'muycercana': RL+=_emParallel(x1,y1,x2,y2,cx,cy,'#22c55e',3);break;
+      case'fusionada':  RL+=_emParallel(x1,y1,x2,y2,cx,cy,'#16a34a',4);break;
+      case'distante':   RL+=`<path d="M${x1},${y1} Q${cx},${cy} ${x2},${y2}" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="7,5"/>`;break;
+      case'cortada':    RL+=_emCortada(x1,y1,x2,y2,cx,cy);break;
+      case'conflictiva':RL+=_emZigzag(x1,y1,x2,y2,'#e94560',2,9,false);break;
+      case'hostil':     RL+=`<path d="M${x1},${y1} Q${cx},${cy} ${x2},${y2}" fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>`;break;
+      case'violenta':   RL+=_emZigzag(x1,y1,x2,y2,'#7c1d6f',2.5,10,true);break;
+    }
+    const rInfo=FAM_REL_TIPOS.find(t=>t.v===rel.tipo);
+    if(rInfo){RL+=`<text x="${cx.toFixed(1)}" y="${(cy-5).toFixed(1)}" text-anchor="middle" fill="${rInfo.color}" font-size="8" font-family="sans-serif" font-style="italic">${esc(rInfo.l)}</text>`;}
+  });
 
   // ── SÍMBOLOS ──────────────────────────────────────────────────────────
   allM.forEach(m=>{
@@ -2612,7 +2714,8 @@ function _famGenSVG(members){
   });
   let GL='';
   usedGens.forEach(g=>{GL+=`<text x="4" y="${GY[g]+5}" fill="#6e7681" font-size="10" font-family="sans-serif" font-style="italic">G${g}</text>`;});
-  return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${L}${S}${GL}</svg>`;
+  // Orden: vínculos estructurales → relaciones emocionales (encima) → símbolos (al frente)
+  return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${L}${RL}${S}${GL}</svg>`;
 }
 
 function famAgregar(){
@@ -2634,7 +2737,12 @@ function famAgregar(){
 }
 
 function famRemove(i){
+  const removedId=STATE._famData[i]?.id;
   STATE._famData.splice(i,1);
+  // Limpiar relaciones emocionales que involucren al miembro eliminado
+  if(removedId&&STATE._famRels){
+    STATE._famRels=STATE._famRels.filter(r=>r.fromId!==removedId&&r.toId!==removedId);
+  }
   _famRender();
 }
 
@@ -2644,12 +2752,33 @@ function famToggleHall(v,checked){
   else{STATE._famHall=STATE._famHall.filter(x=>x!==v);}
 }
 
+function famAgregarRel(){
+  const fromId=document.getElementById('fn-rel-a')?.value||'';
+  const toId=document.getElementById('fn-rel-b')?.value||'';
+  const tipo=document.getElementById('fn-rel-tipo')?.value||'cercana';
+  if(!fromId||!toId){return toast('Seleccione los dos miembros','err');}
+  if(fromId===toId){return toast('Los miembros deben ser distintos','err');}
+  if(!STATE._famRels)STATE._famRels=[];
+  // Si ya existe el par (en cualquier dirección), actualizar el tipo
+  const ya=STATE._famRels.find(r=>(r.fromId===fromId&&r.toId===toId)||(r.fromId===toId&&r.toId===fromId));
+  if(ya){ya.tipo=tipo;}
+  else{STATE._famRels.push({fromId,toId,tipo});}
+  _famRender();
+}
+
+function famRemoveRel(i){
+  if(!STATE._famRels)return;
+  STATE._famRels.splice(i,1);
+  _famRender();
+}
+
 function guardarFamiliograma(){
   STATE._famObs=document.getElementById('fam-obs')?.value||'';
   STATE.draft2['56_data']=[...STATE._famData];
   STATE.draft2['56']=[...(STATE._famHall||[])];
   STATE.draft2['88']=STATE._famObs;
-  delete STATE._famData; delete STATE._famHall; delete STATE._famObs;
+  STATE.draft2['56_rels']=[...(STATE._famRels||[])];
+  delete STATE._famData; delete STATE._famHall; delete STATE._famObs; delete STATE._famRels;
   closeModal();
   toast('Familiograma guardado','ok');
   render();
