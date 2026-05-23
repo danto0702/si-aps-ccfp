@@ -67,22 +67,19 @@ input,select,textarea{touch-action:manipulation}
 /* ── Banner institucional (pantalla inicio) ── */
 .home-banner{
   width:calc(100% + 28px);margin:-14px -14px 14px;
-  overflow:hidden;line-height:0;
+  overflow:hidden;line-height:0;border-radius:0 0 12px 12px;
 }
 .home-banner img{
-  width:100%;height:auto;max-height:120px;object-fit:cover;
-  object-position:center center;display:block;
+  width:100%;height:auto;display:block;
 }
-@media(max-width:479px){.home-banner img{max-height:80px}}
-@media(min-width:800px){.home-banner img{max-height:150px}}
 
 /* ── Logo en navbar ── */
-.hdr-logo{height:32px;width:auto;max-width:140px;object-fit:contain;display:block}
+.hdr-logo{height:32px;width:auto;max-width:140px;object-fit:contain;display:block;border-radius:6px}
 
 /* ── Logo en pantalla de login ── */
 .login-banner{width:100%;max-width:380px;border-radius:12px;overflow:hidden;margin-bottom:10px;line-height:0}
-.login-banner img{width:100%;height:auto;max-height:100px;object-fit:cover;display:block}
-.login-logo-img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--purple);margin-bottom:8px;display:block}
+.login-banner img{width:100%;height:auto;display:block}
+.login-logo-img{width:72px;height:72px;border-radius:14px;object-fit:cover;border:3px solid var(--purple);margin-bottom:8px;display:block}
 
 /* ── Contenido principal ── */
 #main{
@@ -4817,20 +4814,16 @@ function imprimirCaracterizacion(famId) {
 </head>
 <body>
 <!-- Banner institucional -->
-<div style="width:calc(100% + 40px);margin:-16px -20px 12px;line-height:0;overflow:hidden">
+<div style="width:calc(100% + 40px);margin:-16px -20px 12px;line-height:0;overflow:hidden;border-radius:0 0 10px 10px">
   <img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1747672929/cold_smooth_tasty._1_nmosnc.png"
        alt="ESE Hospital Regional Noroccidental"
-       style="width:100%;height:auto;max-height:85px;object-fit:cover;object-position:center;display:block">
+       style="width:100%;height:auto;display:block">
 </div>
 <div class="header">
-  <div class="header-left" style="display:flex;align-items:center;gap:10px">
-    <img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg"
-         alt="Logo" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #c49fd0;flex-shrink:0">
-    <div>
-      <h1>Caracterización Familiar y Personal</h1>
-      <h2>${esc(config.nit ? 'NIT: '+config.nit+' · '+d2['84'] : (d2['84']||'ESE Hospital Regional Noroccidental'))}</h2>
-      <h2>Período: ${config.fechaInicio||'—'} al ${config.fechaFin||'—'}</h2>
-    </div>
+  <div class="header-left">
+    <h1>Caracterización Familiar y Personal</h1>
+    <h2>${esc(config.nit ? 'NIT: '+config.nit+' · '+d2['84'] : (d2['84']||'ESE Hospital Regional Noroccidental'))}</h2>
+    <h2>Período: ${config.fechaInicio||'—'} al ${config.fechaFin||'—'}</h2>
   </div>
   <div class="header-right">
     <div class="ficha-num">Ficha: ${codFicha}</div>
