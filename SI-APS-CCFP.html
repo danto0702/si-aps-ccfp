@@ -1709,6 +1709,104 @@ const EBS_PRESET_HRNO = [
 
 function fmtEBS(e){ return `EBS${e.num}-EBS-${e.label}`; }
 
+// ── Helpers crear/editar usuario — generación automática EBS ──
+const EBS_MUNI_MAP = {
+  '001':'54003','002':'54003','003':'54003','004':'54003',
+  '005':'54128','006':'54128','007':'54128','008':'54128','009':'54128',
+  '010':'54245','011':'54245','012':'54245','013':'54245',
+  '014':'54660','015':'54660','016':'54660','017':'54660'
+};
+const MUNI_HRNO = [
+  {v:'54003',l:'Ábrego'},
+  {v:'54128',l:'Convención'},
+  {v:'54245',l:'El Carmen'},
+  {v:'54660',l:'Teorama'}
+];
+function buildEBSCode(ebsNum, muniCode) {
+  const ti = terrInfoFor(ebsNum);
+  if (!ti || !muniCode) return null;
+  const num = String(ebsNum).padStart(3,'0');
+  return '54' + '41SR002' + muniCode + ti.tc + 'MT01EBS' + num;
+}
+function decodeEBSCode(code) {
+  if (!code || code.length < 27) return code;
+  const muni = code.slice(9,14);
+  const ebsNum = code.slice(24,27);
+  const ti = terrInfoFor(ebsNum);
+  return `EBS${ebsNum} · ${MUNIS_NS[muni]||muni} · ${ti ? ti.tc+' '+ti.tn : code.slice(14,17)}`;
+}
+function ebsForMuni(muniCode) {
+  return Object.entries(EBS_MUNI_MAP)
+    .filter(([,m]) => m === muniCode)
+    .map(([num]) => {
+      const ti = terrInfoFor(num);
+      return {v:num, l:`EBS${num} · ${ti ? ti.tn : num}`};
+    });
+}
+function _renderEBSChips(containerId, codes, removeFn) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!codes || !codes.length) {
+    el.innerHTML = '<div class="field-note" style="margin-top:4px">Sin EBS asignados todavía.</div>';
+    return;
+  }
+  el.innerHTML = codes.map((code,i) => `
+    <div style="display:inline-flex;align-items:center;gap:6px;background:var(--card-2,#1e2430);border:1px solid var(--border);border-radius:8px;padding:4px 10px;margin:3px 3px 0 0;font-size:11px">
+      <span style="font-family:monospace" title="${esc(code)}">${esc(decodeEBSCode(code))}</span>
+      <button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;line-height:1;padding:0;margin-left:2px" onclick="${removeFn}(${i})">×</button>
+    </div>`).join('');
+}
+function muUpdateEBSOptions() {
+  const muni = document.getElementById('mu-muni')?.value||'';
+  const ebsSel = document.getElementById('mu-ebs-sel');
+  if (!ebsSel) return;
+  if (!muni) { ebsSel.innerHTML='<option value="">— Primero seleccione municipio —</option>'; ebsSel.disabled=true; return; }
+  const opts = ebsForMuni(muni);
+  ebsSel.innerHTML = '<option value="">— Seleccione EBS —</option>' + opts.map(o=>`<option value="${o.v}">${esc(o.l)}</option>`).join('');
+  ebsSel.disabled = false;
+}
+function muAddEBS() {
+  const muni = document.getElementById('mu-muni')?.value;
+  const ebsNum = document.getElementById('mu-ebs-sel')?.value;
+  if (!muni || !ebsNum) return toast('Seleccione municipio y EBS primero','err');
+  const code = buildEBSCode(ebsNum, muni);
+  if (!code) return;
+  if (!window._muEBS) window._muEBS = [];
+  if (window._muEBS.includes(code)) return toast('Este EBS ya fue agregado','warn');
+  window._muEBS.push(code);
+  _renderEBSChips('mu-ebs-list', window._muEBS, 'muRemoveEBS');
+}
+function muRemoveEBS(idx) {
+  if (!window._muEBS) return;
+  window._muEBS.splice(idx,1);
+  _renderEBSChips('mu-ebs-list', window._muEBS, 'muRemoveEBS');
+}
+function euUpdateEBSOptions() {
+  const muni = document.getElementById('eu-muni')?.value||'';
+  const ebsSel = document.getElementById('eu-ebs-sel');
+  if (!ebsSel) return;
+  if (!muni) { ebsSel.innerHTML='<option value="">— Primero seleccione municipio —</option>'; ebsSel.disabled=true; return; }
+  const opts = ebsForMuni(muni);
+  ebsSel.innerHTML = '<option value="">— Seleccione EBS —</option>' + opts.map(o=>`<option value="${o.v}">${esc(o.l)}</option>`).join('');
+  ebsSel.disabled = false;
+}
+function euAddEBS() {
+  const muni = document.getElementById('eu-muni')?.value;
+  const ebsNum = document.getElementById('eu-ebs-sel')?.value;
+  if (!muni || !ebsNum) return toast('Seleccione municipio y EBS primero','err');
+  const code = buildEBSCode(ebsNum, muni);
+  if (!code) return;
+  if (!window._euEBS) window._euEBS = [];
+  if (window._euEBS.includes(code)) return toast('Este EBS ya fue agregado','warn');
+  window._euEBS.push(code);
+  _renderEBSChips('eu-ebs-list', window._euEBS, 'euRemoveEBS');
+}
+function euRemoveEBS(idx) {
+  if (!window._euEBS) return;
+  window._euEBS.splice(idx,1);
+  _renderEBSChips('eu-ebs-list', window._euEBS, 'euRemoveEBS');
+}
+
 async function loadEBSPreset() {
   if (!confirm('¿Cargar los 21 EBS predeterminados HRNO? Se reemplazará la lista actual.')) return;
   STATE.ebsList = JSON.parse(JSON.stringify(EBS_PRESET_HRNO));
@@ -1826,6 +1924,8 @@ function renderAdminOptions() {
 
 // ── Modal: Crear usuario ─────────────────────────────────────
 function openCreateUser() {
+  window._muEBS = [];
+  const muniOpts = MUNI_HRNO.map(m=>`<option value="${m.v}">${esc(m.l)}</option>`).join('');
   document.getElementById('modal-root').innerHTML = `
   <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
@@ -1843,11 +1943,25 @@ function openCreateUser() {
         </select>
       </div>
       <div id="mu-ebs-wrap">
-        <div class="field">
-          <div class="field-label">Códigos EBS asignados</div>
-          <input class="field-input" id="mu-ebs" type="text"
-            placeholder="Ej: 54UZPE99954003T99MT99EBS001, 54UZPE99954003T99MT99EBS002">
-          <div class="field-note">Separa múltiples códigos con coma. Usa el mismo código que genera la app en el Paso 1 del formulario.</div>
+        <div class="card" style="padding:12px;margin-bottom:10px;background:var(--card-2,#1a1f2e)">
+          <div style="font-weight:700;font-size:12px;color:var(--purple-l);margin-bottom:10px;letter-spacing:.5px">EBS ASIGNADOS</div>
+          <div class="grid-2" style="gap:8px;margin-bottom:8px">
+            <div class="field" style="margin:0">
+              <div class="field-label">Municipio</div>
+              <select class="field-select" id="mu-muni" onchange="muUpdateEBSOptions()">
+                <option value="">— Seleccione —</option>
+                ${muniOpts}
+              </select>
+            </div>
+            <div class="field" style="margin:0">
+              <div class="field-label">EBS / Territorio</div>
+              <select class="field-select" id="mu-ebs-sel" disabled>
+                <option value="">— Primero municipio —</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:10px" onclick="muAddEBS()">+ Agregar EBS</button>
+          <div id="mu-ebs-list"><div class="field-note">Sin EBS asignados todavía.</div></div>
         </div>
       </div>
       <div id="mu-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
@@ -1864,8 +1978,7 @@ async function submitCreateUser() {
   const email  = document.getElementById('mu-email')?.value?.trim();
   const pass   = document.getElementById('mu-pass')?.value?.trim();
   const rol    = document.getElementById('mu-rol')?.value||'field';
-  const ebsRaw = document.getElementById('mu-ebs')?.value||'';
-  const ebs_codes = rol==='field' ? ebsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const ebs_codes = rol==='field' ? (window._muEBS||[]) : [];
   const err = document.getElementById('mu-err');
   const btn = document.getElementById('mu-btn');
   if (!email||!pass) { showErr(err,'Correo y contraseña son requeridos'); return; }
@@ -1889,6 +2002,7 @@ async function submitCreateUser() {
 async function openEditUser(id) {
   const u = (STATE.adminUsers||[]).find(x=>x.id===id);
   if (!u) return;
+  window._euEBS = [...(u.ebs_codes||[])];
   document.getElementById('modal-root').innerHTML = `
   <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
@@ -1904,10 +2018,25 @@ async function openEditUser(id) {
         </select>
       </div>
       <div id="eu-ebs-wrap" style="${u.rol!=='field'?'display:none':''}">
-        <div class="field">
-          <div class="field-label">Códigos EBS asignados</div>
-          <input class="field-input" id="eu-ebs" type="text" value="${esc((u.ebs_codes||[]).join(', '))}">
-          <div class="field-note">Separa múltiples códigos con coma.</div>
+        <div class="card" style="padding:12px;margin-bottom:10px;background:var(--card-2,#1a1f2e)">
+          <div style="font-weight:700;font-size:12px;color:var(--purple-l);margin-bottom:10px;letter-spacing:.5px">EBS ASIGNADOS</div>
+          <div class="grid-2" style="gap:8px;margin-bottom:8px">
+            <div class="field" style="margin:0">
+              <div class="field-label">Municipio</div>
+              <select class="field-select" id="eu-muni" onchange="euUpdateEBSOptions()">
+                <option value="">— Seleccione —</option>
+                ${MUNI_HRNO.map(m=>`<option value="${m.v}">${esc(m.l)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field" style="margin:0">
+              <div class="field-label">EBS / Territorio</div>
+              <select class="field-select" id="eu-ebs-sel" disabled>
+                <option value="">— Primero municipio —</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:10px" onclick="euAddEBS()">+ Agregar EBS</button>
+          <div id="eu-ebs-list"></div>
         </div>
       </div>
       <div id="eu-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
@@ -1917,13 +2046,14 @@ async function openEditUser(id) {
       </div>
     </div>
   </div>`;
+  // Renderizar chips de EBS existentes
+  _renderEBSChips('eu-ebs-list', window._euEBS, 'euRemoveEBS');
 }
 
 async function submitEditUser(id) {
   const nombre   = document.getElementById('eu-nombre')?.value?.trim()||'';
   const rol      = document.getElementById('eu-rol')?.value||'field';
-  const ebsRaw   = document.getElementById('eu-ebs')?.value||'';
-  const ebs_codes= rol==='field' ? ebsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const ebs_codes= rol==='field' ? (window._euEBS||[]) : [];
   const err=document.getElementById('eu-err');
   const btn=document.getElementById('eu-btn');
   btn.textContent='Guardando...'; btn.disabled=true;

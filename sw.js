@@ -1,5 +1,5 @@
 /* Service Worker — SI-APS CCFP v2.6 */
-const CACHE = 'siaps-ccfp-v12';
+const CACHE = 'siaps-ccfp-v13';
 const ASSETS = [
   './SI-APS-CCFP.html',
   './manifest.json',
