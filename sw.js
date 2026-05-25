@@ -1,11 +1,10 @@
 /* Service Worker — SI-APS CCFP v2.6 */
-const CACHE = 'siaps-ccfp-v15';
+const CACHE = 'siaps-ccfp-v16';
 const ASSETS = [
   './SI-APS-CCFP.html',
   './manifest.json',
-  './icon-180.png',
-  './icon-192.png',
-  './icon-512.png',
+  './icono.png',
+  './banner.png',
   // Leaflet para mapa geopunto (disponible offline después de primera carga)
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'

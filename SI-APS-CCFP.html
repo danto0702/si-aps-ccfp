@@ -11,8 +11,8 @@
 <meta name="format-detection" content="telephone=no,address=no,email=no">
 <title>SI-APS CCFP</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/jpeg" href="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg">
-<link rel="apple-touch-icon" href="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg">
+<link rel="icon" type="image/png" href="./icono.png">
+<link rel="apple-touch-icon" href="./icono.png">
 <style>
 /* ── Variables y reset ─────────────────────────────────────── */
 :root{
@@ -1234,7 +1234,7 @@ function render() {
   if (STATE.screen==='familia_t2') title = STATE.editFamId ? 'Editar Familia' : 'Nueva Familia';
   if (STATE.screen==='persona')    title = STATE.editPerId ? 'Editar Persona' : 'Agregar Persona';
   if (STATE.screen === 'home') {
-    bt.innerHTML = `<img class="hdr-logo" src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg" alt="SI-APS CCFP" loading="eager">`;
+    bt.innerHTML = `<img class="hdr-logo" src="./icono.png" alt="SI-APS CCFP" loading="eager">`;
   } else {
     bt.innerHTML = `${esc(title)}<div class="hdr-sub">${meta.s}</div>`;
   }
@@ -1299,8 +1299,8 @@ function renderLogin() {
   // ── Login / Registro ─────────────────────────────────────
   const isSignup = _loginMode === 'signup';
   return `<div class="login-wrap">
-    <div class="login-banner"><img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1747672929/cold_smooth_tasty._1_nmosnc.png" alt="ESE Hospital Regional Noroccidental" loading="eager"></div>
-    <img class="login-logo-img" src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1779513760/IMG-20260523-WA0001_w1j4kn.jpg" alt="Logo SI-APS" loading="eager">
+    <div class="login-banner"><img src="./banner.png" alt="ESE Hospital Regional Noroccidental" loading="eager"></div>
+    <img class="login-logo-img" src="./icono.png" alt="Logo SI-APS" loading="eager">
     <div class="login-title">SI-APS CCFP</div>
     <div class="login-sub">Caracterización Familia y Persona<br>ESE Hospital Regional Noroccidental</div>
     <div class="login-card">
@@ -1566,7 +1566,7 @@ function renderHome() {
         </div>`;
       }).join('');
 
-  const bannerHtml = `<div class="home-banner"><img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1747672929/cold_smooth_tasty._1_nmosnc.png" alt="ESE Hospital Regional Noroccidental — Salud Pública" loading="eager"></div>`;
+  const bannerHtml = `<div class="home-banner"><img src="./banner.png" alt="ESE Hospital Regional Noroccidental — Salud Pública" loading="eager"></div>`;
 
   return bannerHtml+userInfo+statsHtml+listHtml+
     `<div style="height:20px"></div>
@@ -5657,7 +5657,7 @@ function imprimirCaracterizacion(famId) {
 <body>
 <!-- Banner institucional -->
 <div style="width:calc(100% + 40px);margin:-16px -20px 12px;line-height:0;overflow:hidden;border-radius:0 0 10px 10px">
-  <img src="https://res.cloudinary.com/dj7qylkqh/image/upload/v1747672929/cold_smooth_tasty._1_nmosnc.png"
+  <img src="./banner.png"
        alt="ESE Hospital Regional Noroccidental"
        style="width:100%;height:auto;display:block">
 </div>
