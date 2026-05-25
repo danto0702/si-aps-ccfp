@@ -5613,6 +5613,47 @@ async function imprimirCaracterizacion(famId) {
         ${fila(lbl3('36'), dvp('36'))}
         ${fila(lbl3('37'), d3['37'])}
       </table>
+      ${(()=>{
+        // ── Bloque de tamizajes de salud mental (PDF) ────────────────
+        const _pc=c=>c==='var(--green)'?'#38c793':c==='var(--red)'?'#e94560':c==='var(--yellow)'?'#ffb432':c&&c.includes('orange')?'#ff8c00':'#777';
+        const ts=d3['tam_srq'], ta=d3['tam_audit'], tx=d3['tam_assist'], tr=d3['tam_rqc'];
+        const hasTam=ts||(ta&&ta.score!=null)||(tx&&tx.scores)||(tr&&tr.score!=null);
+        if(!hasTam)return'';
+        const card=(col,icon,titulo,fecha,cuerpo)=>'<div style="border:1.5px solid '+col+';border-radius:4px;padding:6px 10px;margin-top:6px;background:'+col+'22"><div style="display:flex;justify-content:space-between;align-items:center"><strong style="font-size:10.5px">'+icon+' '+titulo+'</strong><span style="font-size:9px;color:#777">'+fecha+'</span></div>'+cuerpo+'</div>';
+        let h='<h4 class="sub-title">🧠 Tamizajes de Salud Mental</h4><div style="padding:0 8px 8px">';
+        // SRQ
+        if(ts){
+          const r=_srqInterp(ts); const col=_pc(r.color); const gs=ts.grupos||r.grupos||[];
+          const cuerpo='<div style="font-size:11px;font-weight:700;color:'+col+';margin-top:2px">'+r.label+'</div>'+(r.detail?'<div style="font-size:10px;color:#555;margin-top:1px">Alertas: '+r.detail+'</div>':'')+'<div style="font-size:9.5px;color:#666;margin-top:3px">'+gs.map(g=>g.label+': <b>'+g.pos+'</b>'+(g.alert?' ⚠️':'')).join(' · ')+'</div>';
+          h+=card(col,'🧠','SRQ — Síntomas Psiquiátricos',ts.fecha||'',cuerpo);
+        }
+        // AUDIT
+        if(ta&&ta.score!=null){
+          const r=_auditInterp(ta.score); const col=_pc(r.color);
+          const cuerpo='<div style="font-size:11px;font-weight:700;color:'+col+';margin-top:2px">'+r.label+'</div><div style="font-size:10px;color:#555;margin-top:1px">Puntaje: '+ta.score+'/40 · '+r.accion+'</div>';
+          h+=card(col,'🍺','AUDIT — Consumo de Alcohol',ta.fecha||'',cuerpo);
+        }
+        // ASSIST
+        if(tx&&tx.scores){
+          const sc=tx.scores;
+          const sustC=ASSIST_SUST.filter(s=>sc[s.k]>0);
+          const mS=sustC.length?Math.max(...sustC.map(s=>sc[s.k])):0;
+          const mK=sustC.length?(sustC.find(s=>sc[s.k]===mS)||{k:''}).k:'';
+          const r=sustC.length?_assistInterp(mS,mK):{label:'Sin consumo detectado',color:'var(--green)'};
+          const col=_pc(r.color);
+          const inner=sustC.length===0
+            ?'<div style="font-size:11px;font-weight:700;color:'+col+';margin-top:2px">Sin consumo detectado</div>'
+            :sustC.map(s=>{const r2=_assistInterp(sc[s.k],s.k);const c2=_pc(r2.color);const lv=sc[s.k]<=10?'Riesgo bajo':sc[s.k]<=26?'Riesgo moderado':'Riesgo alto';return'<div style="font-size:10px;margin-top:2px"><b>'+s.l+':</b> <span style="color:'+c2+';font-weight:600">'+lv+'</span> <span style="color:#777">('+sc[s.k]+' pts)</span></div>';}).join('');
+          h+=card(col,'💊','ASSIST — Consumo de Sustancias',tx.fecha||'',inner);
+        }
+        // RQC
+        if(tr&&tr.score!=null){
+          const r=_rqcInterp(tr.score); const col=_pc(r.color);
+          const cuerpo='<div style="font-size:11px;font-weight:700;color:'+col+';margin-top:2px">'+r.label+'</div><div style="font-size:10px;color:#555;margin-top:1px">Puntaje: '+tr.score+'/10 positivos · '+r.accion+'</div>';
+          h+=card(col,'🧒','RQC — Salud Mental Niños/Adolescentes',tr.fecha||'',cuerpo);
+        }
+        h+='</div>'; return h;
+      })()}
     </div>`;
   }).join('');
 
