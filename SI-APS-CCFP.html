@@ -399,6 +399,7 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .scale-btn{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:8px;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;cursor:pointer;touch-action:manipulation;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:.1s;-webkit-user-select:none;user-select:none}
 .scale-btn:active{opacity:.75}
 .scale-btn.sel-ok{border-color:var(--green);background:#0d2318;color:var(--green)}
+.scale-btn.sel-err{border-color:var(--muted);background:#1a1a2e;color:var(--text)}
 .scale-btn .sv{font-size:18px;font-weight:900}
 /* Pregunta de instrumento */
 .ins-q{border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px}
@@ -3928,10 +3929,596 @@ function renderPersona(){
     ${sino3('36',d['36']||'',false)}
     ${showMotivo37?multi3('motivoNoAtencionAguda','37',d['37']||[],false):''}
   </div>
+  ${renderTamizajesBlock(d)}
   <div class="bottom-bar">
     <button class="btn btn-secondary" onclick="navigate('familia_t3',{editFamId:'${STATE.editFamId}'})">Cancelar</button>
     <button class="btn btn-primary" onclick="savePersona()">💾 Guardar persona</button>
   </div>`;}
+
+function calcEdadAnios(fechaNac){
+  if(!fechaNac)return null;
+  const nac=new Date(fechaNac);
+  if(isNaN(nac))return null;
+  const h=new Date();
+  let e=h.getFullYear()-nac.getFullYear();
+  if(h.getMonth()<nac.getMonth()||(h.getMonth()===nac.getMonth()&&h.getDate()<nac.getDate()))e--;
+  return e;
+}
+
+function _tamChip(icon,label,score,color,sub){
+  return `<div class="tool-result-chip">
+    <div class="tool-score-big" style="color:${color};font-size:${typeof score==='number'&&score<100?'28px':'20px'}">${typeof score==='number'?score:icon}</div>
+    <div class="tool-result-text">
+      <div class="tool-result-label" style="color:${color}">${esc(label)}</div>
+      <div class="tool-result-sub">${esc(sub)}</div>
+    </div>
+  </div>`;
+}
+
+function renderTamizajesBlock(d){
+  const edad=calcEdadAnios(d['9']);
+  const nombre=[d['3'],d['5']].filter(Boolean).join(' ')||'esta persona';
+  const showRQC = edad!=null && edad>=5 && edad<=15;
+  const showAdulto = edad!=null && edad>=16;
+  const showAll = edad==null;
+
+  // SRQ result chip
+  const srq=d['tam_srq'];
+  let srqChip='';
+  if(srq){
+    const r=_srqInterp(srq);
+    srqChip=_tamChip('🧠',r.label,null,r.color,`Aplicado ${srq.fecha||''}${r.detail?' · '+r.detail:''}`);
+  }
+  // AUDIT result chip
+  const audit=d['tam_audit'];
+  let auditChip='';
+  if(audit!=null&&audit.score!=null){
+    const r=_auditInterp(audit.score);
+    auditChip=_tamChip('🍺',r.label,audit.score,r.color,`Score: ${audit.score}/40 · ${r.accion}`);
+  }
+  // ASSIST result chip (show highest-risk substance)
+  const assist=d['tam_assist'];
+  let assistChip='';
+  if(assist&&assist.scores){
+    const maxS=Math.max(...Object.values(assist.scores));
+    const maxK=Object.keys(assist.scores).find(k=>assist.scores[k]===maxS)||'';
+    const r=_assistInterp(maxS,maxK);
+    assistChip=_tamChip('💊',r.label,maxS,r.color,r.detail+` · Aplicado ${assist.fecha||''}`);
+  }
+  // RQC result chip
+  const rqc=d['tam_rqc'];
+  let rqcChip='';
+  if(rqc!=null&&rqc.score!=null){
+    const r=_rqcInterp(rqc.score);
+    rqcChip=_tamChip('🧒',r.label,rqc.score,r.color,`${rqc.score}/10 positivos · Aplicado ${rqc.fecha||''}`);
+  }
+
+  const tamBloque=(tests)=>tests.join('');
+
+  const adultTests=`
+    <!-- SRQ -->
+    <div class="tool-block">
+      <div class="tool-block-title">SRQ — Síntomas Psiquiátricos (adultos)</div>
+      <button class="btn btn-secondary btn-block" onclick="openModalSRQ()">
+        🧠 ${srq?'Editar SRQ ('+nombre+')':'Aplicar SRQ a '+nombre+' (33 preguntas)'}
+      </button>
+      ${srqChip}
+    </div>
+    <!-- AUDIT -->
+    <div class="tool-block">
+      <div class="tool-block-title">AUDIT — Consumo de Alcohol</div>
+      <button class="btn btn-secondary btn-block" onclick="openModalAUDIT()">
+        🍺 ${audit?'Editar AUDIT (score: '+(audit.score||0)+'/40)':'Aplicar AUDIT a '+nombre+' (10 preguntas)'}
+      </button>
+      ${auditChip}
+    </div>
+    <!-- ASSIST -->
+    <div class="tool-block">
+      <div class="tool-block-title">ASSIST — Alcohol, Tabaco y Sustancias</div>
+      <button class="btn btn-secondary btn-block" onclick="openModalASSIST()">
+        💊 ${assist?'Editar ASSIST':'Aplicar ASSIST a '+nombre+' (8 preguntas × sustancias)'}
+      </button>
+      ${assistChip}
+    </div>`;
+
+  const childTest=`
+    <!-- RQC -->
+    <div class="tool-block">
+      <div class="tool-block-title">RQC — Salud Mental Niños/Adolescentes</div>
+      <button class="btn btn-secondary btn-block" onclick="openModalRQC()">
+        🧒 ${rqc?'Editar RQC (score: '+(rqc.score||0)+'/10)':'Aplicar RQC a '+nombre+' (10 preguntas)'}
+      </button>
+      ${rqcChip}
+    </div>`;
+
+  let content='';
+  if(showAll) content=adultTests+childTest;
+  else if(showAdulto) content=adultTests;
+  else if(showRQC) content=childTest;
+  else return '';
+
+  return `<div class="card">
+    <div class="card-title">🧠 Tamizajes de Salud Mental <span style="font-size:11px;color:var(--muted);font-weight:400">(opcionales)</span></div>
+    ${edad!=null?`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Edad calculada: <b>${edad} años</b> · ${showRQC?'Test disponible: RQC':showAdulto?'Tests disponibles: SRQ, AUDIT, ASSIST':'Sin test aplicable para esta edad'}</div>`:'<div style="font-size:11px;color:var(--yellow);margin-bottom:10px">Ingrese la fecha de nacimiento para ver los test aplicables</div>'}
+    ${content}
+  </div>`;
+}
+
+// ============================================================
+// ██  SRQ — Cuestionario Autoreporte Síntomas Psiquiátricos
+// ============================================================
+const SRQ_PREGUNTAS=[
+  '¿Tiene frecuentes dolores de cabeza?',
+  '¿Tiene mal apetito?',
+  '¿Duerme mal?',
+  '¿Se asusta con facilidad?',
+  '¿Sufre de temblor de manos?',
+  '¿Se siente nervioso, tenso o aburrido?',
+  '¿Sufre de mala digestión?',
+  '¿No puede pensar con claridad?',
+  '¿Se siente triste?',
+  '¿Llora usted con mucha frecuencia?',
+  '¿Tiene dificultad en disfrutar sus actividades diarias?',
+  '¿Tiene dificultad para tomar decisiones?',
+  '¿Tiene dificultad en hacer su trabajo?',
+  '¿Es incapaz de desempeñar un papel útil en su vida?',
+  '¿Ha perdido interés en las cosas?',
+  '¿Siente que usted es una persona inútil?',
+  '¿Ha tenido la idea de acabar con su vida?',
+  '¿Se siente cansado todo el tiempo?',
+  '¿Tiene sensaciones desagradables en su estómago?',
+  '¿Se cansa con facilidad?',
+  '¿Siente usted que alguien ha tratado de herirlo en alguna forma?',
+  '¿Es usted una persona mucho más importante de lo que piensan los demás?',
+  '¿Ha notado interferencias o algo raro en su pensamiento?',
+  '¿Oye voces sin saber de dónde vienen o que otras personas no pueden oír?',
+  '¿Ha tenido convulsiones, ataques o caídas al suelo con movimientos de brazos y piernas?',
+  '¿Alguna vez le ha parecido a su familia, amigos o médico que usted estaba bebiendo demasiado licor?',
+  '¿Alguna vez ha querido dejar de beber, pero no ha podido?',
+  '¿Ha tenido dificultades en el trabajo a causa de la bebida?',
+  '¿Ha estado en riñas o lo han detenido estando borracho?',
+  '¿Le ha parecido alguna vez que usted bebía demasiado?',
+  '¿Alguna vez le ha parecido a su familia, amigos o médico que fumaba demasiado cigarrillo?',
+  '¿Alguna vez ha querido dejar de fumar, pero no ha podido?',
+  '¿Ha experimentado con el consumo de sustancias (marihuana, cocaína, perico, hongos, LSD, etc.)?'
+];
+const SRQ_GRUPOS=[
+  {id:'neuropsi',label:'Síntomas neuropsiquiátricos',qs:[0,19],cutoff:11,mode:'sum'},
+  {id:'psi',label:'Síntomas psicóticos',qs:[20,24],cutoff:1,mode:'any'},
+  {id:'alcohol',label:'Consumo de alcohol',qs:[25,29],cutoff:3,mode:'sum'},
+  {id:'sustancias',label:'Tabaco y sustancias',qs:[30,32],cutoff:1,mode:'any'}
+];
+
+function _srqInterp(tam){
+  const resp=tam.resp||[];
+  const grupos=SRQ_GRUPOS.map(g=>{
+    const slice=resp.slice(g.qs[0],g.qs[1]+1);
+    const pos=slice.filter(x=>x==='1').length;
+    const alert=g.mode==='sum'?(pos>=g.cutoff):pos>0;
+    const alertPsico=g.id==='neuropsi'&&resp[16]==='1';
+    return {...g,pos,alert:alert||alertPsico};
+  });
+  const anyAlert=grupos.some(g=>g.alert);
+  const label=anyAlert?'Alto riesgo — Canalizar a EPS':'Sin riesgo detectado';
+  const color=anyAlert?'var(--red)':'var(--green)';
+  const detail=grupos.filter(g=>g.alert).map(g=>g.label).join(', ')||'';
+  return {label,color,detail,grupos};
+}
+
+function openModalSRQ(){
+  const prev=STATE.draft3['tam_srq'];
+  STATE._srqAns=prev?.resp?[...prev.resp]:new Array(33).fill(null);
+  _renderSRQModal();
+}
+function _renderSRQModal(){
+  const ans=STATE._srqAns;
+  const done=ans.filter(x=>x!==null).length;
+  const grupos=SRQ_GRUPOS.map(g=>`
+    <div style="margin-bottom:6px;padding:6px 0;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase">${esc(g.label)}</div>
+      ${Array.from({length:g.qs[1]-g.qs[0]+1},(_,i)=>{const qi=g.qs[0]+i; return `
+      <div class="ins-q" style="margin-bottom:8px">
+        <div class="field-label" style="margin-bottom:6px"><span class="field-num">${qi+1}</span>${esc(SRQ_PREGUNTAS[qi])}${qi===16?' <span style="color:var(--red);font-weight:700">(RIESGO ALTO si SI)</span>':''}</div>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="scale-btn${ans[qi]==='1'?' sel-ok':''}" style="flex:1" onclick="srqPick(${qi},'1')">SI</button>
+          <button type="button" class="scale-btn${ans[qi]==='0'?' sel-err':''}" style="flex:1" onclick="srqPick(${qi},'0')">NO</button>
+        </div>
+      </div>`;}).join('')}
+    </div>`).join('');
+  const r=done>0?_srqInterp({resp:ans}):null;
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-title">🧠 SRQ — Autoreporte de Síntomas Psiquiátricos</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">33 preguntas · Responda SI o NO · ${done}/33 respondidas</p>
+      <div class="prog-bar"><div class="prog-fill" id="srq-bar" style="width:${(done/33*100).toFixed(0)}%"></div></div>
+      ${grupos}
+      ${r?`<div class="score-panel" style="border-color:${r.color}">
+        <div style="font-size:11px;color:var(--muted)">RESULTADO</div>
+        <div class="slbl" style="color:${r.color};font-size:16px">${esc(r.label)}</div>
+        ${r.detail?`<div class="ssub">Alertas: ${esc(r.detail)}</div>`:''}
+      </div>`:''}
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="guardarSRQ()">Guardar SRQ</button>
+      </div>
+    </div>
+  </div>`;}
+function srqPick(qi,v){
+  STATE._srqAns[qi]=v;
+  const done=STATE._srqAns.filter(x=>x!==null).length;
+  const bar=document.getElementById('srq-bar');
+  if(bar)bar.style.width=(done/33*100).toFixed(0)+'%';
+  // Update button styles
+  const btns=document.querySelectorAll(`[onclick="srqPick(${qi},'1')"], [onclick="srqPick(${qi},'0')"]`);
+  btns.forEach(b=>{ b.classList.remove('sel-ok','sel-err');
+    if(b.getAttribute('onclick').includes("'1'")&&v==='1') b.classList.add('sel-ok');
+    if(b.getAttribute('onclick').includes("'0'")&&v==='0') b.classList.add('sel-err');
+  });
+  // Refresh result panel
+  const r=_srqInterp({resp:STATE._srqAns});
+  const panel=document.querySelector('#modal-root .score-panel');
+  if(panel){
+    panel.style.borderColor=r.color;
+    const lbl=panel.querySelector('.slbl');
+    if(lbl){lbl.style.color=r.color;lbl.textContent=r.label;}
+  }
+}
+function guardarSRQ(){
+  const ans=STATE._srqAns;
+  const done=ans.filter(x=>x!==null).length;
+  if(done<33)return toast(`Complete todas las preguntas (${done}/33 respondidas)`,'err');
+  const r=_srqInterp({resp:ans});
+  STATE.draft3['tam_srq']={fecha:today(),resp:[...ans],grupos:r.grupos,riesgo:r.grupos.some(g=>g.alert)?'alto':'bajo'};
+  delete STATE._srqAns;
+  closeModal();
+  toast('SRQ guardado · '+r.label,'ok');
+  render();
+}
+
+// ============================================================
+// ██  AUDIT — Test Identificación Trastornos por Alcohol
+// ============================================================
+const AUDIT_PREGUNTAS=[
+  {t:'¿Con qué frecuencia consume alguna bebida alcohólica?',opts:[{v:0,l:'Nunca'},{v:1,l:'Una o menos veces al mes'},{v:2,l:'De 2 a 4 veces al mes'},{v:3,l:'De 2 a 3 veces a la semana'},{v:4,l:'4 o más veces a la semana'}]},
+  {t:'¿Cuántas bebidas alcohólicas suele tomar en un día de consumo normal?',opts:[{v:0,l:'1 ó 2'},{v:1,l:'3 ó 4'},{v:2,l:'5 ó 6'},{v:3,l:'De 7 a 9'},{v:4,l:'10 o más'}]},
+  {t:'¿Con qué frecuencia toma 5 o más bebidas alcohólicas en un solo día?',opts:[{v:0,l:'Nunca'},{v:1,l:'Menos de una vez al mes'},{v:2,l:'Mensualmente'},{v:3,l:'Semanalmente'},{v:4,l:'A diario o casi a diario'}]},
+  {t:'¿Con qué frecuencia en el último año fue incapaz de parar de beber una vez había empezado?',opts:[{v:0,l:'Nunca'},{v:1,l:'Menos de una vez al mes'},{v:2,l:'Mensualmente'},{v:3,l:'Semanalmente'},{v:4,l:'A diario o casi a diario'}]},
+  {t:'¿Con qué frecuencia en el último año no pudo hacer lo que se esperaba por haber bebido?',opts:[{v:0,l:'Nunca'},{v:1,l:'Menos de una vez al mes'},{v:2,l:'Mensualmente'},{v:3,l:'Semanalmente'},{v:4,l:'A diario o casi a diario'}]},
+  {t:'¿Con qué frecuencia en el último año necesitó beber en ayunas para recuperarse?',opts:[{v:0,l:'Nunca'},{v:1,l:'Menos de una vez al mes'},{v:2,l:'Mensualmente'},{v:3,l:'Semanalmente'},{v:4,l:'A diario o casi a diario'}]},
+  {t:'¿Con qué frecuencia en el último año tuvo remordimientos o sentimientos de culpa después de haber bebido?',opts:[{v:0,l:'Nunca'},{v:1,l:'Menos de una vez al mes'},{v:2,l:'Mensualmente'},{v:3,l:'Semanalmente'},{v:4,l:'A diario o casi a diario'}]},
+  {t:'¿Con qué frecuencia en el último año no pudo recordar lo que sucedió la noche anterior por haber bebido?',opts:[{v:0,l:'Nunca'},{v:1,l:'Menos de una vez al mes'},{v:2,l:'Mensualmente'},{v:3,l:'Semanalmente'},{v:4,l:'A diario o casi a diario'}]},
+  {t:'¿Usted o alguna otra persona ha resultado herida porque usted había bebido?',opts:[{v:0,l:'No'},{v:2,l:'Sí, pero no en el último año'},{v:4,l:'Sí, el último año'}]},
+  {t:'¿Algún familiar, amigo, médico o profesional ha mostrado preocupación por su consumo de alcohol o le ha sugerido que deje de beber?',opts:[{v:0,l:'No'},{v:2,l:'Sí, pero no en el último año'},{v:4,l:'Sí, el último año'}]}
+];
+
+function _auditInterp(score){
+  if(score<=7) return {label:'Sin riesgo / Consumo de bajo riesgo',color:'var(--green)',accion:'No requiere intervención',cat:'bajo'};
+  if(score<=15) return {label:'Consumo de riesgo',color:'var(--yellow)',accion:'Consejería breve',cat:'riesgo'};
+  if(score<=19) return {label:'Consumo perjudicial',color:'var(--orange,#ff8c00)',accion:'Intervención breve + evaluación',cat:'perjudicial'};
+  return {label:'Dependencia probable',color:'var(--red)',accion:'Canalizar a EPS urgente',cat:'dependencia'};
+}
+
+function openModalAUDIT(){
+  const prev=STATE.draft3['tam_audit'];
+  STATE._auditAns=prev?.resp?[...prev.resp]:new Array(10).fill(null);
+  _renderAUDITModal();
+}
+function _renderAUDITModal(){
+  const ans=STATE._auditAns;
+  const done=ans.filter(x=>x!==null).length;
+  const score=ans.reduce((s,x)=>s!=null&&x!=null?s+x:s,0);
+  const r=done>0?_auditInterp(score):null;
+  const rows=AUDIT_PREGUNTAS.map((p,i)=>`
+    <div class="ins-q">
+      <div class="field-label" style="margin-bottom:8px"><span class="field-num">${i+1}</span>${esc(p.t)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${p.opts.map(o=>`<button type="button" class="scale-btn${ans[i]===o.v?' sel-ok':''}" style="flex:1;min-width:80px;font-size:11px"
+          onclick="auditPick(${i},${o.v})">${esc(o.l)} <span class="sv">(${o.v})</span></button>`).join('')}
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-title">🍺 AUDIT — Identificación de Trastornos por Alcohol</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">10 preguntas · ${done}/10 respondidas · Puntuación: <b>${score}</b>/40</p>
+      <div class="prog-bar"><div class="prog-fill" id="aud-bar" style="width:${(done/10*100).toFixed(0)}%"></div></div>
+      ${rows}
+      ${r?`<div class="score-panel" style="border-color:${r.color}">
+        <div style="font-size:11px;color:var(--muted)">PUNTAJE TOTAL</div>
+        <div class="snum" style="color:${r.color}">${score}</div>
+        <div class="slbl" style="color:${r.color}">${esc(r.label)}</div>
+        <div class="ssub">${esc(r.accion)}</div>
+      </div>`:''}
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="guardarAUDIT()">Guardar AUDIT</button>
+      </div>
+    </div>
+  </div>`;}
+function auditPick(qi,v){
+  STATE._auditAns[qi]=v;
+  const done=STATE._auditAns.filter(x=>x!==null).length;
+  const score=STATE._auditAns.reduce((s,x)=>x!=null?s+x:s,0);
+  const bar=document.getElementById('aud-bar');
+  if(bar)bar.style.width=(done/10*100).toFixed(0)+'%';
+  document.querySelectorAll('.ins-q').forEach((row,i)=>{
+    row.querySelectorAll('.scale-btn').forEach(b=>{
+      b.classList.toggle('sel-ok',b.getAttribute('onclick')===`auditPick(${i},${STATE._auditAns[i]})`);
+    });
+  });
+  const r=_auditInterp(score);
+  const panel=document.querySelector('#modal-root .score-panel');
+  if(panel){
+    panel.style.borderColor=r.color;
+    const num=panel.querySelector('.snum');const lbl=panel.querySelector('.slbl');const sub=panel.querySelector('.ssub');
+    if(num){num.style.color=r.color;num.textContent=score;}
+    if(lbl){lbl.style.color=r.color;lbl.textContent=r.label;}
+    if(sub)sub.textContent=r.accion;
+  } else {
+    const mp=document.querySelector('#modal-root .modal');
+    if(mp&&!mp.querySelector('.score-panel')){
+      const div=document.createElement('div');
+      div.className='score-panel';div.style.borderColor=r.color;
+      div.innerHTML=`<div style="font-size:11px;color:var(--muted)">PUNTAJE TOTAL</div><div class="snum" style="color:${r.color}">${score}</div><div class="slbl" style="color:${r.color}">${esc(r.label)}</div><div class="ssub">${esc(r.accion)}</div>`;
+      mp.querySelector('.prog-bar').after(div);
+    }
+  }
+}
+function guardarAUDIT(){
+  const ans=STATE._auditAns;
+  const done=ans.filter(x=>x!==null).length;
+  if(done<10)return toast(`Complete todas las preguntas (${done}/10)`,'err');
+  const score=ans.reduce((s,x)=>s+x,0);
+  const r=_auditInterp(score);
+  STATE.draft3['tam_audit']={fecha:today(),resp:[...ans],score,nivel:r.cat};
+  delete STATE._auditAns;
+  closeModal();
+  toast('AUDIT guardado · Score '+score+' · '+r.label,'ok');
+  render();
+}
+
+// ============================================================
+// ██  ASSIST — Detección Consumo Alcohol, Tabaco y Sustancias
+// ============================================================
+const ASSIST_SUST=[
+  {k:'tabaco',l:'Tabaco'},
+  {k:'alcohol',l:'Alcohol'},
+  {k:'cannabis',l:'Cannabis'},
+  {k:'cocaina',l:'Cocaína'},
+  {k:'anfetaminas',l:'Anfetaminas/estimulantes'},
+  {k:'inhalantes',l:'Inhalantes'},
+  {k:'tranquilizantes',l:'Tranquilizantes/somníferos'},
+  {k:'alucinogenos',l:'Alucinógenos'},
+  {k:'opiaceos',l:'Opiáceos'},
+  {k:'otros',l:'Otras sustancias'}
+];
+const ASSIST_Q2_7_OPTS=[{v:0,l:'Nunca'},{v:2,l:'1-2 veces'},{v:3,l:'Cada mes'},{v:4,l:'Cada semana'},{v:6,l:'A diario'}];
+const ASSIST_Q6_7_OPTS=[{v:0,l:'No, nunca'},{v:6,l:'Sí, últimos 3 meses'},{v:3,l:'Sí, antes'}];
+const ASSIST_Q8_OPTS=[{v:0,l:'No, nunca'},{v:2,l:'Sí, últimos 3 meses'},{v:1,l:'Sí, pero antes'}];
+
+function _assistInterp(score,sustKey){
+  const sust=ASSIST_SUST.find(s=>s.k===sustKey)?.l||sustKey;
+  if(score===0) return {label:'Sin consumo',color:'var(--green)',detail:'Sin riesgo detectado'};
+  if(score<=10) return {label:`Riesgo bajo: ${sust}`,color:'var(--green)',detail:'Consejería breve sobre riesgos'};
+  if(score<=26) return {label:`Riesgo moderado: ${sust}`,color:'var(--yellow)',detail:'Intervención breve recomendada'};
+  return {label:`Riesgo alto: ${sust}`,color:'var(--red)',detail:'Canalizar a EPS / Tratamiento intensivo'};
+}
+
+function _assistScores(data){
+  const scores={};
+  ASSIST_SUST.forEach(s=>{
+    const usedQ1=(data.q1||{})[s.k]===3;
+    if(!usedQ1){scores[s.k]=0;return;}
+    let t=0;
+    [2,3,4,5,6,7].forEach(qi=>{const val=(data['q'+qi]||{})[s.k];if(val!=null)t+=val;});
+    scores[s.k]=t;
+  });
+  return scores;
+}
+
+function openModalASSIST(){
+  const prev=STATE.draft3['tam_assist']||{};
+  STATE._assist={
+    q1:{...({tabaco:0,alcohol:0,cannabis:0,cocaina:0,anfetaminas:0,inhalantes:0,tranquilizantes:0,alucinogenos:0,opiaceos:0,otros:0},...(prev.q1||{}))},
+    q2:{...(prev.q2||{})},q3:{...(prev.q3||{})},q4:{...(prev.q4||{})},
+    q5:{...(prev.q5||{})},q6:{...(prev.q6||{})},q7:{...(prev.q7||{})},
+    q8:prev.q8??null
+  };
+  _renderASSISTModal();
+}
+function _renderASSISTModal(){
+  const a=STATE._assist;
+  const usedSust=ASSIST_SUST.filter(s=>a.q1[s.k]===3);
+
+  const q1rows=ASSIST_SUST.map(s=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;font-size:13px">${esc(s.l)}</div>
+      <button type="button" class="scale-btn${a.q1[s.k]===0?' sel-err':''}" style="min-width:44px" onclick="assistQ1('${s.k}',0)">NO</button>
+      <button type="button" class="scale-btn${a.q1[s.k]===3?' sel-ok':''}" style="min-width:44px" onclick="assistQ1('${s.k}',3)">SÍ</button>
+    </div>`).join('');
+
+  const makeFreqRows=(qn,label,opts)=>usedSust.length===0?'':`
+    <div style="margin-top:12px;padding:8px 0;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">P${qn}: ${esc(label)}</div>
+      ${usedSust.map(s=>`
+        <div style="margin-bottom:8px">
+          <div style="font-size:12px;margin-bottom:4px;font-weight:500">${esc(s.l)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${opts.map(o=>`<button type="button" class="scale-btn${(a['q'+qn]||{})[s.k]===o.v?' sel-ok':''}" style="flex:1;min-width:60px;font-size:11px"
+              onclick="assistQ('q${qn}','${s.k}',${o.v})">${esc(o.l)}</button>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`;
+
+  const scores=_assistScores(a);
+  const maxScore=Math.max(0,...Object.values(scores));
+  const riskSust=ASSIST_SUST.filter(s=>scores[s.k]>0).map(s=>{
+    const r=_assistInterp(scores[s.k],s.k);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
+      <span style="font-size:12px">${esc(s.l)}</span>
+      <span style="font-size:12px;font-weight:700;color:${r.color}">${scores[s.k]} — ${esc(r.label.split(':')[0])}</span>
+    </div>`;}).join('');
+
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:540px">
+      <div class="modal-title">💊 ASSIST — Detección de Consumo de Sustancias</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Marque todas las sustancias consumidas alguna vez (P1), luego complete las preguntas 2-8 para las sustancias marcadas.</p>
+
+      <div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">P1: ¿Cuál de las siguientes sustancias ha consumido ALGUNA VEZ? (solo uso no médico)</div>
+        ${q1rows}
+      </div>
+
+      ${makeFreqRows(2,'¿Con qué frecuencia ha consumido en los últimos 3 meses?',ASSIST_Q2_7_OPTS)}
+      ${makeFreqRows(3,'¿Con qué frecuencia tuvo deseos o ansias de consumir en los últimos 3 meses?',ASSIST_Q2_7_OPTS)}
+      ${makeFreqRows(4,'¿Con qué frecuencia su consumo le causó problemas (salud, social, legal, económico)?',ASSIST_Q2_7_OPTS)}
+      ${makeFreqRows(5,'¿Con qué frecuencia dejó de hacer lo que se esperaba de usted por el consumo?',ASSIST_Q2_7_OPTS)}
+      ${usedSust.length>0?makeFreqRows(6,'¿Algún familiar/amigo mostró preocupación por su consumo?',ASSIST_Q6_7_OPTS):''}
+      ${usedSust.length>0?makeFreqRows(7,'¿Ha intentado controlar, reducir o dejar de consumir y no lo ha logrado?',ASSIST_Q6_7_OPTS):''}
+
+      <div style="margin-top:12px;padding:8px 0;border-top:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">P8: ¿Ha consumido alguna droga por vía inyectada? (uso no médico)</div>
+        <div style="display:flex;gap:6px">
+          ${ASSIST_Q8_OPTS.map(o=>`<button type="button" class="scale-btn${a.q8===o.v?' sel-ok':''}" style="flex:1;font-size:11px"
+            onclick="assistQ8(${o.v})">${esc(o.l)}</button>`).join('')}
+        </div>
+      </div>
+
+      ${maxScore>0?`<div class="score-panel" style="border-color:var(--purple)">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">RESULTADOS POR SUSTANCIA</div>
+        ${riskSust||'<div style="font-size:12px;color:var(--muted)">Sin puntuación — complete las preguntas 2-7</div>'}
+      </div>`:''}
+
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="guardarASSIST()">Guardar ASSIST</button>
+      </div>
+    </div>
+  </div>`;}
+
+function assistQ1(sKey,v){
+  STATE._assist.q1[sKey]=v;
+  // Clear Q2-Q7 for this substance if deselected
+  if(v===0)[2,3,4,5,6,7].forEach(qi=>{if(STATE._assist['q'+qi])delete STATE._assist['q'+qi][sKey];});
+  _renderASSISTModal();
+}
+function assistQ(qKey,sKey,v){
+  if(!STATE._assist[qKey])STATE._assist[qKey]={};
+  STATE._assist[qKey][sKey]=v;
+  _renderASSISTModal();
+}
+function assistQ8(v){STATE._assist.q8=v;_renderASSISTModal();}
+function guardarASSIST(){
+  const a=STATE._assist;
+  const usedSust=ASSIST_SUST.filter(s=>a.q1[s.k]===3);
+  if(a.q8===null)return toast('Responda la pregunta 8 (uso de drogas inyectadas)','err');
+  const scores=_assistScores(a);
+  STATE.draft3['tam_assist']={fecha:today(),...a,scores};
+  delete STATE._assist;
+  closeModal();
+  const maxK=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];
+  toast('ASSIST guardado · '+(maxK&&maxK[1]>0?`Mayor riesgo: ${ASSIST_SUST.find(s=>s.k===maxK[0])?.l||maxK[0]} (${maxK[1]} pts)`:'Sin consumo detectado'),'ok');
+  render();
+}
+
+// ============================================================
+// ██  RQC — Salud Mental en Niños y Adolescentes
+// ============================================================
+const RQC_PREGUNTAS=[
+  '¿El lenguaje del niño(a) es anormal en alguna forma?',
+  '¿El niño(a) duerme mal?',
+  '¿Ha tenido el niño(a) en algunas ocasiones convulsiones o caídas sin razón?',
+  '¿Sufre el niño(a) de dolores fuertes de cabeza?',
+  '¿El niño(a) ha huido de la casa frecuentemente?',
+  '¿El niño(a) ha robado cosas de la casa?',
+  '¿El niño(a) se asusta o pone nervioso sin razón?',
+  '¿Parece como si fuese lento para aprender cuando se le compara con otros niños de su misma edad?',
+  '¿El niño(a) casi nunca juega con otros niños(as)?',
+  '¿El niño(a) se orina o defeca en su ropa?'
+];
+
+function _rqcInterp(score){
+  if(score===0)return{label:'Sin hallazgos',color:'var(--green)',accion:'Sin indicación de intervención'};
+  if(score<=2)return{label:'Riesgo leve',color:'var(--yellow)',accion:'Monitoreo y seguimiento'};
+  return{label:'Riesgo alto — Posible problema de salud mental',color:'var(--red)',accion:'Canalizar a EPS para evaluación especializada'};
+}
+
+function openModalRQC(){
+  const prev=STATE.draft3['tam_rqc'];
+  STATE._rqcAns=prev?.resp?[...prev.resp]:new Array(10).fill(null);
+  _renderRQCModal();
+}
+function _renderRQCModal(){
+  const ans=STATE._rqcAns;
+  const done=ans.filter(x=>x!==null).length;
+  const score=ans.filter(x=>x==='1').length;
+  const r=done>0?_rqcInterp(score):null;
+  const rows=RQC_PREGUNTAS.map((p,i)=>`
+    <div class="ins-q" style="margin-bottom:10px">
+      <div class="field-label" style="margin-bottom:6px"><span class="field-num">${i+1}</span>${esc(p)}</div>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="scale-btn${ans[i]==='1'?' sel-ok':''}" style="flex:1" onclick="rqcPick(${i},'1')">SÍ</button>
+        <button type="button" class="scale-btn${ans[i]==='0'?' sel-err':''}" style="flex:1" onclick="rqcPick(${i},'0')">NO</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-title">🧒 RQC — Salud Mental Niños y Adolescentes</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">10 preguntas · Responda SÍ o NO · ${done}/10 respondidas</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;font-style:italic">Respondido por el padre/madre/cuidador del niño(a)</p>
+      <div class="prog-bar"><div class="prog-fill" id="rqc-bar" style="width:${(done/10*100).toFixed(0)}%"></div></div>
+      ${rows}
+      ${r?`<div class="score-panel" style="border-color:${r.color}">
+        <div style="font-size:11px;color:var(--muted)">RESULTADO</div>
+        <div class="snum" style="color:${r.color}">${score}</div>
+        <div class="slbl" style="color:${r.color}">${esc(r.label)}</div>
+        <div class="ssub">${esc(r.accion)}</div>
+      </div>`:''}
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="guardarRQC()">Guardar RQC</button>
+      </div>
+    </div>
+  </div>`;}
+function rqcPick(qi,v){
+  STATE._rqcAns[qi]=v;
+  const done=STATE._rqcAns.filter(x=>x!==null).length;
+  const score=STATE._rqcAns.filter(x=>x==='1').length;
+  const bar=document.getElementById('rqc-bar');
+  if(bar)bar.style.width=(done/10*100).toFixed(0)+'%';
+  document.querySelectorAll('.ins-q').forEach((row,i)=>{
+    row.querySelectorAll('.scale-btn').forEach(b=>{
+      const onc=b.getAttribute('onclick');
+      b.classList.remove('sel-ok','sel-err');
+      if(onc===`rqcPick(${i},'1')`&&STATE._rqcAns[i]==='1') b.classList.add('sel-ok');
+      if(onc===`rqcPick(${i},'0')`&&STATE._rqcAns[i]==='0') b.classList.add('sel-err');
+    });
+  });
+  const r=_rqcInterp(score);
+  const panel=document.querySelector('#modal-root .score-panel');
+  if(panel){
+    panel.style.borderColor=r.color;
+    const num=panel.querySelector('.snum');const lbl=panel.querySelector('.slbl');const sub=panel.querySelector('.ssub');
+    if(num){num.style.color=r.color;num.textContent=score;}
+    if(lbl){lbl.style.color=r.color;lbl.textContent=r.label;}
+    if(sub)sub.textContent=r.accion;
+  }
+}
+function guardarRQC(){
+  const ans=STATE._rqcAns;
+  const done=ans.filter(x=>x!==null).length;
+  if(done<10)return toast(`Complete todas las preguntas (${done}/10)`,'err');
+  const score=ans.filter(x=>x==='1').length;
+  const r=_rqcInterp(score);
+  STATE.draft3['tam_rqc']={fecha:today(),resp:[...ans],score,riesgo:score>=3?'alto':'bajo'};
+  delete STATE._rqcAns;
+  closeModal();
+  toast('RQC guardado · '+score+' positivos · '+r.label,'ok');
+  render();
+}
 
 async function savePersona(){
   const d=STATE.draft3;
