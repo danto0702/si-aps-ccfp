@@ -5355,9 +5355,21 @@ async function downloadExcel() {
 // ============================================================
 // IMPRIMIR CARACTERIZACIÓN COMPLETA (PDF)
 // ============================================================
-function imprimirCaracterizacion(famId) {
+async function imprimirCaracterizacion(famId) {
   const fam = STATE.familias.find(f => f.id === famId);
   if (!fam) { toast('Familia no encontrada','err'); return; }
+
+  // Pre-cargar banner como data URL para que funcione en contexto blob:
+  let bannerSrc = './banner.png';
+  try {
+    const _resp = await fetch('./banner.png');
+    const _blob = await _resp.blob();
+    bannerSrc = await new Promise(res => {
+      const _r = new FileReader();
+      _r.onload = e => res(e.target.result);
+      _r.readAsDataURL(_blob);
+    });
+  } catch(_e) { /* mantener ruta relativa como fallback */ }
 
   const d2 = fam.d2 || {};
   const personas = fam.personas || [];
@@ -5657,14 +5669,14 @@ function imprimirCaracterizacion(famId) {
 <body>
 <!-- Banner institucional -->
 <div style="width:calc(100% + 40px);margin:-16px -20px 12px;line-height:0;overflow:hidden;border-radius:0 0 10px 10px">
-  <img src="./banner.png"
+  <img src="${bannerSrc}"
        alt="ESE Hospital Regional Noroccidental"
        style="width:100%;height:auto;display:block">
 </div>
 <div class="header">
   <div class="header-left">
     <h1>Caracterización Familiar y Personal</h1>
-    <h2>${esc(config.nit ? 'NIT: '+config.nit+' · '+d2['84'] : (d2['84']||'ESE Hospital Regional Noroccidental'))}</h2>
+    <h2>${esc(config.nit ? 'NIT: '+config.nit+' · '+(d2['84']||'ESE Hospital Regional Noroccidental') : (d2['84']||'ESE Hospital Regional Noroccidental'))}</h2>
     <h2>Período: ${config.fechaInicio||'—'} al ${config.fechaFin||'—'}</h2>
   </div>
   <div class="header-right">
