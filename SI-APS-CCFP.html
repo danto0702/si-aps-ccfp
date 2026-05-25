@@ -3324,9 +3324,10 @@ function renderT2Step1(d){
   // Build dropdown options from user's assigned EBS codes
   const _uzpeLbl = v => v === '41SR002' ? '41-SR00254' : v;
   const uzpeOpts = ebsOptsFor(2,9, _uzpeLbl);
-  // Si hay UZPE configurado en el panel y no está en la lista, agregarlo como primera opción
-  if (STATE.config.uzpe && !uzpeOpts.some(o => o.v === STATE.config.uzpe)) {
-    uzpeOpts.unshift({v: STATE.config.uzpe, l: _uzpeLbl(STATE.config.uzpe)});
+  // Garantizar que el valor actual (config o draft) esté siempre en la lista
+  const _uzpeRef = STATE.config.uzpe || d['4'] || '41SR002';
+  if (_uzpeRef && !uzpeOpts.some(o => o.v === _uzpeRef)) {
+    uzpeOpts.unshift({v: _uzpeRef, l: _uzpeLbl(_uzpeRef)});
   }
   // Territorio: auto-llenado desde TERRIT_MAP según EBS seleccionado
   const _terrInfo = terrInfoFor(d.ebs_num);
