@@ -4319,11 +4319,12 @@ function _assistScores(data){
 
 function openModalASSIST(){
   const prev=STATE.draft3['tam_assist']||{};
+  const _def={tabaco:0,alcohol:0,cannabis:0,cocaina:0,anfetaminas:0,inhalantes:0,tranquilizantes:0,alucinogenos:0,opiaceos:0,otros:0};
   STATE._assist={
-    q1:{...({tabaco:0,alcohol:0,cannabis:0,cocaina:0,anfetaminas:0,inhalantes:0,tranquilizantes:0,alucinogenos:0,opiaceos:0,otros:0},...(prev.q1||{}))},
-    q2:{...(prev.q2||{})},q3:{...(prev.q3||{})},q4:{...(prev.q4||{})},
-    q5:{...(prev.q5||{})},q6:{...(prev.q6||{})},q7:{...(prev.q7||{})},
-    q8:prev.q8??null
+    q1:Object.assign({},_def,prev.q1||{}),
+    q2:Object.assign({},prev.q2||{}),q3:Object.assign({},prev.q3||{}),q4:Object.assign({},prev.q4||{}),
+    q5:Object.assign({},prev.q5||{}),q6:Object.assign({},prev.q6||{}),q7:Object.assign({},prev.q7||{}),
+    q8:(prev.q8!=null?prev.q8:null)
   };
   _renderASSISTModal();
 }
