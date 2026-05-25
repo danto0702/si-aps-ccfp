@@ -4347,6 +4347,7 @@ function _renderASSISTModal(){
           <div style="font-size:12px;margin-bottom:4px;font-weight:500">${esc(s.l)}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">
             ${opts.map(o=>`<button type="button" class="scale-btn${(a['q'+qn]||{})[s.k]===o.v?' sel-ok':''}" style="flex:1;min-width:60px;font-size:11px"
+              data-q="q${qn}" data-sust="${s.k}" data-v="${o.v}"
               onclick="assistQ('q${qn}','${s.k}',${o.v})">${esc(o.l)}</button>`).join('')}
           </div>
         </div>`).join('')}
@@ -4383,6 +4384,7 @@ function _renderASSISTModal(){
         <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">P8: ¿Ha consumido alguna droga por vía inyectada? (uso no médico)</div>
         <div style="display:flex;gap:6px">
           ${ASSIST_Q8_OPTS.map(o=>`<button type="button" class="scale-btn${a.q8===o.v?' sel-ok':''}" style="flex:1;font-size:11px"
+            data-q="q8" data-v="${o.v}"
             onclick="assistQ8(${o.v})">${esc(o.l)}</button>`).join('')}
         </div>
       </div>
@@ -4401,16 +4403,49 @@ function _renderASSISTModal(){
 
 function assistQ1(sKey,v){
   STATE._assist.q1[sKey]=v;
-  // Clear Q2-Q7 for this substance if deselected
   if(v===0)[2,3,4,5,6,7].forEach(qi=>{if(STATE._assist['q'+qi])delete STATE._assist['q'+qi][sKey];});
+  // Q1 cambia la estructura (aparecen/desaparecen preguntas): re-render pero conserva scroll
+  const overlay=document.querySelector('#modal-root .modal-overlay');
+  const scrollTop=overlay?overlay.scrollTop:0;
   _renderASSISTModal();
+  const newOverlay=document.querySelector('#modal-root .modal-overlay');
+  if(newOverlay) newOverlay.scrollTop=scrollTop;
 }
 function assistQ(qKey,sKey,v){
   if(!STATE._assist[qKey])STATE._assist[qKey]={};
   STATE._assist[qKey][sKey]=v;
-  _renderASSISTModal();
+  // Solo actualiza botones del grupo y panel de puntaje — sin re-render
+  document.querySelectorAll(`[data-q="${qKey}"][data-sust="${sKey}"]`).forEach(btn=>{
+    btn.classList.toggle('sel-ok', Number(btn.dataset.v)===v);
+  });
+  _assistUpdateScorePanel();
 }
-function assistQ8(v){STATE._assist.q8=v;_renderASSISTModal();}
+function assistQ8(v){
+  STATE._assist.q8=v;
+  document.querySelectorAll('[data-q="q8"]').forEach(btn=>{
+    btn.classList.toggle('sel-ok', Number(btn.dataset.v)===v);
+  });
+}
+function _assistUpdateScorePanel(){
+  const scores=_assistScores(STATE._assist);
+  const maxScore=Math.max(0,...Object.values(scores));
+  const riskHtml=ASSIST_SUST.filter(s=>scores[s.k]>0).map(s=>{
+    const r=_assistInterp(scores[s.k],s.k);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
+      <span style="font-size:12px">${esc(s.l)}</span>
+      <span style="font-size:12px;font-weight:700;color:${r.color}">${scores[s.k]} — ${esc(r.label.split(':')[0])}</span>
+    </div>`;}).join('');
+  let panel=document.querySelector('#modal-root .score-panel');
+  if(!panel&&maxScore>0){
+    const footer=document.querySelector('#modal-root [style*="sticky"]');
+    if(footer){
+      panel=document.createElement('div');
+      panel.className='score-panel';panel.style.borderColor='var(--purple)';
+      footer.before(panel);
+    }
+  }
+  if(panel) panel.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">RESULTADOS POR SUSTANCIA</div>${riskHtml||'<div style="font-size:12px;color:var(--muted)">Sin puntuación — complete las preguntas 2-7</div>'}`;
+}
 function guardarASSIST(){
   const a=STATE._assist;
   const usedSust=ASSIST_SUST.filter(s=>a.q1[s.k]===3);
