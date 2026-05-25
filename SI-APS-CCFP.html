@@ -1152,6 +1152,28 @@ function ebsOptsFor(start, end, labelFn) {
   const vals = [...new Set(allKnownEBS().map(c=>c.slice(start,end)).filter(Boolean))].sort();
   return vals.map(v=>({v, l: labelFn ? labelFn(v) : v}));
 }
+// Mapa de territorialización Regional Occidente (41-SR00254)
+// Clave: número EBS con 3 dígitos → {tc: código territorio, tn: nombre territorio, micros:[{c,n}]}
+const TERRIT_MAP = {
+  '001':{tc:'T02',tn:'Capitanlargo',    micros:[{c:'MT01',n:'Vereda Capitanlargo'},{c:'MT02',n:'Chapinero'},{c:'MT03',n:'Las Rojas'},{c:'MT04',n:'El Potrero'}]},
+  '002':{tc:'T01',tn:'Hoyo Pilón',      micros:[{c:'MT01',n:'Vereda Hoyo Pilón'},{c:'MT02',n:'San Vicente'},{c:'MT03',n:'La Arenosa'},{c:'MT04',n:'La Motilona'}]},
+  '003':{tc:'T03',tn:'La Estrella',     micros:[{c:'MT01',n:'Barrio La Estrella'},{c:'MT02',n:'San Antonio'},{c:'MT03',n:'Villa del Rosario'},{c:'MT04',n:'Villa Celmira'}]},
+  '004':{tc:'T04',tn:'La Sierra',       micros:[{c:'MT01',n:'Vereda La Sierra'},{c:'MT02',n:'Pavez'},{c:'MT03',n:'El Guamal'},{c:'MT04',n:'Palmira'}]},
+  '005':{tc:'T05',tn:'Bridicayra',      micros:[{c:'MT01',n:'Bridikayra'},{c:'MT02',n:'Santa Fe - Honduras Motilona'},{c:'MT03',n:'Guasiles Sur - Norte - Honduras'},{c:'MT04',n:'La Libertad'}]},
+  '006':{tc:'T04',tn:'Campoalegre',     micros:[{c:'MT01',n:'Campo Alegre'},{c:'MT02',n:'San José de La Pitas - Llanos de Belén'},{c:'MT03',n:'Maicitos - Las Abejas - Las Palmas'},{c:'MT04',n:'La Trinidad'}]},
+  '007':{tc:'T02',tn:'Casa Blanca',     micros:[{c:'MT01',n:'Casa Blanca - Balcones'},{c:'MT02',n:'Egipto - Venaditos - Pueblo Nuevo'},{c:'MT03',n:'Tronqueros - San Cayetano'},{c:'MT04',n:'Cerro Gordo - Tierra Temple - Guayabal'}]},
+  '008':{tc:'T01',tn:'Cartagenita',     micros:[{c:'MT01',n:'Cartagenita - Miraflores - El Retiro - San Isidro - Gramales'},{c:'MT02',n:'Santa Bárbara - Alto Ventanas'},{c:'MT03',n:'La Carolina - Bella Luz - San Francisco'},{c:'MT04',n:'Patiecitos - Los Limos'}]},
+  '009':{tc:'T03',tn:'La Laguna',       micros:[{c:'MT01',n:'La Laguna - Líbano - Bella Unión'},{c:'MT02',n:'Guamal - Piedecuesta'},{c:'MT03',n:'Culebrita - Puente Burbura'},{c:'MT04',n:'El Poleo - La Vega'}]},
+  '010':{tc:'T02',tn:'Corrongkayra',    micros:[{c:'MT01',n:'Corrongkayra'},{c:'MT02',n:'Dos Quebradas'},{c:'MT03',n:'El Edén'},{c:'MT04',n:'Ichirringdakayra'}]},
+  '011':{tc:'T05',tn:'Guamalito',       micros:[{c:'MT01',n:'10 de Abril'},{c:'MT02',n:'Juan XXIII'},{c:'MT03',n:'Sector Norte'},{c:'MT04',n:'Villa Esperanza'}]},
+  '012':{tc:'T01',tn:'Santa Inés',      micros:[{c:'MT01',n:'Santa Inés'},{c:'MT02',n:'Boquerón'},{c:'MT03',n:'Camorra'},{c:'MT04',n:'Planadas Paraíso'}]},
+  '013':{tc:'T06',tn:'Tierra Azul',     micros:[{c:'MT01',n:'Páramo'},{c:'MT02',n:'San Vicente'},{c:'MT03',n:'Potrero Grande'},{c:'MT04',n:'San Francisco'},{c:'MT05',n:'La Estrella'},{c:'MT06',n:'Limonal'},{c:'MT07',n:'Quebrada Arriba'},{c:'MT08',n:'Tabacal'},{c:'MT09',n:'Lagunitas'}]},
+  '014':{tc:'T06',tn:'Aserrío',         micros:[{c:'MT01',n:'Aserrío 1'},{c:'MT02',n:'Aserrío 2'},{c:'MT03',n:'Aserrío 3'},{c:'MT04',n:'San Luis de Veguitas'}]},
+  '015':{tc:'T07',tn:'La Cecilia',      micros:[{c:'MT01',n:'La Cecilia'},{c:'MT02',n:'Platanal'},{c:'MT03',n:'Santa Inés'},{c:'MT04',n:'Villanueva'}]},
+  '016':{tc:'T08',tn:'San Juancito',    micros:[{c:'MT01',n:'San Juancito'},{c:'MT02',n:'Sacado'},{c:'MT03',n:'Mundo Nuevo'},{c:'MT04',n:'Tiradera'}]},
+  '017':{tc:'T05',tn:'San Pablo',       micros:[{c:'MT01',n:'San Pablo 1'},{c:'MT02',n:'San Pablo 2'},{c:'MT03',n:'Puente Azul'},{c:'MT04',n:'Mesones'}]}
+};
+function terrInfoFor(ebsNum){return TERRIT_MAP[String(ebsNum||'').padStart(3,'0')]||null;}
 function uid()     { return Math.random().toString(36).slice(2)+Date.now().toString(36); }
 function esc(s)    { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function today()   { return new Date().toISOString().slice(0,10); }
@@ -1573,11 +1595,11 @@ function renderConfig() {
         oninput="STATE.config.nit=this.value">
     </div>
     <div class="field">
-      <div class="field-label">Código UZPE / Subregión</div>
-      <input class="field-input" id="cfg-uzpe" type="text" maxlength="7"
-        value="${esc(c.uzpe||'')}" placeholder="Ej: UZPE002"
-        oninput="STATE.config.uzpe=this.value.toUpperCase()">
-      <div class="field-note">Se usará como valor predeterminado en el campo 4 del formulario.</div>
+      <div class="field-label">Código Subregión (campo 4)</div>
+      <input class="field-input" id="cfg-uzpe" type="text" maxlength="9"
+        value="${esc(c.uzpe||'')}" placeholder="Ej: 41SR002"
+        oninput="STATE.config.uzpe=this.value.toUpperCase().replace(/-/g,'')">
+      <div class="field-note">7 caracteres, sin guión. Regional Occidente: <strong>41SR002</strong> (muestra como 41-SR00254 en el formulario).</div>
     </div>
   </div>
   <div class="card">
@@ -2953,7 +2975,14 @@ function calcNumIdFamilia(d,idx){return calcNumVivienda(d,idx)+calcNumFamilia(d,
 function setDraft2(k,v){STATE.draft2[k]=v;}
 function setDraft3(k,v){STATE.draft3[k]=v;}
 // Select/date inputs: update state AND re-render (needed for conditional field show/hide)
-function setDraftSel2(k,v){STATE.draft2[k]=v;render();}
+function setDraftSel2(k,v){
+  STATE.draft2[k]=v;
+  if(k==='ebs_num'){
+    const t=terrInfoFor(v);
+    if(t){STATE.draft2['6']=t.tc;STATE.draft2['7']='';}
+  }
+  render();
+}
 function setDraftSel3(k,v){STATE.draft3[k]=v;render();}
 
 function toggleMulti2(campo,val){
@@ -3224,7 +3253,7 @@ function nuevaFamilia(){
   let maxFicha=0;
   for(const f of STATE.familias){const n=parseInt(f.d2?.['18']||'0')||0;if(n>maxFicha)maxFicha=n;}
   STATE.draft2={
-    '2':'1','3':'54','4':STATE.config.uzpe||'UZPE002','6':'T99','7':'MT99',
+    '2':'1','3':'54','4':STATE.config.uzpe||'41SR002','6':'T99','7':'MT99',
     ebs_num:'001',hogar_num:'',familia_num:'1',
     '15':'1','16':'1','17':'1','18':String(maxFicha+1),
     '20':STATE.config.nit||'','21':'CC','25':today()
@@ -3239,10 +3268,12 @@ function nuevaFamilia(){
     STATE.draft2['3']=ebsDefault.slice(0,2);
     STATE.draft2['4']=ebsDefault.slice(2,9);
     STATE.draft2['5']=ebsDefault.slice(9,14);
-    STATE.draft2['6']=ebsDefault.slice(14,17);
-    STATE.draft2['7']=ebsDefault.slice(17,21);
     STATE.draft2.ebs_num=ebsDefault.slice(24,27);
     STATE.draft2['16']=String(parseInt(ebsDefault.slice(24,27))||1);
+    // Territorio y microterritorio desde TERRIT_MAP (prioridad sobre el código EBS almacenado)
+    const _ti=terrInfoFor(STATE.draft2.ebs_num);
+    if(_ti){STATE.draft2['6']=_ti.tc;STATE.draft2['7']='';}
+    else{STATE.draft2['6']=ebsDefault.slice(14,17);STATE.draft2['7']=ebsDefault.slice(17,21);}
   }
   navigate('familia_t2');
 }
@@ -3291,13 +3322,20 @@ function renderT2Step1(d){
   const idx=STATE.editFamId?STATE.familias.findIndex(f=>f.id===STATE.editFamId):STATE.familias.length;
   const ebsCode=calcEBS(d),numViv=calcNumVivienda(d,idx),numFam=calcNumFamilia(d,idx),codFicha=calcCodFicha(d,idx);
   // Build dropdown options from user's assigned EBS codes
-  const uzpeOpts = ebsOptsFor(2,9);
+  const _uzpeLbl = v => v === '41SR002' ? '41-SR00254' : v;
+  const uzpeOpts = ebsOptsFor(2,9, _uzpeLbl);
   // Si hay UZPE configurado en el panel y no está en la lista, agregarlo como primera opción
   if (STATE.config.uzpe && !uzpeOpts.some(o => o.v === STATE.config.uzpe)) {
-    uzpeOpts.unshift({v: STATE.config.uzpe, l: STATE.config.uzpe});
+    uzpeOpts.unshift({v: STATE.config.uzpe, l: _uzpeLbl(STATE.config.uzpe)});
   }
-  const terrOpts = ebsOptsFor(14,17);
-  const microOpts= ebsOptsFor(17,21);
+  // Territorio: auto-llenado desde TERRIT_MAP según EBS seleccionado
+  const _terrInfo = terrInfoFor(d.ebs_num);
+  if(_terrInfo && STATE.draft2['6'] !== _terrInfo.tc){STATE.draft2['6']=_terrInfo.tc;}
+  const _terrDisplay = _terrInfo ? `${_terrInfo.tc} – ${_terrInfo.tn}` : (d['6']||'—');
+  // Microterritorio: opciones en cascada según el territorio del EBS
+  const microOpts = _terrInfo
+    ? _terrInfo.micros.map(m=>({v:m.c, l:`${m.c} – ${m.n}`}))
+    : ebsOptsFor(17,21);
   // Si el admin configuró EBS en el panel, usar esa lista; si no, derivar del código de usuario
   const ebsNumOpts=STATE.ebsList?.length
     ? STATE.ebsList.map(e=>({v:e.num, l:fmtEBS(e)}))
@@ -3323,16 +3361,10 @@ function renderT2Step1(d){
       ? sel(muniOpts,'5',d['5']||'',true)
       : txt('5',d['5']||'',5,true,'Ej: 54003')}
     <div class="grid-2">
-      ${(STATE.fieldConfig?.t2?.['6']?.options?.length)
-        ? sel(STATE.fieldConfig.t2['6'].options,'6',d['6']||STATE.fieldConfig.t2['6'].defaultVal||STATE.fieldConfig.t2['6'].options[0]?.v||'',true)
-        : terrOpts.length
-          ? sel(terrOpts,'6',d['6']||terrOpts[0]?.v||'',true)
-          : txt('6',d['6']||'',3,true,'Ej: T01')}
-      ${(STATE.fieldConfig?.t2?.['7']?.options?.length)
-        ? sel(STATE.fieldConfig.t2['7'].options,'7',d['7']||STATE.fieldConfig.t2['7'].defaultVal||STATE.fieldConfig.t2['7'].options[0]?.v||'',true)
-        : microOpts.length
-          ? sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true)
-          : txt('7',d['7']||'',4,true,'Ej: MT01')}
+      <div class="field">${fl('6',true)}<div class="field-ro" style="color:var(--green)">${esc(_terrDisplay)}</div><div class="field-note">Auto-llenado según el EBS</div></div>
+      ${microOpts.length
+        ? sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true)
+        : txt('7',d['7']||'',4,true,'Ej: MT01')}
     </div>
     ${txt('8',d['8']||'',200,true,'Nombre del corregimiento, vereda, barrio...')}
     ${txt('9',d['9']||'',200,false,'Dirección (opcional)')}
