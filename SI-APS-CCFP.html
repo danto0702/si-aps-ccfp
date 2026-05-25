@@ -3109,7 +3109,32 @@ function setDraftSel2(k,v){
   STATE.draft2[k]=v;
   if(k==='ebs_num'){
     const t=terrInfoFor(v);
-    if(t){STATE.draft2['6']=t.tc;STATE.draft2['7']='';}
+    if(t){
+      STATE.draft2['6']=t.tc;
+      STATE.draft2['7']='';
+      // Admin: sincronizar municipio desde EBS seleccionado
+      if(isAdmin() && EBS_MUNI_MAP[String(v).padStart(3,'0')]){
+        STATE.draft2['5']=EBS_MUNI_MAP[String(v).padStart(3,'0')];
+      }
+    }
+  }
+  // Admin: al cambiar municipio, limpiar territorio, micro y ebs
+  if(k==='5' && isAdmin()){
+    STATE.draft2['6']=''; STATE.draft2['7']=''; STATE.draft2.ebs_num='';
+  }
+  // Admin: al cambiar territorio, auto-derivar EBS y limpiar micro
+  if(k==='6' && isAdmin()){
+    STATE.draft2['7']='';
+    const muni=STATE.draft2['5'], terrCode=v;
+    if(muni && terrCode){
+      const match=Object.entries(EBS_MUNI_MAP)
+        .find(([num,m])=>m===muni && terrInfoFor(num)?.tc===terrCode);
+      if(match){
+        const num=match[0];
+        STATE.draft2.ebs_num=num;
+        STATE.draft2['16']=String(parseInt(num)||1);
+      }
+    }
   }
   render();
 }
@@ -3382,9 +3407,14 @@ function nuevaFamilia(){
   // Auto-generate campo 18: next ficha number after existing max
   let maxFicha=0;
   for(const f of STATE.familias){const n=parseInt(f.d2?.['18']||'0')||0;if(n>maxFicha)maxFicha=n;}
+  const _admin=isAdmin();
   STATE.draft2={
-    '2':'1','3':'54','4':STATE.config.uzpe||'41SR002','6':'T99','7':'MT99',
-    ebs_num:'001',hogar_num:'',familia_num:'1',
+    '2':'1','3':'54','4':STATE.config.uzpe||'41SR002',
+    '5':_admin?'':'',               // municipio: vacío siempre al inicio
+    '6':_admin?'':'T99',            // territorio: vacío para admin, placeholder para campo
+    '7':_admin?'':'MT99',           // microterritorio: ídem
+    ebs_num:_admin?'':'001',        // admin sin EBS pre-asignado
+    hogar_num:'',familia_num:'1',
     '15':'1','16':'1','17':'1','18':String(maxFicha+1),
     '20':STATE.config.nit||'','21':'CC','25':today()
   };
@@ -3459,14 +3489,42 @@ function renderT2Step1(d){
   if (_uzpeRef && !uzpeOpts.some(o => o.v === _uzpeRef)) {
     uzpeOpts.unshift({v: _uzpeRef, l: _uzpeLbl(_uzpeRef)});
   }
-  // Territorio: auto-llenado desde TERRIT_MAP según EBS seleccionado
+  // ── Territorio y Microterritorio — lógica diferenciada admin vs campo ──
   const _terrInfo = terrInfoFor(d.ebs_num);
-  if(_terrInfo && STATE.draft2['6'] !== _terrInfo.tc){STATE.draft2['6']=_terrInfo.tc;}
-  const _terrDisplay = _terrInfo ? `${_terrInfo.tc} – ${_terrInfo.tn}` : (d['6']||'—');
-  // Microterritorio: opciones en cascada según el territorio del EBS
-  const microOpts = _terrInfo
-    ? _terrInfo.micros.map(m=>({v:m.c, l:`${m.c} – ${m.n}`}))
-    : ebsOptsFor(17,21);
+  let _terrFieldHtml, _microFieldHtml;
+  if (isAdmin()) {
+    // Admin: cascada libre municipio → territorio → microterritorio
+    const muniSel = d['5']||'';
+    if (muniSel) {
+      // Territorios del municipio seleccionado (dedup por tc)
+      const seen=new Set(), terrOpts=[];
+      Object.entries(EBS_MUNI_MAP).forEach(([num,m])=>{
+        if(m===muniSel){const ti=terrInfoFor(num);if(ti&&!seen.has(ti.tc)){seen.add(ti.tc);terrOpts.push({v:ti.tc,l:`${ti.tc} – ${ti.tn}`});}}
+      });
+      _terrFieldHtml = sel(terrOpts,'6',d['6']||'',true);
+    } else {
+      _terrFieldHtml = `<div class="field">${fl('6',true)}<div class="field-ro" style="color:var(--muted);font-style:italic">Seleccione municipio primero</div></div>`;
+    }
+    // Microterritorio: de la info del territorio seleccionado
+    const terrSel = d['6']||'';
+    if (terrSel && muniSel) {
+      const matchEBS = Object.entries(EBS_MUNI_MAP)
+        .find(([num,m])=>m===muniSel && terrInfoFor(num)?.tc===terrSel);
+      const microOpts = matchEBS ? (terrInfoFor(matchEBS[0])?.micros||[]).map(m=>({v:m.c,l:`${m.c} – ${m.n}`})) : [];
+      _microFieldHtml = sel(microOpts,'7',d['7']||'',true);
+    } else {
+      _microFieldHtml = `<div class="field">${fl('7',true)}<div class="field-ro" style="color:var(--muted);font-style:italic">Seleccione territorio primero</div></div>`;
+    }
+  } else {
+    // Usuario de campo: territorio auto-llenado desde su EBS asignado
+    if(_terrInfo && STATE.draft2['6'] !== _terrInfo.tc){STATE.draft2['6']=_terrInfo.tc;}
+    const _terrDisplay = _terrInfo ? `${_terrInfo.tc} – ${_terrInfo.tn}` : (d['6']||'—');
+    _terrFieldHtml = `<div class="field">${fl('6',true)}<div class="field-ro" style="color:var(--green)">${esc(_terrDisplay)}</div><div class="field-note">Auto-llenado según el EBS</div></div>`;
+    const microOpts = _terrInfo
+      ? _terrInfo.micros.map(m=>({v:m.c,l:`${m.c} – ${m.n}`}))
+      : ebsOptsFor(17,21);
+    _microFieldHtml = sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true);
+  }
   // Si el admin configuró EBS en el panel, usar esa lista; si no, derivar del código de usuario
   const ebsNumOpts=STATE.ebsList?.length
     ? STATE.ebsList.map(e=>({v:e.num, l:fmtEBS(e)}))
@@ -3492,10 +3550,8 @@ function renderT2Step1(d){
       ? sel(muniOpts,'5',d['5']||'',true)
       : txt('5',d['5']||'',5,true,'Ej: 54003')}
     <div class="grid-2">
-      <div class="field">${fl('6',true)}<div class="field-ro" style="color:var(--green)">${esc(_terrDisplay)}</div><div class="field-note">Auto-llenado según el EBS</div></div>
-      ${microOpts.length
-        ? sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true)
-        : txt('7',d['7']||'',4,true,'Ej: MT01')}
+      ${_terrFieldHtml}
+      ${_microFieldHtml}
     </div>
     ${txt('8',d['8']||'',200,true,'Nombre del corregimiento, vereda, barrio...')}
     ${txt('9',d['9']||'',200,false,'Dirección (opcional)')}
