@@ -3275,7 +3275,7 @@ function setSino3(campo,val){STATE.draft3[campo]=(STATE.draft3[campo]===val)?'':
 // ══════════════════════════════════════════════════════════════════════════
 
 function calcPCI(ea,em,sexo,cond){
-  const plan={paciente:{ciclo_vital_asignado:null,ruta_especial:null},
+  const plan={paciente:{ciclo_vital_asignado:null,ruta_especial:null,sexo:sexo},
     plan_cuidado:{medicina_general:[],enfermeria:[],odontologia:[],psicologia:[],
       nutricion:[],laboratorios_y_apoyo_diagnostico:[],educacion_e_insumos:[]},alertas:[]};
   const pg=plan.plan_cuidado;const F=sexo==='F';const etm=ea*12+em;
@@ -3523,10 +3523,23 @@ function renderPCIBlock(d){
   </div>`;
   h+=`<button class="btn btn-primary" style="width:100%" onclick="generarPCI()">⚕ Generar Plan de Cuidado Individual</button>`;
 
+  const currentSexo=d['10']==='1'?'M':(d['10']==='2'?'F':'M');
   const pci=d['_pci'];
   if(pci){
-    try{const plan=typeof pci==='string'?JSON.parse(pci):pci;h+=renderPCIResult(plan);}
-    catch(e){}
+    try{
+      const plan=typeof pci==='string'?JSON.parse(pci):pci;
+      const planSexo=plan.paciente?.sexo;
+      // Actividades exclusivas de mujeres para detectar planes obsoletos sin sexo guardado
+      const femAct=['Valoración Clínica de Mama','Mamografía','Citología','ADN-VPH','Cervicovaginal','IVE','Gestante','Prenatal','Puerperio'];
+      const allItems=Object.values(plan.plan_cuidado||{}).flat().join(' ');
+      const hasFemAct=femAct.some(a=>allItems.includes(a));
+      const mismatch=(planSexo&&planSexo!==currentSexo)||(!planSexo&&hasFemAct&&currentSexo==='M');
+      if(mismatch){
+        h+=`<div class="pci-alert" style="margin-top:10px"><span style="flex-shrink:0">⚠</span><span>El plan guardado contiene actividades que no corresponden al sexo actual del paciente (<b>${currentSexo==='F'?'Femenino':'Masculino'}</b>). Presione <b>Generar Plan</b> para actualizarlo.</span></div>`;
+      }else{
+        h+=renderPCIResult(plan);
+      }
+    }catch(e){}
   }
   h+=`</div>`;return h;
 }
@@ -4310,6 +4323,7 @@ function renderT3List(){
           <div class="persona-avatar">${av}</div>
           <div class="persona-info"><div class="persona-nombre">${esc(nombre)}</div><div class="persona-meta">${esc(meta)}</div></div>
           <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" title="Generar Plan de Cuidado Individual" onclick="quickPCI('${fam.id}','${p.id}')">⚕</button>
             <button class="btn btn-secondary btn-sm" onclick="editPersona('${fam.id}','${p.id}')">✏</button>
             <button class="btn btn-danger btn-sm" onclick="deletePersona('${fam.id}','${p.id}')">🗑</button>
           </div>
@@ -4336,6 +4350,14 @@ function editPersona(famId,perId){
   STATE.editFamId=famId; STATE.editPerId=perId;
   STATE.draft3=JSON.parse(JSON.stringify(per.d3||{}));
   navigate('persona');
+}
+function quickPCI(famId,perId){
+  editPersona(famId,perId);
+  generarPCI();
+  setTimeout(()=>{
+    const el=document.getElementById('pci-result');
+    if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  },60);
 }
 async function deletePersona(famId,perId){
   if(!confirm('¿Eliminar esta persona?'))return;
