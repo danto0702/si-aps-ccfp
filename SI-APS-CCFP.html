@@ -3640,7 +3640,7 @@ function imprimirPCI(){
       </tr>
       <tr>
         <td style="padding:3px 8px 3px 0"><b style="color:#0d2447">Ciclo Vital:</b> ${esc(ciclo)}${plan.paciente.ruta_especial?' · <b style="color:#e94560">'+esc(plan.paciente.ruta_especial)+'</b>':''}</td>
-        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono:</b> ${esc(d['_tel']||'—')}${d['_email']?` &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> ${esc(d['_email'])}`:''}${!d['_email']?' &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> —':''}</td>
+        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono:</b> ${esc(d2['_tel']||'—')}${d2['_email']?` &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> ${esc(d2['_email'])}`:''}${!d2['_email']?' &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> —':''}</td>
       </tr>
     </table>
   </div>`;
