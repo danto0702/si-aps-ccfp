@@ -5943,8 +5943,8 @@ async function downloadExcelPCI() {
     toast('Preparando Excel PCI…','ok');
     await loadSheetJS();
     const XLSX = window.XLSX;
-    const myId = STATE.auth?.user?.id;
-    const fams = STATE.familias.filter(f => !f.deleted_at && (isAdmin() || f.created_by === myId));
+    // Mismo criterio que renderHome: todas las familias visibles sin filtro de autor
+    const fams = STATE.familias.filter(f => !f.deleted_at);
 
     const SRV_NAMES = {
       medicina_general: 'Medicina General',
@@ -6015,7 +6015,11 @@ async function downloadExcelPCI() {
       });
     });
 
-    if (rows.length <= 1) { toast('No hay planes de cuidado generados aun','err'); return; }
+    if (rows.length <= 1) {
+      const totalPers = fams.reduce((s,f)=>(f.personas||[]).length+s, 0);
+      toast('Sin PCI: ' + fams.length + ' familia(s), ' + totalPers + ' persona(s) revisadas — genere el PCI desde ⚕ en la lista de personas','err');
+      return;
+    }
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
