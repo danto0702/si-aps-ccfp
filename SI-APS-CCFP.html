@@ -5212,6 +5212,7 @@ function renderExport(){
   <div style="display:flex;flex-direction:column;gap:8px">
     <button class="btn btn-success btn-block" onclick="downloadFile()" ${!confOk?'disabled':''}>⬇ Descargar archivo PISIS (${esc(fileName)})</button>
     <button class="btn btn-primary btn-block" onclick="downloadExcel()">📊 Exportar Excel (T2 + T3)</button>
+    <button class="btn btn-primary btn-block" style="background:var(--purple)" onclick="downloadExcelPCI()">📋 Exportar Planes de Cuidado Individual (PCI)</button>
     <button class="btn btn-secondary btn-block" onclick="downloadJSON()">📄 Exportar JSON (backup)</button>
   </div>`;}
 
@@ -5934,6 +5935,103 @@ async function downloadExcel() {
     XLSX.writeFile(wb, `SI-APS-CCFP-${scope}-${date}-${modeTag}.xlsx`);
     toast('Excel descargado','ok');
   } catch(e) { toast('Error Excel: '+e.message,'err'); }
+}
+
+// ── Export: Excel Planes de Cuidado Individual ────────────────
+async function downloadExcelPCI() {
+  try {
+    toast('Preparando Excel PCI…','ok');
+    await loadSheetJS();
+    const XLSX = window.XLSX;
+    const myId = STATE.auth?.user?.id;
+    const fams = STATE.familias.filter(f => !f.deleted_at && (isAdmin() || f.created_by === myId));
+
+    const SRV_NAMES = {
+      medicina_general: 'Medicina General',
+      enfermeria: 'Enfermeria',
+      odontologia: 'Odontologia',
+      psicologia: 'Psicologia',
+      nutricion: 'Nutricion',
+      laboratorios_y_apoyo_diagnostico: 'Laboratorios y Apoyo Diagnostico',
+      educacion_e_insumos: 'Educacion e Insumos'
+    };
+    const SRV_KEYS = Object.keys(SRV_NAMES);
+
+    const headers = [
+      'Codigo Ficha','Nombre Completo','Fecha Nacimiento','Edad (anos)','Sexo',
+      'Municipio','Direccion','Telefono','Correo Electronico','EBS',
+      'Ciclo Vital','Ruta Especial',
+      ...SRV_KEYS.map(k => SRV_NAMES[k]),
+      'Codigos PISIS (Campo 28)','Actividades No Aplicables'
+    ];
+
+    const rows = [headers];
+    let total = 0;
+
+    fams.forEach((f, fi) => {
+      const d2 = f.d2 || {};
+      const ebsCode = calcEBS(d2);
+      const muniNombre = (typeof MUNIS_NS !== 'undefined' && MUNIS_NS[d2['5']]) || d2['5'] || '';
+      const direccion = d2['9'] || '';
+      const tel = d2['_tel'] || '';
+      const email = d2['_email'] || '';
+      const codFicha = calcCodFicha(d2, fi);
+
+      (f.personas || []).forEach(p => {
+        const d3 = p.d3 || {};
+        if (!d3['_pci']) return;
+        total++;
+
+        const nombre = [d3['3'],d3['4'],d3['5'],d3['6']].filter(Boolean).join(' ') || '';
+        const fechaNac = d3['9'] || '';
+        const edadVal = calcEdadAnios(d3['9']);
+        const sexoCod = d3['10'];
+        const sexo = sexoCod === '1' ? 'Masculino' : sexoCod === '2' ? 'Femenino' : '';
+
+        let plan;
+        try { plan = typeof d3['_pci'] === 'string' ? JSON.parse(d3['_pci']) : d3['_pci']; }
+        catch(e) { return; }
+        const unc = Array.isArray(d3['_pci_unchecked']) ? d3['_pci_unchecked'] : [];
+        const activePlan = getActivePlan(plan, unc);
+
+        const ciclo = plan.paciente?.ciclo_vital_asignado || '';
+        const ruta = plan.paciente?.ruta_especial || '';
+
+        const srvCols = SRV_KEYS.map(k => {
+          const items = activePlan.plan_cuidado?.[k] || [];
+          return items.join(' | ') || '';
+        });
+
+        const pisisCodes = Array.isArray(d3['28']) ? d3['28'].join(', ') : (d3['28'] || '');
+        const uncLabel = unc.length > 0 ? String(unc.length) + ' actividad(es) excluida(s)' : '';
+
+        rows.push([
+          codFicha, nombre, fechaNac, edadVal !== null ? edadVal : '', sexo,
+          muniNombre, direccion, tel, email, ebsCode,
+          ciclo, ruta,
+          ...srvCols,
+          pisisCodes, uncLabel
+        ]);
+      });
+    });
+
+    if (rows.length <= 1) { toast('No hay planes de cuidado generados aun','err'); return; }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [
+      {wch:18},{wch:32},{wch:14},{wch:10},{wch:12},
+      {wch:20},{wch:24},{wch:16},{wch:28},{wch:14},
+      {wch:24},{wch:26},
+      {wch:32},{wch:32},{wch:32},{wch:32},{wch:28},{wch:38},{wch:32},
+      {wch:24},{wch:28}
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Planes de Cuidado');
+    const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const scope = isAdmin() ? 'TOTAL' : 'PROPIO';
+    XLSX.writeFile(wb, 'SI-APS-PCI-' + scope + '-' + date + '.xlsx');
+    toast('Excel PCI descargado — ' + total + ' plan(es)','ok');
+  } catch(e) { toast('Error PCI Excel: '+e.message,'err'); }
 }
 
 // ============================================================
