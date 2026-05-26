@@ -4319,11 +4319,16 @@ function renderT3List(){
         const nombre=[pd['3'],pd['4'],pd['5'],pd['6']].filter(Boolean).join(' ')||'(sin nombre)';
         const meta=[pd['7']&&pd['8']?pd['7']+' '+pd['8']:'',pd['9']||'',REF.sexo.find(o=>o.v===pd['10'])?.l||''].filter(Boolean).join(' · ');
         const av=pd['10']==='1'?'👨':pd['10']==='2'?'👩':'🧑';
+        const tienePCI=!!pd['_pci'];
         return `<div class="persona-item">
           <div class="persona-avatar">${av}</div>
-          <div class="persona-info"><div class="persona-nombre">${esc(nombre)}</div><div class="persona-meta">${esc(meta)}</div></div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-secondary btn-sm" title="Generar Plan de Cuidado Individual" onclick="quickPCI('${fam.id}','${p.id}')">⚕</button>
+          <div class="persona-info">
+            <div class="persona-nombre">${esc(nombre)}${tienePCI?` <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(56,199,147,.15);color:var(--green);border:1px solid rgba(56,199,147,.3)">PCI ✓</span>`:''}</div>
+            <div class="persona-meta">${esc(meta)}</div>
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
+            ${tienePCI?`<button class="btn btn-secondary btn-sm" title="Descargar / imprimir Plan de Cuidado Individual" onclick="imprimirPCIPer('${fam.id}','${p.id}')">📄</button>`:''}
+            <button class="btn btn-secondary btn-sm" title="${tienePCI?'Regenerar':'Generar'} Plan de Cuidado Individual" onclick="quickPCI('${fam.id}','${p.id}')">⚕</button>
             <button class="btn btn-secondary btn-sm" onclick="editPersona('${fam.id}','${p.id}')">✏</button>
             <button class="btn btn-danger btn-sm" onclick="deletePersona('${fam.id}','${p.id}')">🗑</button>
           </div>
@@ -4358,6 +4363,17 @@ function quickPCI(famId,perId){
     const el=document.getElementById('pci-result');
     if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
   },60);
+}
+function imprimirPCIPer(famId,perId){
+  const fam=STATE.familias.find(f=>f.id===famId);
+  const per=fam?.personas?.find(p=>p.id===perId);
+  if(!per){toast('Persona no encontrada','err');return;}
+  const d=per.d3||{};
+  if(!d['_pci']){toast('Sin plan generado — use ⚕ para generar el PCI primero','err');return;}
+  const prev=STATE.draft3;
+  STATE.draft3=d;
+  imprimirPCI();
+  STATE.draft3=prev;
 }
 async function deletePersona(famId,perId){
   if(!confirm('¿Eliminar esta persona?'))return;
