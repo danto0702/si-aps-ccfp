@@ -229,6 +229,16 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .mc-item.selected .mc-box{background:var(--green);border-color:var(--green);color:#fff;font-size:11px}
 .mc-item.custom-opt.selected .mc-box{background:var(--yellow);border-color:var(--yellow);color:#000}
 .mc-label{flex:1;min-width:0}.mc-code{color:var(--muted);margin-right:4px}
+/* PCI — Plan de Cuidado Individual */
+.pci-sep{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.pci-locked{opacity:.7;cursor:default!important}
+.pci-alert{display:flex;gap:8px;padding:8px 10px;background:rgba(255,180,50,.07);border:1px solid rgba(255,180,50,.25);border-radius:8px;margin-bottom:6px;font-size:11px;color:var(--yellow);line-height:1.5}
+.pci-srv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+@media(max-width:500px){.pci-srv-grid{grid-template-columns:1fr}}
+.pci-srv-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px}
+.pci-srv-head{display:flex;align-items:center;gap:7px;margin-bottom:8px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.pci-item{display:flex;gap:7px;padding:4px 0;border-top:1px solid var(--border);font-size:11.5px;color:var(--text);line-height:1.4}
+.pci-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:4px}
 
 .badge{padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700}
 .badge-green{background:#1a4731;color:var(--green)}
@@ -3259,6 +3269,334 @@ function closeGeopunto(){
 function setSino2(campo,val){STATE.draft2[campo]=(STATE.draft2[campo]===val)?'':val;render();}
 function setSino3(campo,val){STATE.draft3[campo]=(STATE.draft3[campo]===val)?'':val;render();}
 
+// ══════════════════════════════════════════════════════════════════════════
+// PLAN DE CUIDADO INDIVIDUAL (PCI) — Resolución 3280/2018 Minsalud Colombia
+// Motor de reglas integrado en CCFP · reemplaza campo 28 (Intervenciones pendientes)
+// ══════════════════════════════════════════════════════════════════════════
+
+function calcPCI(ea,em,sexo,cond){
+  const plan={paciente:{ciclo_vital_asignado:null,ruta_especial:null},
+    plan_cuidado:{medicina_general:[],enfermeria:[],odontologia:[],psicologia:[],
+      nutricion:[],laboratorios_y_apoyo_diagnostico:[],educacion_e_insumos:[]},alertas:[]};
+  const pg=plan.plan_cuidado;const F=sexo==='F';const etm=ea*12+em;
+  const esGest=cond.includes('gestante'),esPre=cond.includes('preconcepcional');
+  const esPuer=cond.includes('puerperio'),rCV=cond.includes('riesgo_cv');
+  const rMal=cond.includes('riesgo_malnutricion'),vSex=cond.includes('vida_sexual_activa');
+  const rITS=cond.includes('riesgo_its'),sIVE=cond.includes('solicita_ive');
+  /* ══ 1. RUTA MATERNO PERINATAL (Prioridad Absoluta) ══ */
+  if(esGest||esPre||esPuer){
+    plan.paciente.ruta_especial='Ruta Materno Perinatal';
+    const etq=[];if(esPre)etq.push('Preconcepcional');if(esGest)etq.push('Gestante');if(esPuer)etq.push('Puerperio');
+    plan.paciente.ciclo_vital_asignado=etq.join(' / ');
+    if(esPre){
+      pg.medicina_general.push('Atención Preconcepcional — Consulta de Medicina General');
+      pg.enfermeria.push('Atención Preconcepcional — Valoración de Enfermería');
+      pg.laboratorios_y_apoyo_diagnostico.push('Laboratorios preconcepcionales: Hemograma, Glicemia, Sífilis (VDRL), VIH, Toxoplasma, Rubéola, Grupo y Rh');
+      pg.educacion_e_insumos.push('Suplementación con Ácido Fólico desde la etapa preconcepcional');
+    }
+    if(esGest){
+      pg.medicina_general.push('Control Prenatal — Medicina General (bajo riesgo)');
+      pg.medicina_general.push('Referencia a Ginecología si se identifica alto riesgo obstétrico');
+      pg.laboratorios_y_apoyo_diagnostico.push('Panel Trimestral: VIH, Sífilis (VDRL/RPR), Toxoplasma, Rubéola, Hemograma, Glicemia, Urinálisis, Urocultivo');
+      pg.odontologia.push('Valoración Odontológica Gestacional (1 vez durante el embarazo)');
+      pg.nutricion.push('Valoración Nutricional Gestacional (1 vez)');
+      pg.psicologia.push('Valoración Psicológica Gestacional (1 vez)');
+      pg.educacion_e_insumos.push('Inscripción a Curso de Preparación en Maternidad y Paternidad');
+      pg.educacion_e_insumos.push('Suplementación con Micronutrientes: Hierro + Ácido Fólico + Calcio');
+    }
+    if(esPuer){
+      pg.medicina_general.push('Control Posparto — Consulta antes de los 7 días del parto');
+      pg.medicina_general.push('Control del Recién Nacido — Antes del primer mes de vida');
+      pg.enfermeria.push('Consejería en Lactancia Materna y Cuidados del Recién Nacido');
+    }
+    if(sIVE){
+      pg.medicina_general.push('Asesoría IVE — Información, orientación y referencia (Medicina General)');
+      pg.psicologia.push('Apoyo Psicológico en proceso de IVE');
+      plan.alertas.push('Solicitud de IVE: Garantizar atención oportuna, no discriminatoria y con perspectiva de derechos. Activar ruta institucional.');
+    }
+    return plan;
+  }
+  /* ══ 2. PRIMERA INFANCIA (0–5 años) ══ */
+  if(ea>=0&&ea<=5){
+    plan.paciente.ciclo_vital_asignado='Primera Infancia (0 a 5 años)';
+    const sch=[{lbl:'1 mes',max:1},{lbl:'2-3 meses',max:3},{lbl:'4-5 meses',max:5},
+      {lbl:'6-8 meses',max:8},{lbl:'9-11 meses',max:11},{lbl:'12-18 meses',max:18},
+      {lbl:'18-24 meses',max:24},{lbl:'24-30 meses',max:30},{lbl:'30-36 meses',max:36},
+      {lbl:'3 años',max:48},{lbl:'4 años',max:60},{lbl:'5 años',max:72}];
+    const pend=sch.filter(s=>etm<s.max).map(s=>s.lbl);
+    pg.medicina_general.push('Control de Crecimiento y Desarrollo — '+(pend.length?'Próximas citas: '+pend.join(', '):'Cronograma completado — continuar con ciclo Infancia'));
+    if(etm>=6) pg.odontologia.push('Aplicación de Barniz de Flúor — cada 6 meses (desde los 6 meses)');
+    if(etm>=12) pg.odontologia.push('Consulta Odontológica programada: 12M, 2A, 3A, 4A, 5A');
+    if(ea>=3)   pg.odontologia.push('Profilaxis Dental — 2 veces al año (desde los 3 años)');
+    if(ea>=3&&ea<=5) pg.psicologia.push('Tamizaje RQC (Riesgo Psicosocial del Desarrollo) — Anual: 3A, 4A, 5A');
+    if(etm>=12) pg.enfermeria.push('Desparasitación — 2 veces al año (desde los 12 meses)');
+    if(etm>=6)  pg.educacion_e_insumos.push('Suplementación con Hierro y Vitamina A — desde los 6 meses');
+    if(etm<12)  pg.laboratorios_y_apoyo_diagnostico.push('Tamizaje de Hemoglobina — programar a los 12 meses');
+    else if(etm<24) pg.laboratorios_y_apoyo_diagnostico.push('Tamizaje de Hemoglobina — indicado al primer año de vida');
+    if(rMal){pg.nutricion.push('Derivación prioritaria a Nutrición por Riesgo de Malnutrición');
+      plan.alertas.push('Riesgo de malnutrición en primera infancia: Valoración nutricional prioritaria. Revisar curvas de crecimiento y antecedentes alimentarios.');}
+  /* ══ 3. INFANCIA (6–11 años) ══ */
+  }else if(ea>=6&&ea<=11){
+    plan.paciente.ciclo_vital_asignado='Infancia (6 a 11 años)';
+    pg.medicina_general.push('Control de Crecimiento y Desarrollo — Anual');
+    pg.odontologia.push('Consulta Odontológica — Anual');
+    pg.odontologia.push('Profilaxis Dental — 2 veces al año');
+    pg.odontologia.push('Aplicación de Barniz de Flúor — 2 veces al año');
+    pg.psicologia.push('Tamizaje RQC (Riesgo Psicosocial del Desarrollo) — Anual');
+    pg.enfermeria.push('Desparasitación — 2 veces al año');
+    if(rMal){pg.nutricion.push('Derivación a Nutrición por Riesgo de Malnutrición');
+      plan.alertas.push('Riesgo de malnutrición detectado: Evaluar estado nutricional y hábitos alimentarios.');}
+  /* ══ 4. ADOLESCENCIA (12–17 años) ══ */
+  }else if(ea>=12&&ea<=17){
+    plan.paciente.ciclo_vital_asignado='Adolescencia (12 a 17 años)';
+    pg.medicina_general.push('Consulta Integral de Adolescentes / Control CyD — Anual');
+    pg.odontologia.push('Consulta Odontológica — Anual');
+    pg.odontologia.push('Profilaxis Dental — 2 veces al año');
+    pg.odontologia.push('Aplicación de Barniz de Flúor — 2 veces al año');
+    pg.psicologia.push('Tamizaje SRQ (Cuestionario de Salud Mental) — Anual');
+    pg.educacion_e_insumos.push('Suministro de Preservativos');
+    if(F&&ea>=10&&ea<=13) pg.laboratorios_y_apoyo_diagnostico.push('Tamizaje de Hemoglobina — Mujeres entre 10 y 13 años');
+    if(vSex){pg.laboratorios_y_apoyo_diagnostico.push('Pruebas Rápidas de ITS: VIH, Sífilis (Treponémica), Hepatitis B');
+      pg.medicina_general.push('Asesoría en Planificación Familiar y Métodos Anticonceptivos');
+      plan.alertas.push('Adolescente con vida sexual activa: Activar tamizaje de ITS y asesoría anticonceptiva. Enfoque en derechos sexuales y reproductivos.');}
+  /* ══ 5. JUVENTUD (18–28 años) ══ */
+  }else if(ea>=18&&ea<=28){
+    plan.paciente.ciclo_vital_asignado='Juventud (18 a 28 años)';
+    pg.medicina_general.push('Valoración Integral — Medicina General (1 vez cada 5 años; incluye evaluación de riesgo cardiovascular)');
+    pg.psicologia.push('Tamizaje SRQ (Cuestionario de Salud Mental)');
+    pg.odontologia.push('Consulta Odontológica — 1 vez cada 2 años');
+    pg.odontologia.push('Profilaxis Dental — Anual');
+    pg.educacion_e_insumos.push('Suministro de Preservativos');
+    if(F&&ea>=25) pg.laboratorios_y_apoyo_diagnostico.push('Citología Cervicovaginal — Esquema 1-1-3 (anual dos veces; luego cada 3 años si resultado normal)');
+    else if(F&&ea<25) plan.alertas.push('Rastreo de cáncer cervicouterino: Citología aplica a partir de los 25 años (edad actual: '+ea+' años). Programar para los 25 años.');
+    if(rITS||vSex) pg.laboratorios_y_apoyo_diagnostico.push('Pruebas Rápidas de ITS: VIH, Sífilis (Treponémica), Hepatitis B, Hepatitis C');
+    if(rCV){pg.laboratorios_y_apoyo_diagnostico.push('Perfil Lipídico y Glicemia en Ayunas (por riesgo cardiovascular detectado)');
+      plan.alertas.push('Riesgo cardiovascular en adulto joven: Incluir perfil cardiometabólico en la valoración integral. Reforzar hábitos saludables.');}
+  /* ══ 6. ADULTEZ (29–59 años) ══ */
+  }else if(ea>=29&&ea<=59){
+    plan.paciente.ciclo_vital_asignado='Adultez (29 a 59 años)';
+    pg.medicina_general.push('Valoración Integral — Medicina General (cada 5 años; incluye evaluación de riesgo cardiovascular)');
+    pg.psicologia.push('Tamizaje SRQ (Cuestionario de Salud Mental) — En cada valoración integral');
+    pg.odontologia.push('Consulta Odontológica — Cada 2 años');
+    pg.odontologia.push('Profilaxis Dental — Cada 2 años');
+    if(F){
+      if(ea===29) pg.laboratorios_y_apoyo_diagnostico.push('Citología Cervicovaginal — Esquema 1-1-3 (inicio de rastreo)');
+      else if(ea>=30) pg.laboratorios_y_apoyo_diagnostico.push('Prueba de ADN-VPH — Cada 5 años (reemplaza la citología como prueba primaria desde los 30 años)');
+      if(ea>=40) pg.medicina_general.push('Valoración Clínica de Mama — Anual (desde los 40 años)');
+      if(ea>=50) pg.laboratorios_y_apoyo_diagnostico.push('Mamografía Bilateral — Cada 2 años (desde los 50 años)');
+    }
+    if(!F&&ea>=50) pg.laboratorios_y_apoyo_diagnostico.push('Tamizaje de Cáncer de Próstata: PSA + Tacto Rectal — Cada 5 años (desde los 50 años)');
+    if(ea>=50) pg.laboratorios_y_apoyo_diagnostico.push('Sangre Oculta en Heces (SOH) — Cada 2 años (rastreo de cáncer colorrectal desde los 50 años)');
+    if(rCV){pg.laboratorios_y_apoyo_diagnostico.push('Perfil Lipídico, Glicemia en Ayunas y HbA1c (por riesgo cardiovascular)');
+      plan.alertas.push('Riesgo cardiovascular: Incluir perfil cardiometabólico completo. Considerar cálculo de riesgo CV a 10 años (Framingham/OPS). Derivar a Medicina Interna si es necesario.');}
+    if(rMal){pg.nutricion.push('Valoración Nutricional por Riesgo de Malnutrición');
+      plan.alertas.push('Riesgo de malnutrición en etapa adulta: Evaluar composición corporal, hábitos alimentarios y causas subyacentes.');}
+  /* ══ 7. VEJEZ (≥ 60 años) ══ */
+  }else if(ea>=60){
+    plan.paciente.ciclo_vital_asignado='Vejez (60 años en adelante)';
+    pg.medicina_general.push('Valoración Integral Geriátrica — Medicina General (cada 3 años; incluye valoración funcional, cognitiva y de riesgo cardiovascular)');
+    pg.psicologia.push('Tamizaje SRQ (Cuestionario de Salud Mental) — En cada valoración integral');
+    pg.odontologia.push('Consulta Odontológica — Cada 2 años');
+    pg.odontologia.push('Profilaxis Dental — Cada 2 años');
+    if(F){
+      if(ea<=65) pg.laboratorios_y_apoyo_diagnostico.push('Prueba de ADN-VPH o Citología Cervicovaginal — Hasta los 65 años (si hay historial de resultados normales)');
+      else plan.alertas.push('Rastreo de cáncer cervicouterino: Paciente > 65 años — NO aplica tamizaje rutinario si cuenta con 3 citologías negativas consecutivas. Revisar historial clínico.');
+      pg.medicina_general.push('Valoración Clínica de Mama — Anual (sin límite de edad establecido)');
+      if(ea<=69) pg.laboratorios_y_apoyo_diagnostico.push('Mamografía Bilateral — Cada 2 años (hasta los 69 años)');
+      else plan.alertas.push('Mamografía: Paciente > 69 años — fuera del rango de tamizaje poblacional rutinario. Evaluar indicación individual con el equipo médico.');
+    }
+    if(!F){
+      if(ea<=75) pg.laboratorios_y_apoyo_diagnostico.push('Tamizaje de Cáncer de Próstata: PSA + Tacto Rectal — Cada 5 años (hasta los 75 años)');
+      else plan.alertas.push('Tamizaje de próstata: Paciente > 75 años — fuera del rango recomendado. El balance riesgo-beneficio no favorece el tamizaje rutinario a esta edad. Consultar con Urología si hay síntomas.');
+    }
+    if(ea<=75) pg.laboratorios_y_apoyo_diagnostico.push('Sangre Oculta en Heces (SOH) — Cada 2 años (rastreo de cáncer colorrectal hasta los 75 años)');
+    else plan.alertas.push('Rastreo de cáncer colorrectal: Paciente > 75 años — fuera del rango recomendado. Evaluar con el equipo clínico si hay síntomas sugestivos.');
+    if(rCV){pg.laboratorios_y_apoyo_diagnostico.push('Perfil Lipídico, Glicemia en Ayunas y HbA1c (por riesgo cardiovascular en adulto mayor)');
+      plan.alertas.push('Riesgo cardiovascular en adulto mayor: Priorizar valoración integral. Evaluar polifarmacia, fragilidad y funcionalidad. Derivar a Medicina Interna o Geriatría si corresponde.');}
+    if(rMal){pg.nutricion.push('Valoración Nutricional por Riesgo de Malnutrición en Adulto Mayor (aplicar tamizaje MNA — Mini Nutritional Assessment)');
+      plan.alertas.push('Riesgo de malnutrición en adulto mayor: Evaluación prioritaria. Considerar impacto de sarcopenia, polifarmacia y condiciones crónicas.');}
+  }
+  return plan;
+}
+
+function mapPlanToPISIS(plan){
+  const codes=new Set();
+  const all=Object.values(plan.plan_cuidado).flat();
+  const R=[
+    [/Valoración Integral.*Medicina|Control de Crecimiento|Consulta Integral de Adolescentes|Valoración Integral Geriátrica/i,'1'],
+    [/Odontológi|Consulta Odontológica|Valoración Odontológ/i,'2'],
+    [/Lactancia Materna/i,'3'],
+    [/Barniz de Flúor/i,'4'],
+    [/Profilaxis Dental/i,'5'],
+    [/Micronutrientes|Hierro.*Ácido|Vitamina A|Suplementación.*Hierro|Suplementación.*Ácido|Ácido Fólico/i,'8'],
+    [/Desparasitación/i,'9'],
+    [/Hemoglobina|Hematocrito/i,'10'],
+    [/Planificación Familiar|Anticoncep|Preservativo/i,'11'],
+    [/Lipídico|cardiometaból|Framingham|HbA1c.*riesgo|Glicemia.*riesgo cardiovascular/i,'12'],
+    [/ITS|Sífilis|Hepatitis/i,'13'],
+    [/Citología|ADN-VPH|Cuello Uterino|Cervicovaginal/i,'14'],
+    [/Valoración Clínica de Mama|Mamografía/i,'15'],
+    [/Próstata|PSA/i,'16'],
+    [/Sangre Oculta|colorrectal/i,'17'],
+    [/Preconcepcional/i,'18'],
+    [/Control Prenatal|cuidado prenatal/i,'19'],
+    [/Maternidad y Paternidad|Curso de Preparación/i,'20'],
+    [/IVE|Interrupción Voluntaria/i,'21'],
+    [/Puerperio|Posparto/i,'22'],
+    [/Recién Nacido/i,'23'],
+    [/Educación para la salud/i,'25'],
+  ];
+  all.forEach(item=>R.forEach(([re,c])=>{if(re.test(item))codes.add(c);}));
+  return codes.size>0?[...codes]:['26'];
+}
+
+function renderPCIResult(plan){
+  const S={
+    medicina_general:{t:'Medicina General',ico:'🩺',col:'var(--blue)'},
+    enfermeria:{t:'Enfermería',ico:'💉',col:'var(--green)'},
+    odontologia:{t:'Odontología',ico:'🦷',col:'var(--purple)'},
+    psicologia:{t:'Psicología',ico:'🧠',col:'var(--red)'},
+    nutricion:{t:'Nutrición',ico:'🥗',col:'var(--yellow)'},
+    laboratorios_y_apoyo_diagnostico:{t:'Laboratorios y Apoyo Dx',ico:'🔬',col:'var(--green)'},
+    educacion_e_insumos:{t:'Educación e Insumos',ico:'📚',col:'var(--blue)'},
+  };
+  let h=`<div id="pci-result" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">`;
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:var(--text)">${esc(plan.paciente.ciclo_vital_asignado||'')}</span>
+    ${plan.paciente.ruta_especial?`<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(233,69,96,.12);border:1px solid var(--red);color:var(--red)">⚠ ${esc(plan.paciente.ruta_especial)}</span>`:''}
+  </div>`;
+  plan.alertas.forEach(a=>{h+=`<div class="pci-alert"><span style="flex-shrink:0">⚠</span><span>${esc(a)}</span></div>`;});
+  const nv=Object.entries(plan.plan_cuidado).filter(([,v])=>v.length>0);
+  if(!nv.length){h+=`<div class="field-note">No se identificaron actividades para esta combinación.</div>`;return h+'</div>';}
+  h+=`<div class="pci-srv-grid">`;
+  nv.forEach(([srv,items])=>{
+    const c=S[srv];
+    h+=`<div class="pci-srv-card"><div class="pci-srv-head">${c.ico} <span>${c.t}</span></div><ul style="list-style:none;margin:0;padding:0">
+      ${items.map(item=>`<li class="pci-item"><span class="pci-dot" style="background:${c.col}"></span><span>${esc(item)}</span></li>`).join('')}
+    </ul></div>`;
+  });
+  h+=`</div>`;
+  h+=`<div class="field-note" style="margin-top:8px;color:var(--green)">✓ Intervenciones pendientes (campo 28) actualizadas automáticamente según este plan.</div>`;
+  h+=`<button class="btn btn-secondary" style="margin-top:8px;font-size:12px" onclick="imprimirPCI()">🖨 Imprimir solo PCI</button>`;
+  h+=`</div>`;return h;
+}
+
+function renderPCIBlock(d){
+  const esM=d['10']==='2';
+  const autoGest=d['11']==='1';
+  const cond=Array.isArray(d['_pci_cond'])?d['_pci_cond']:[];
+  let ageYr=null;
+  if(d['9']){const ms=Date.now()-new Date(d['9']).getTime();ageYr=ms/(365.25*24*3600*1000);}
+  const showIVE=esM&&(ageYr===null||ageYr>=12);
+
+  const chk=(val,label,locked=false)=>{
+    const active=locked?autoGest:cond.includes(val);
+    const cls='mc-item'+(active?' selected':'')+(locked?' pci-locked':'');
+    const note=locked&&autoGest?` <span style="font-size:10px;color:var(--green)">(auto · campo 11)</span>`:'';
+    return `<div class="${cls}" onclick="${locked?'':`togglePCICond('${val}')`}">
+      <div class="mc-box">${active?'✓':''}</div>
+      <div class="mc-label">${esc(label)}${note}</div>
+    </div>`;
+  };
+
+  let h=`<div class="field">`;
+  h+=`<div class="field-label"><span class="field-num">28</span>${esc(fieldLabel3('28'))}</div>`;
+  h+=`<div class="field-note" style="color:var(--blue-light,#6b90c6);margin-bottom:10px">
+    ⚕ Plan de Cuidado Individual — Res. 3280/2018 · Marque las condiciones del paciente y presione Generar
+  </div>`;
+
+  if(esM){
+    h+=`<div class="pci-sep">Ruta Materno Perinatal</div>
+    <div class="mc-grid" style="margin-bottom:4px">
+      ${chk('preconcepcional','Atención preconcepcional')}
+      ${chk('gestante','Gestante (embarazada)',true)}
+      ${chk('puerperio','Puerperio / posparto reciente')}
+      ${showIVE?chk('solicita_ive','Solicita IVE'):''}
+    </div>`;
+  }
+  h+=`<div class="pci-sep" style="margin-top:${esM?'10':'0'}px">Factores de Riesgo</div>
+  <div class="mc-grid" style="margin-bottom:10px">
+    ${chk('riesgo_cv','Riesgo cardiovascular')}
+    ${chk('riesgo_malnutricion','Riesgo de malnutrición')}
+    ${chk('vida_sexual_activa','Vida sexual activa')}
+    ${chk('riesgo_its','Riesgo de ITS')}
+  </div>`;
+  h+=`<button class="btn btn-primary" style="width:100%" onclick="generarPCI()">⚕ Generar Plan de Cuidado Individual</button>`;
+
+  const pci=d['_pci'];
+  if(pci){
+    try{const plan=typeof pci==='string'?JSON.parse(pci):pci;h+=renderPCIResult(plan);}
+    catch(e){}
+  }
+  h+=`</div>`;return h;
+}
+
+function togglePCICond(val){
+  const c=Array.isArray(STATE.draft3['_pci_cond'])?[...STATE.draft3['_pci_cond']]:[];
+  const i=c.indexOf(val);if(i>=0)c.splice(i,1);else c.push(val);
+  STATE.draft3['_pci_cond']=c;render();
+}
+
+function generarPCI(){
+  const d=STATE.draft3;const dob=d['9'];
+  let ea=0,em=0;
+  if(dob){
+    const birth=new Date(dob);
+    if(!isNaN(birth)){
+      let tm=(new Date().getFullYear()-birth.getFullYear())*12+(new Date().getMonth()-birth.getMonth());
+      if(new Date().getDate()<birth.getDate())tm--;
+      tm=Math.max(0,tm);ea=Math.floor(tm/12);em=tm%12;
+    }
+  }
+  const sexo=d['10']==='1'?'M':(d['10']==='2'?'F':'M');
+  const base=Array.isArray(d['_pci_cond'])?d['_pci_cond']:[];
+  const cond=d['11']==='1'&&!base.includes('gestante')?[...base,'gestante']:base;
+  const plan=calcPCI(ea,em,sexo,cond);
+  const codes=mapPlanToPISIS(plan);
+  STATE.draft3['_pci']=plan;
+  STATE.draft3['28']=codes;
+  render();toast('Plan de Cuidado Individual generado ✓','ok');
+  setTimeout(()=>{const el=document.getElementById('pci-result');if(el)el.scrollIntoView({behavior:'smooth',block:'nearest'});},120);
+}
+
+function imprimirPCI(){
+  const pci=STATE.draft3['_pci'];
+  if(!pci){toast('Genere el plan primero','err');return;}
+  const plan=typeof pci==='string'?JSON.parse(pci):pci;
+  const d=STATE.draft3;
+  const nombre=[d['3'],d['5']].filter(Boolean).join(' ')||'Paciente';
+  const S={medicina_general:{t:'Medicina General',ico:'🩺'},enfermeria:{t:'Enfermería',ico:'💉'},
+    odontologia:{t:'Odontología',ico:'🦷'},psicologia:{t:'Psicología',ico:'🧠'},
+    nutricion:{t:'Nutrición',ico:'🥗'},laboratorios_y_apoyo_diagnostico:{t:'Laboratorios y Apoyo Dx',ico:'🔬'},
+    educacion_e_insumos:{t:'Educación e Insumos',ico:'📚'}};
+  const nv=Object.entries(plan.plan_cuidado).filter(([,v])=>v.length>0);
+  let body=`<h2 style="color:#4a6fa5;border-bottom:2px solid #4a6fa5;padding-bottom:4px">Plan de Cuidado Individual — Res. 3280/2018</h2>
+    <p style="margin:6px 0;font-size:12px"><b>Paciente:</b> ${esc(nombre)} &nbsp;|&nbsp; <b>Ciclo:</b> ${esc(plan.paciente.ciclo_vital_asignado||'')}${plan.paciente.ruta_especial?` &nbsp;|&nbsp; <b style="color:#e94560">⚠ ${esc(plan.paciente.ruta_especial)}</b>`:''}</p>`;
+  if(plan.alertas.length){
+    body+=`<div style="background:#fff8e1;border-left:3px solid #f59e0b;padding:6px 10px;margin:8px 0;font-size:11px">`;
+    plan.alertas.forEach(a=>{body+=`<div>⚠ ${esc(a)}</div>`;});body+=`</div>`;
+  }
+  body+=`<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">`;
+  const pairs=[];for(let i=0;i<nv.length;i+=2)pairs.push([nv[i],nv[i+1]||null]);
+  pairs.forEach(([a,b])=>{
+    body+=`<tr>`;
+    [a,b].forEach(entry=>{
+      if(!entry){body+=`<td></td>`;return;}
+      const [srv,items]=entry;const c=S[srv];
+      body+=`<td style="vertical-align:top;padding:6px;border:1px solid #ddd;width:50%"><b style="font-size:11px">${c.ico} ${c.t}</b>
+        ${items.map(i=>`<div style="color:#333;padding:1px 0 1px 8px">• ${esc(i)}</div>`).join('')}
+      </td>`;
+    });
+    body+=`</tr>`;
+  });
+  body+=`</table><p style="font-size:9px;color:#888;margin-top:12px">Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP · ESE Hospital Regional Noroccidental</p>`;
+  const w=window.open('','_blank','width=800,height=600');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PCI — ${esc(nombre)}</title>
+    <style>body{font-family:'Segoe UI',sans-serif;padding:20px;color:#222}@media print{button{display:none}}</style>
+    </head><body>${body}<br><button onclick="window.print()">🖨 Imprimir</button></body></html>`);
+  w.document.close();
+}
+
 // ── DIAGNÓSTICO NUTRICIONAL OMS — Resolución 2465/2016 Minsalud Colombia ──
 // WHO Child Growth Standards 2006 (0-5 años) + WHO Growth Reference 2007 (5-19 años)
 // Datos LMS: nutriverse/zscorer (CRAN). Tabla Atalah para gestantes.
@@ -4056,7 +4394,7 @@ function renderPersona(){
     ${dec3('25',d['25']||'')}
     <div class="grid-2">${dec3('38',d['38']||'')}${dec3('39',d['39']||'')}</div>
     ${sino3('26',d['26']||'',true)}${sino3('27',d['27']||'',false)}
-    ${multi3WithExtra('intervencionPendiente','28','28_obs',d['28']||[],d['28_obs']||[],false)}
+    ${renderPCIBlock(d)}
     ${multi3('motivoNoAtencionProm','29',d['29']||[],false)}
     ${sino3('30',d['30']||'',false)}
     <div class="field"><div class="field-note">Campos 31-32 aplican solo si el integrante es menor de 2 años</div></div>
@@ -5791,6 +6129,32 @@ async function imprimirCaracterizacion(famId) {
           h+=card(col,'🧒','RQC — Salud Mental Niños/Adolescentes',tr.fecha||'',cuerpo);
         }
         h+='</div>'; return h;
+      })()}
+      ${(()=>{
+        // ── Plan de Cuidado Individual PCI (PDF) ─────────────────────
+        const pci=d3['_pci'];if(!pci)return'';
+        const plan=typeof pci==='string'?JSON.parse(pci):pci;
+        const S={medicina_general:{t:'Medicina General',ico:'🩺'},enfermeria:{t:'Enfermería',ico:'💉'},
+          odontologia:{t:'Odontología',ico:'🦷'},psicologia:{t:'Psicología',ico:'🧠'},
+          nutricion:{t:'Nutrición',ico:'🥗'},laboratorios_y_apoyo_diagnostico:{t:'Laboratorios y Apoyo Dx',ico:'🔬'},
+          educacion_e_insumos:{t:'Educación e Insumos',ico:'📚'}};
+        const nv=Object.entries(plan.plan_cuidado).filter(([,v])=>v.length>0);
+        if(!nv.length)return'';
+        let h='<h4 class="sub-title">⚕ Plan de Cuidado Individual — Res. 3280/2018</h4>';
+        h+=`<div style="font-size:11px;color:#4a6fa5;margin-bottom:6px;font-weight:600">${esc(plan.paciente.ciclo_vital_asignado||'')}${plan.paciente.ruta_especial?' — '+esc(plan.paciente.ruta_especial):''}</div>`;
+        (plan.alertas||[]).forEach(a=>{h+=`<div style="padding:5px 8px;background:#fff8e1;border-left:3px solid #f59e0b;margin-bottom:4px;font-size:10.5px;color:#7a5000">${esc(a)}</div>`;});
+        h+='<table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:6px">';
+        const pairs=[];for(let i=0;i<nv.length;i+=2)pairs.push([nv[i],nv[i+1]||null]);
+        pairs.forEach(([a,b])=>{
+          h+='<tr>';
+          [a,b].forEach(entry=>{
+            if(!entry){h+='<td style="width:50%"></td>';return;}
+            const[srv,items]=entry;const c=S[srv]||{t:srv,ico:'⚕'};
+            h+=`<td style="vertical-align:top;padding:5px 6px;border:1px solid #ddd;width:50%"><b style="font-size:10.5px">${c.ico} ${c.t}</b>${items.map(it=>`<div style="color:#333;padding:1px 0 1px 8px;font-size:9.5px">• ${esc(it)}</div>`).join('')}</td>`;
+          });
+          h+='</tr>';
+        });
+        h+='</table>';return h;
       })()}
     </div>`;
   }).join('');
