@@ -3450,7 +3450,8 @@ function mapPlanToPISIS(plan){
   return codes.size>0?[...codes]:['26'];
 }
 
-function renderPCIResult(plan){
+function renderPCIResult(plan, d){
+  const unc=Array.isArray(d?.['_pci_unchecked'])?d['_pci_unchecked']:[];
   const S={
     medicina_general:{t:'Medicina General',ico:'🩺',col:'var(--blue)'},
     enfermeria:{t:'Enfermería',ico:'💉',col:'var(--green)'},
@@ -3468,15 +3469,24 @@ function renderPCIResult(plan){
   plan.alertas.forEach(a=>{h+=`<div class="pci-alert"><span style="flex-shrink:0">⚠</span><span>${esc(a)}</span></div>`;});
   const nv=Object.entries(plan.plan_cuidado).filter(([,v])=>v.length>0);
   if(!nv.length){h+=`<div class="field-note">No se identificaron actividades para esta combinación.</div>`;return h+'</div>';}
+  h+=`<div class="field-note" style="margin-bottom:8px;color:var(--muted)">Toque una actividad para marcarla como no aplicable (se excluye del campo 28).</div>`;
   h+=`<div class="pci-srv-grid">`;
   nv.forEach(([srv,items])=>{
     const c=S[srv];
     h+=`<div class="pci-srv-card"><div class="pci-srv-head">${c.ico} <span>${c.t}</span></div><ul style="list-style:none;margin:0;padding:0">
-      ${items.map(item=>`<li class="pci-item"><span class="pci-dot" style="background:${c.col}"></span><span>${esc(item)}</span></li>`).join('')}
+      ${items.map((item,idx)=>{
+        const k=srv+':'+idx;const active=!unc.includes(k);
+        return `<li class="pci-item" style="cursor:pointer;gap:8px;user-select:none;${active?'':'opacity:0.38;text-decoration:line-through'}" onclick="togglePCIItem('${srv}',${idx})">
+          <span class="pci-dot" style="background:${active?c.col:'var(--muted)'}"></span>
+          <span style="flex:1">${esc(item)}</span>
+          <span style="font-size:13px;color:${active?'var(--green)':'var(--muted)'};flex-shrink:0">${active?'☑':'☐'}</span>
+        </li>`;
+      }).join('')}
     </ul></div>`;
   });
   h+=`</div>`;
-  h+=`<div class="field-note" style="margin-top:8px;color:var(--green)">✓ Intervenciones pendientes (campo 28) actualizadas automáticamente según este plan.</div>`;
+  const totalActive=nv.reduce((s,[srv,items])=>s+items.filter((_,idx)=>!unc.includes(srv+':'+idx)).length,0);
+  h+=`<div class="field-note" style="margin-top:8px;color:var(--green)">☑ ${totalActive} actividad(es) seleccionada(s) · Campo 28 actualizado automáticamente.</div>`;
   h+=`<button class="btn btn-secondary" style="margin-top:8px;font-size:12px" onclick="imprimirPCI()">🖨 Imprimir solo PCI</button>`;
   h+=`</div>`;return h;
 }
@@ -3537,7 +3547,7 @@ function renderPCIBlock(d){
       if(mismatch){
         h+=`<div class="pci-alert" style="margin-top:10px"><span style="flex-shrink:0">⚠</span><span>El plan guardado contiene actividades que no corresponden al sexo actual del paciente (<b>${currentSexo==='F'?'Femenino':'Masculino'}</b>). Presione <b>Generar Plan</b> para actualizarlo.</span></div>`;
       }else{
-        h+=renderPCIResult(plan);
+        h+=renderPCIResult(plan, d);
       }
     }catch(e){}
   }
@@ -3548,6 +3558,25 @@ function togglePCICond(val){
   const c=Array.isArray(STATE.draft3['_pci_cond'])?[...STATE.draft3['_pci_cond']]:[];
   const i=c.indexOf(val);if(i>=0)c.splice(i,1);else c.push(val);
   STATE.draft3['_pci_cond']=c;render();
+}
+function getActivePlan(plan,unc){
+  const p=JSON.parse(JSON.stringify(plan));
+  Object.keys(p.plan_cuidado).forEach(srv=>{
+    p.plan_cuidado[srv]=p.plan_cuidado[srv].filter((_,idx)=>!unc.includes(srv+':'+idx));
+  });
+  return p;
+}
+function togglePCIItem(srvKey,idx){
+  const k=srvKey+':'+idx;
+  const unc=Array.isArray(STATE.draft3['_pci_unchecked'])?[...STATE.draft3['_pci_unchecked']]:[];
+  const i=unc.indexOf(k);if(i>=0)unc.splice(i,1);else unc.push(k);
+  STATE.draft3['_pci_unchecked']=unc;
+  const plan=STATE.draft3['_pci'];
+  if(plan){
+    const pp=typeof plan==='string'?JSON.parse(plan):plan;
+    STATE.draft3['28']=mapPlanToPISIS(getActivePlan(pp,unc));
+  }
+  render();
 }
 
 function generarPCI(){
@@ -3568,6 +3597,7 @@ function generarPCI(){
   const codes=mapPlanToPISIS(plan);
   STATE.draft3['_pci']=plan;
   STATE.draft3['28']=codes;
+  STATE.draft3['_pci_unchecked']=[];  // todas las actividades activas al generar
   render();toast('Plan de Cuidado Individual generado ✓','ok');
   setTimeout(()=>{const el=document.getElementById('pci-result');if(el)el.scrollIntoView({behavior:'smooth',block:'nearest'});},120);
 }
@@ -3575,8 +3605,9 @@ function generarPCI(){
 function imprimirPCI(){
   const pci=STATE.draft3['_pci'];
   if(!pci){toast('Genere el plan primero','err');return;}
-  const plan=typeof pci==='string'?JSON.parse(pci):pci;
   const d=STATE.draft3;
+  const unc=Array.isArray(d['_pci_unchecked'])?d['_pci_unchecked']:[];
+  const plan=getActivePlan(typeof pci==='string'?JSON.parse(pci):pci, unc);
   const nombre=[d['3'],d['5']].filter(Boolean).join(' ')||'Paciente';
   const S={medicina_general:{t:'Medicina General',ico:'🩺'},enfermeria:{t:'Enfermería',ico:'💉'},
     odontologia:{t:'Odontología',ico:'🦷'},psicologia:{t:'Psicología',ico:'🧠'},
