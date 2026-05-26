@@ -4114,6 +4114,14 @@ function renderT2Step1(d){
       </div>
     </div>
     ${txt('12',d['12']||'',200,false,'Descripción de ubicación sin nomenclatura')}
+    <div class="grid-2">
+      <div class="field"><div class="field-label">Teléfono / Celular <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div>
+        <input class="field-input" type="tel" inputmode="numeric" maxlength="15" placeholder="Ej. 3001234567"
+          value="${esc(d['_tel']||'')}" oninput="setDraft2('_tel',this.value.replace(/[^0-9+\-() ]/g,''))"></div>
+      <div class="field"><div class="field-label">Correo Electrónico <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div>
+        <input class="field-input" type="email" inputmode="email" maxlength="80" placeholder="Ej. nombre@correo.com"
+          value="${esc(d['_email']||'')}" oninput="setDraft2('_email',this.value.trim())"></div>
+    </div>
   </div>
   <div class="card">
     <div class="card-title">N° EBS y Consecutivos</div>
