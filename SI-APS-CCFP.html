@@ -3640,7 +3640,7 @@ function imprimirPCI(){
       </tr>
       <tr>
         <td style="padding:3px 8px 3px 0"><b style="color:#0d2447">Ciclo Vital:</b> ${esc(ciclo)}${plan.paciente.ruta_especial?' · <b style="color:#e94560">'+esc(plan.paciente.ruta_especial)+'</b>':''}</td>
-        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono:</b> —</td>
+        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono:</b> ${esc(d['_tel']||'—')}${d['_email']?` &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> ${esc(d['_email'])}`:''}${!d['_email']?' &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> —':''}</td>
       </tr>
     </table>
   </div>`;
@@ -4464,6 +4464,10 @@ function renderPersona(){
     ${searchField3('13',REF_CIUO,d['13']||'',true)}
     <div class="grid-2">${sel3(REF.nivelEducativo,'14',d['14']||'',true)}${sel3(REF.regimen,'15',d['15']||'',true)}</div>
     ${showEAPB?searchField3('16',REF_EAPB,d['16']||'',false):''}
+    <div class="grid-2">
+      <div class="field"><div class="field-label">Teléfono / Celular <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div><input class="field-input" type="tel" inputmode="numeric" maxlength="15" placeholder="Ej. 3001234567" value="${esc(d['_tel']||'')}" oninput="setDraft3('_tel',this.value.replace(/[^0-9+\\-() ]/g,''))"></div>
+      <div class="field"><div class="field-label">Correo Electrónico <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div><input class="field-input" type="email" inputmode="email" maxlength="80" placeholder="Ej. nombre@correo.com" value="${esc(d['_email']||'')}" oninput="setDraft3('_email',this.value.trim())"></div>
+    </div>
   </div>
   <div class="card">
     <div class="card-title">Perfil Social y Étnico</div>
