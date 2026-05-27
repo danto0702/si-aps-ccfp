@@ -1100,13 +1100,15 @@ async function rebuildAppState() {
     fams = allLocal;
   } else {
     const myId  = STATE.auth?.user?.id;
-    const codes = new Set(STATE.profile?.ebs_codes||[]);
-    // Show: families the user created (created_by) OR families whose ebs_code is
-    // assigned to the user. This survives empty ebs_codes and broken index.
-    fams = allLocal.filter(f =>
-      (myId && f.created_by === myId) ||
-      (f.ebs_code && codes.has(f.ebs_code))
-    );
+    const userCodes = STATE.profile?.ebs_codes||[];
+    // Prefijos de territorio: '5441SR00254245T05MT01EBS011' → '5441SR00254245T05'
+    // El usuario ve TODO lo que esté en su territorio, sin importar microterritorio o EBS #
+    const terPrefixes = [...new Set(userCodes.map(ebsTerritoryPrefix).filter(p=>p.length>0))];
+    fams = allLocal.filter(f => {
+      if (myId && f.created_by === myId) return true;                             // propias
+      if (!f.ebs_code) return false;
+      return terPrefixes.some(prefix => f.ebs_code.startsWith(prefix));           // mismo territorio
+    });
   }
   fams = fams.filter(f=>!f.deleted_at);
   // Deduplicar por id (protección contra doble escritura en IDB o Supabase)
@@ -3291,6 +3293,12 @@ function calcEBS(d) {
   const mic =String(d['7']||'').slice(0,4).padEnd(4,' ');
   const ne  =String(d.ebs_num||'001').padStart(3,'0');
   return (dpto+sub+mun+ter+mic+'EBS'+ne).replace(/\s/g,'');
+}
+// Extrae el prefijo de territorio de un ebs_code: elimina (MT...) y EBS... del final
+// Ej: '5441SR00254245T05MT01EBS011' → '5441SR00254245T05'
+//     '5441SR00254245T05EBS011'     → '5441SR00254245T05'
+function ebsTerritoryPrefix(code) {
+  return (code||'').replace(/(MT\d+)?EBS\d+$/, '');
 }
 function calcNumVivienda(d,idx){const ebs=calcEBS(d);const h=String(d.hogar_num||idx+1).padStart(4,'0');return ebs+'H'+h;}
 function calcNumFamilia(d,idx){const nv=calcNumVivienda(d,idx);return nv+'F'+String(d.familia_num||'1').padStart(4,'0');}
