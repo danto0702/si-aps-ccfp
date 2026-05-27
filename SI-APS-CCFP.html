@@ -1182,7 +1182,11 @@ const TERRIT_MAP = {
   '014':{tc:'T06',tn:'Aserrío',         micros:[{c:'MT01',n:'Aserrío 1'},{c:'MT02',n:'Aserrío 2'},{c:'MT03',n:'Aserrío 3'},{c:'MT04',n:'San Luis de Veguitas'}]},
   '015':{tc:'T07',tn:'La Cecilia',      micros:[{c:'MT01',n:'La Cecilia'},{c:'MT02',n:'Platanal'},{c:'MT03',n:'Santa Inés'},{c:'MT04',n:'Villanueva'}]},
   '016':{tc:'T08',tn:'San Juancito',    micros:[{c:'MT01',n:'San Juancito'},{c:'MT02',n:'Sacado'},{c:'MT03',n:'Mundo Nuevo'},{c:'MT04',n:'Tiradera'}]},
-  '017':{tc:'T05',tn:'San Pablo',       micros:[{c:'MT01',n:'San Pablo 1'},{c:'MT02',n:'San Pablo 2'},{c:'MT03',n:'Puente Azul'},{c:'MT04',n:'Mesones'}]}
+  '017':{tc:'T05',tn:'San Pablo',       micros:[{c:'MT01',n:'San Pablo 1'},{c:'MT02',n:'San Pablo 2'},{c:'MT03',n:'Puente Azul'},{c:'MT04',n:'Mesones'}]},
+  // ── Jóvenes en Paz (programa especial) ──────────────────────
+  '090':{tc:'T99',tn:'ABREGO',          micros:[{c:'MT01',n:'Jovenes en Paz Abrego'}]},
+  '091':{tc:'T99',tn:'EL CARMEN',       micros:[{c:'MT01',n:'Jovenes en Paz El Carmen'}]},
+  '092':{tc:'T99',tn:'CONVENCION',      micros:[{c:'MT01',n:'Jovenes en Paz Convencion'}]}
 };
 function terrInfoFor(ebsNum){return TERRIT_MAP[String(ebsNum||'').padStart(3,'0')]||null;}
 function uid()     { return Math.random().toString(36).slice(2)+Date.now().toString(36); }
@@ -1725,13 +1729,20 @@ const EBS_MUNI_MAP = {
   '001':'54003','002':'54003','003':'54003','004':'54003',
   '005':'54128','006':'54128','007':'54128','008':'54128','009':'54128',
   '010':'54245','011':'54245','012':'54245','013':'54245',
-  '014':'54660','015':'54660','016':'54660','017':'54660'
+  '014':'54660','015':'54660','016':'54660','017':'54660',
+  '090':'54003','091':'54245','092':'54128'
 };
 const MUNI_HRNO = [
   {v:'54003',l:'Ábrego'},
   {v:'54128',l:'Convención'},
   {v:'54245',l:'El Carmen'},
   {v:'54660',l:'Teorama'}
+];
+// Equipos especiales Jóvenes en Paz — aparecen en formulario T2 y asignación de usuarios
+const JEP_EBS = [
+  {num:'090', label:'JPA001: JOVENES EN PAZ ABREGO'},
+  {num:'091', label:'JPE002: JOVENES EN PAZ EL CARMEN'},
+  {num:'092', label:'JPC003: JOVENES EN PAZ CONVENCION'}
 ];
 function buildEBSCode(ebsNum, muniCode) {
   const ti = terrInfoFor(ebsNum);
@@ -1743,6 +1754,8 @@ function decodeEBSCode(code) {
   if (!code || code.length < 27) return code;
   const muni = code.slice(9,14);
   const ebsNum = code.slice(24,27);
+  const jep = JEP_EBS.find(j=>j.num===ebsNum);
+  if (jep) return `${jep.label} · ${MUNIS_NS[muni]||muni}`;
   const ti = terrInfoFor(ebsNum);
   return `EBS${ebsNum} · ${MUNIS_NS[muni]||muni} · ${ti ? ti.tc+' '+ti.tn : code.slice(14,17)}`;
 }
@@ -1750,6 +1763,8 @@ function ebsForMuni(muniCode) {
   return Object.entries(EBS_MUNI_MAP)
     .filter(([,m]) => m === muniCode)
     .map(([num]) => {
+      const jep = JEP_EBS.find(j=>j.num===num);
+      if (jep) return {v:num, l:jep.label};
       const ti = terrInfoFor(num);
       return {v:num, l:`EBS${num} · ${ti ? ti.tn : num}`};
     });
@@ -4074,9 +4089,12 @@ function renderT2Step1(d){
     _microFieldHtml = sel(microOpts,'7',d['7']||microOpts[0]?.v||'',true);
   }
   // Si el admin configuró EBS en el panel, usar esa lista; si no, derivar del código de usuario
-  const ebsNumOpts=STATE.ebsList?.length
+  // Los EBS de Jóvenes en Paz siempre se agregan al final
+  const _baseEBSOpts=STATE.ebsList?.length
     ? STATE.ebsList.map(e=>({v:e.num, l:fmtEBS(e)}))
     : ebsOptsFor(24,27, v=>`EBS${v}-EBS-(${parseInt(v)})`);
+  const ebsNumOpts=[..._baseEBSOpts,
+    ...JEP_EBS.map(e=>({v:e.num, l:e.label})).filter(j=>!_baseEBSOpts.some(b=>b.v===j.v))];
   // Municipios: merge EBS-derived codes + full NS static list, keep sorted
   const muniFromEBS = ebsOptsFor(9,14, v=>`${v} — ${MUNIS_NS[v]||'(Municipio)'}`);
   const muniCodes = new Set(muniFromEBS.map(o=>o.v));
