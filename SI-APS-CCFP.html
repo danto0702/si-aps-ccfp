@@ -1146,7 +1146,8 @@ const STATE = {
   // Campo configuration: options override + default values for any field
   fieldConfig: {t2:{}, t3:{}},
   // EBS list: [{num:'001', label:'EBS 001 — Municipio'}]. If empty, derived from user codes.
-  ebsList: []
+  ebsList: [],
+  busquedaFamilia: ''
 };
 
 function isAdmin() { return STATE.profile?.rol==='admin'; }
@@ -1556,38 +1557,124 @@ function renderHome() {
     </div>`;
   }
 
-  const listHtml = fams.length===0
-    ? `<div class="empty"><div class="empty-icon">🏠</div>
-       <div class="empty-title">Sin familias registradas</div>
-       <div class="empty-sub">Pulse el botón + para agregar la primera familia</div></div>`
-    : fams.map(f=>{
-        const d=f.d2||{};
-        const lugar=d['8']||d['5']||'(sin ubicación)';
-        const np=(f.personas||[]).length;
-        const ebsCode=calcEBS(d);
-        return `<div class="familia-item">
-          <div class="familia-icon">🏠</div>
-          <div class="familia-info">
-            <div class="familia-nombre">${esc(lugar)}</div>
-            <div class="familia-meta">Mun: ${d['5']||'—'} · EBS: ${esc(ebsCode.slice(-6))} · ${np} persona(s) · ${d['25']||'—'}</div>
-          </div>
-          <div class="familia-actions">
-            <button class="btn btn-secondary btn-sm" onclick="editFamilia('${f.id}')" title="Editar familia">✏</button>
-            <button class="btn btn-secondary btn-sm" onclick="navigate('familia_t3',{editFamId:'${f.id}'})" title="Integrantes">👥</button>
-            <button class="btn btn-secondary btn-sm" onclick="imprimirCaracterizacion('${f.id}')" title="Imprimir / PDF">🖨</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteFamilia('${f.id}')" title="Eliminar">🗑</button>
-          </div>
-        </div>`;
-      }).join('');
+  const buscadorHtml = `
+    <div class="card" style="padding:10px 12px;margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;flex-shrink:0">🔍</span>
+        <input id="buscador-familia" class="field-input" type="search" placeholder="Buscar por nombre de integrante…"
+          style="flex:1;margin:0;padding:8px 10px;font-size:14px"
+          value="${esc(STATE.busquedaFamilia)}"
+          oninput="filtrarFamilias(this.value)"
+          autocomplete="off">
+        <button id="busq-clear" class="btn btn-secondary btn-sm" onclick="filtrarFamilias('')" title="Limpiar búsqueda"
+          style="${STATE.busquedaFamilia?'':'display:none'}">✕</button>
+      </div>
+      <div id="busq-count" style="font-size:11px;color:var(--muted);margin-top:6px;min-height:14px"></div>
+    </div>`;
+
+  const listHtml = `<div id="familia-list">${buildFamiliaListHtml(STATE.busquedaFamilia, fams)}</div>`;
 
   const bannerHtml = `<div class="home-banner"><img src="./banner.png" alt="ESE Hospital Regional Noroccidental — Salud Pública" loading="eager"></div>`;
 
-  return bannerHtml+userInfo+statsHtml+listHtml+
+  return bannerHtml+userInfo+statsHtml+buscadorHtml+listHtml+
     `<div style="height:20px"></div>
      <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
      <button class="btn btn-primary btn-block" onclick="navigate('analytics')">📊 Ver análisis e indicadores</button>
      ${isAdmin()?`<button class="btn btn-secondary btn-block" onclick="navigate('config')">⚙ Configuración del reporte</button>`:''}
      <button class="fab" onclick="nuevaFamilia()">+</button>`;
+}
+
+// ── Buscador de familias por nombre de integrante ─────────────
+function buildFamiliaListHtml(q, fams) {
+  if (!fams) fams = STATE.familias.filter(f=>!f.deleted_at);
+  const term = (q||'').trim().toLowerCase();
+
+  // Filtrar y anotar coincidencias
+  const resultados = fams.reduce((acc, f) => {
+    if (!term) { acc.push({f, match:null}); return acc; }
+    const d2 = f.d2||{};
+    // Buscar en cada integrante
+    let matchNombre = null;
+    for (const p of (f.personas||[])) {
+      const pd = p.d3||{};
+      const nombre = [pd['3'],pd['4'],pd['5'],pd['6']].filter(Boolean).join(' ').toLowerCase();
+      if (nombre.includes(term)) { matchNombre = [pd['3'],pd['4'],pd['5'],pd['6']].filter(Boolean).join(' '); break; }
+    }
+    // También buscar en sector/vereda y dirección
+    const sector = (d2['8']||'').toLowerCase();
+    const dir    = (d2['9']||'').toLowerCase();
+    if (matchNombre || sector.includes(term) || dir.includes(term)) {
+      acc.push({f, match: matchNombre});
+    }
+    return acc;
+  }, []);
+
+  // Actualizar contador
+  if (term) {
+    const cnt = document.getElementById('busq-count');
+    if (cnt) cnt.textContent = resultados.length === 0
+      ? 'Sin resultados para "'+q+'"'
+      : resultados.length + ' familia(s) encontrada(s)';
+  }
+
+  if (resultados.length === 0 && !term) {
+    return `<div class="empty"><div class="empty-icon">🏠</div>
+      <div class="empty-title">Sin familias registradas</div>
+      <div class="empty-sub">Pulse el botón + para agregar la primera familia</div></div>`;
+  }
+  if (resultados.length === 0 && term) {
+    return `<div class="empty"><div class="empty-icon">🔍</div>
+      <div class="empty-title">Sin resultados</div>
+      <div class="empty-sub">No se encontró ningún integrante con ese nombre</div></div>`;
+  }
+
+  function hi(txt, q) {
+    if (!q || !txt) return esc(txt||'');
+    const i = txt.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return esc(txt);
+    return esc(txt.slice(0,i))+'<mark style="background:var(--yellow);color:#000;border-radius:2px;padding:0 2px">'+esc(txt.slice(i,i+q.length))+'</mark>'+esc(txt.slice(i+q.length));
+  }
+
+  return resultados.map(({f, match}) => {
+    const d = f.d2||{};
+    const lugar = d['8']||d['5']||'(sin ubicación)';
+    const np = (f.personas||[]).length;
+    const ebsCode = calcEBS(d);
+    const matchBadge = match
+      ? `<div style="font-size:10px;color:var(--green);margin-top:3px">👤 ${hi(match, q)}</div>` : '';
+    return `<div class="familia-item">
+      <div class="familia-icon">🏠</div>
+      <div class="familia-info">
+        <div class="familia-nombre">${hi(lugar, q)}</div>
+        <div class="familia-meta">Mun: ${d['5']||'—'} · EBS: ${esc(ebsCode.slice(-6))} · ${np} persona(s) · ${d['25']||'—'}</div>
+        ${matchBadge}
+      </div>
+      <div class="familia-actions">
+        <button class="btn btn-secondary btn-sm" onclick="editFamilia('${f.id}')" title="Editar familia">✏</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('familia_t3',{editFamId:'${f.id}'})" title="Integrantes">👥</button>
+        <button class="btn btn-secondary btn-sm" onclick="imprimirCaracterizacion('${f.id}')" title="Imprimir / PDF">🖨</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFamilia('${f.id}')" title="Eliminar">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filtrarFamilias(q) {
+  STATE.busquedaFamilia = (q||'').trim();
+  const fams = STATE.familias.filter(f=>!f.deleted_at);
+  const term = STATE.busquedaFamilia.toLowerCase();
+  // Actualizar valor del input (útil al limpiar con el botón ✕)
+  const inp = document.getElementById('buscador-familia');
+  if (inp && inp.value !== (q||'')) inp.value = q||'';
+  // Actualizar lista sin re-render completo para no perder foco del input
+  const listEl = document.getElementById('familia-list');
+  if (listEl) listEl.innerHTML = buildFamiliaListHtml(STATE.busquedaFamilia, fams);
+  // Mostrar/ocultar botón limpiar
+  const clrEl = document.getElementById('busq-clear');
+  if (clrEl) clrEl.style.display = term ? '' : 'none';
+  // Limpiar contador si no hay búsqueda activa
+  const cntEl = document.getElementById('busq-count');
+  if (cntEl && !term) cntEl.textContent = '';
 }
 
 // ============================================================
