@@ -1043,11 +1043,23 @@ async function pullFromCloud() {
   const fams = await sbFetch('/rest/v1/familias?deleted_at=is.null&select=*');
   for (const f of (fams||[])) {
     const existing = await idb.get('familias', f.id);
-    if (!existing?.deleted_at) await idb.put('familias', f);
+    if (!existing?.deleted_at) {
+      // Preserve ebs_code from local record if the server didn't return it
+      // (prevents breaking the IDB index when Supabase omits the column)
+      const record = {...f};
+      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
+      await idb.put('familias', record);
+    }
   }
   // Personas
   const pers = await sbFetch('/rest/v1/personas?deleted_at=is.null&select=*');
-  for (const p of (pers||[])) await idb.put('personas', p);
+  for (const p of (pers||[])) {
+    const existing = await idb.get('personas', p.id);
+    const record = {...p};
+    // Preserve familia_id from local record if server didn't return it
+    if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
+    await idb.put('personas', record);
+  }
   // Opciones custom
   const opts = await sbFetch('/rest/v1/opciones_custom?activo=eq.true&select=*');
   await idb.clear('opciones_custom');
@@ -1076,15 +1088,21 @@ async function pullFromCloud() {
 async function rebuildAppState() {
   // Load familias from IDB
   let fams;
+  // Always load all local families first — avoids losing records when ebs_code index
+  // is stale (e.g. server overwrote the IDB record without ebs_code) or when profile
+  // ebs_codes list is empty / out of sync with calcEBS output.
+  const allLocal = await idb.getAll('familias');
   if (STATE.profile?.rol==='admin') {
-    fams = await idb.getAll('familias');
+    fams = allLocal;
   } else {
-    const codes = STATE.profile?.ebs_codes||[];
-    fams = [];
-    for (const code of codes) {
-      const fs = await idb.getAllByIndex('familias','ebs_code',code);
-      fams.push(...fs);
-    }
+    const myId  = STATE.auth?.user?.id;
+    const codes = new Set(STATE.profile?.ebs_codes||[]);
+    // Show: families the user created (created_by) OR families whose ebs_code is
+    // assigned to the user. This survives empty ebs_codes and broken index.
+    fams = allLocal.filter(f =>
+      (myId && f.created_by === myId) ||
+      (f.ebs_code && codes.has(f.ebs_code))
+    );
   }
   fams = fams.filter(f=>!f.deleted_at);
   // Deduplicar por id (protección contra doble escritura en IDB o Supabase)
