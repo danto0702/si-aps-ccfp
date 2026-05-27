@@ -281,6 +281,7 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .toast.show{opacity:1}
 .toast.ok{border-color:var(--green);color:var(--green)}
 .toast.err{border-color:var(--red);color:var(--red)}
+.toast.warn{border-color:var(--yellow);color:var(--yellow)}
 .toast.info{border-color:var(--blue);color:#93c5fd}
 
 /* ── Login ── 100dvh arregla el bug de 100vh en iOS Safari */
@@ -935,22 +936,73 @@ async function addPending(op, table, data) {
   updateSyncUI();
 }
 
-async function syncToCloud() {
-  if (_syncing || !STATE.isOnline || !STATE.auth) return;
+async function syncToCloud(manual=false) {
+  if (_syncing || !STATE.isOnline || !STATE.auth) {
+    if (manual && !STATE.isOnline) {
+      toast('Sin conexión a internet. Los datos se guardarán localmente y se sincronizarán al recuperar señal.','warn');
+    }
+    return;
+  }
   _syncing = true; setSyncDot('syncing');
+  const connBanner = document.getElementById('conn-banner');
+  if (connBanner && manual) {
+    connBanner.className='conn-banner syncing';
+    connBanner.textContent='🔄 Sincronizando con el servidor...';
+  }
   try {
     const pending = await idb.getAll('sync_pending');
+    let uploaded = 0;
     for (const item of pending) {
       try {
         await execSyncOp(item);
         await idb.delete('sync_pending', item.id);
+        uploaded++;
       } catch(e){ console.warn('sync item failed:', e.message); }
     }
+    const famsBefore = STATE.familias.filter(f=>!f.deleted_at).length;
     await pullFromCloud();
+    const famsAfter  = STATE.familias.filter(f=>!f.deleted_at).length;
+    const downloaded = Math.max(0, famsAfter - famsBefore);
     setSyncDot('online');
-  } catch(e){ setSyncDot('online'); }
-  _syncing = false;
-  updateSyncUI();
+    if (manual) {
+      const parts = [];
+      if (uploaded>0)   parts.push(`${uploaded} registro(s) subido(s)`);
+      if (downloaded>0) parts.push(`${downloaded} familia(s) nueva(s) descargada(s)`);
+      if (!parts.length) parts.push('Todo al día · Sin cambios pendientes');
+      toast('✅ Sincronización completa — '+parts.join(' · '),'ok');
+    }
+    _lastSyncTs = Date.now();
+    _updateSyncTimestamp();
+  } catch(e){
+    setSyncDot('online');
+    if (manual) toast('Error al sincronizar: '+e.message,'err');
+  } finally {
+    if (connBanner) { connBanner.className='conn-banner'; connBanner.textContent=''; }
+    _syncing = false;
+    updateSyncUI();
+  }
+}
+
+let _lastSyncTs = 0;
+function _updateSyncTimestamp() {
+  const el = document.getElementById('last-sync-label');
+  if (!el || !_lastSyncTs) return;
+  const diff = Math.round((Date.now()-_lastSyncTs)/1000);
+  el.textContent = diff < 60 ? 'Hace menos de 1 min' :
+    diff < 3600 ? `Hace ${Math.floor(diff/60)} min` :
+    new Date(_lastSyncTs).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+}
+
+// Auto-sync cada 2 minutos mientras la app esté abierta y con sesión activa
+let _autoSyncInterval = null;
+function startAutoSync() {
+  if (_autoSyncInterval) clearInterval(_autoSyncInterval);
+  _autoSyncInterval = setInterval(async () => {
+    if (STATE.auth && STATE.isOnline && STATE.screen !== 'login') {
+      await syncToCloud(false); // silencioso
+      _updateSyncTimestamp();
+    }
+  }, 2 * 60 * 1000); // cada 2 minutos
 }
 
 async function execSyncOp(item) {
@@ -1543,7 +1595,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.4</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.5</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
       </div>
@@ -1576,8 +1628,19 @@ function renderHome() {
 
   const bannerHtml = `<div class="home-banner"><img src="./banner.png" alt="ESE Hospital Regional Noroccidental — Salud Pública" loading="eager"></div>`;
 
+  const syncBtn = `<div style="margin-bottom:10px">
+    <button class="btn btn-block" onclick="syncToCloud(true)"
+      style="background:#1a3a5c;color:#93c5fd;border:1.5px solid #2563eb;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:10px">
+      🔄 Cargar / Sincronizar datos
+    </button>
+    <div style="text-align:center;margin-top:5px;font-size:11px;color:var(--muted)">
+      Última sincronización: <span id="last-sync-label" style="color:#93c5fd">${_lastSyncTs?'Hace menos de 1 min':'Nunca (presiona el botón)'}</span>
+    </div>
+  </div>`;
+
   return bannerHtml+userInfo+statsHtml+buscadorHtml+listHtml+
     `<div style="height:20px"></div>
+     ${syncBtn}
      <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
      <button class="btn btn-primary btn-block" onclick="navigate('analytics')">📊 Ver análisis e indicadores</button>
      ${isAdmin()?`<button class="btn btn-secondary btn-block" onclick="navigate('config')">⚙ Configuración del reporte</button>`:''}
@@ -1642,10 +1705,11 @@ function buildFamiliaListHtml(q, fams) {
     const ebsCode = calcEBS(d);
     const matchBadge = match
       ? `<div style="font-size:10px;color:var(--green);margin-top:3px">👤 ${hi(match, q)}</div>` : '';
-    return `<div class="familia-item">
+    const isDraftFam = d['_draft']===true;
+    return `<div class="familia-item" style="${isDraftFam?'border-left:3px solid var(--yellow)':''}">
       <div class="familia-icon">🏠</div>
       <div class="familia-info">
-        <div class="familia-nombre">${hi(lugar, q)}</div>
+        <div class="familia-nombre">${hi(lugar, q)}${isDraftFam?` <span style="font-size:10px;font-weight:700;color:var(--yellow);background:rgba(255,180,50,.12);border:1px solid var(--yellow);border-radius:4px;padding:1px 5px;vertical-align:middle">📝 BORRADOR</span>`:''}</div>
         <div class="familia-meta">Mun: ${d['5']||'—'} · EBS: ${esc(ebsCode.slice(-6))} · ${np} persona(s) · ${d['25']||'—'}</div>
         ${matchBadge}
       </div>
@@ -3742,7 +3806,7 @@ function imprimirPCI(){
       </tr>
       <tr>
         <td style="padding:3px 8px 3px 0"><b style="color:#0d2447">Ciclo Vital:</b> ${esc(ciclo)}${plan.paciente.ruta_especial?' · <b style="color:#e94560">'+esc(plan.paciente.ruta_especial)+'</b>':''}</td>
-        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono:</b> ${esc(d2['_tel']||'—')}${d2['_email']?` &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> ${esc(d2['_email'])}`:''}${!d2['_email']?' &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> —':''}</td>
+        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono:</b> ${esc(d['_tel']||d2['_tel']||'—')}${(d['_email']||d2['_email'])?` &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> ${esc(d['_email']||d2['_email'])}`:' &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> —'}</td>
       </tr>
     </table>
   </div>`;
@@ -4125,7 +4189,10 @@ function renderT2(){
                    :`<button class="btn btn-secondary" onclick="navigate('home')">Cancelar</button>`;
   const next=step<5?`<button class="btn btn-primary" onclick="STATE.t2step=${step+1};render()">Siguiente →</button>`
                    :`<button class="btn btn-primary" onclick="saveFamilia()">💾 Guardar familia</button>`;
-  return stepsHtml+content+`<div class="bottom-bar">${prev}${next}</div>`;
+  const draftBtn=`<button class="btn" onclick="saveFamiliaBorrador()" title="Guarda la información actual aunque esté incompleta"
+    style="background:#2a2000;color:var(--yellow);border:1.5px solid var(--yellow);font-size:12px;white-space:nowrap;padding:10px 10px;flex:0 0 auto">
+    📝 Borrador</button>`;
+  return stepsHtml+content+`<div class="bottom-bar" style="flex-wrap:nowrap;gap:6px">${prev}${draftBtn}${next}</div>`;
 }
 
 function renderT2Step1(d){
@@ -4447,6 +4514,7 @@ async function saveFamilia(){
   // Ensure auto-derived fields are set correctly before saving
   d['15'] = '1'; // Siempre IPS Pública para HRNO
   d['16'] = String(parseInt(d.ebs_num||d['16']||'1')||1);
+  d['_draft'] = false; // Guardado completo: limpiar marca de borrador
   const ebsCode=calcEBS(d);
   if(STATE.editFamId){
     const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
@@ -4463,6 +4531,37 @@ async function saveFamilia(){
   }
   _savingFam = false;
   toast('Familia guardada','ok'); navigate('home');
+}
+
+async function saveFamiliaBorrador(){
+  if(_savingFam) return;
+  _savingFam = true;
+  const d=STATE.draft2;
+  // Mínimo: que tenga algo identificable (barrio o municipio o nombre)
+  if(!d['2']&&!d['3']&&!d['5']&&!d['8']){
+    _savingFam=false;
+    return toast('Ingrese al menos el barrio/vereda o municipio antes de guardar como borrador','warn');
+  }
+  d['15'] = '1';
+  d['16'] = String(parseInt(d.ebs_num||d['16']||'1')||1);
+  d['_draft'] = true; // Marca de borrador
+  const ebsCode=calcEBS(d);
+  if(STATE.editFamId){
+    const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
+    if(fam){
+      fam.d2={...d}; fam.ebs_code=ebsCode; fam.updated_at=new Date().toISOString();
+      await writeRecord('familias',{id:fam.id,ebs_code:ebsCode,d2:d,updated_at:fam.updated_at,created_by:fam.created_by,created_at:fam.created_at});
+    }
+  } else {
+    const id=uid();
+    const now=new Date().toISOString();
+    const rec={id,ebs_code:ebsCode,d2:{...d},created_by:STATE.auth?.user?.id,created_at:now,updated_at:now};
+    STATE.familias.push({...rec,personas:[]});
+    await writeRecord('familias',rec);
+  }
+  _savingFam = false;
+  toast('📝 Borrador guardado — recuerda completar la información para el reporte PISIS','warn');
+  navigate('home');
 }
 
 // ============================================================
@@ -4488,10 +4587,11 @@ function renderT3List(){
         const meta=[pd['7']&&pd['8']?pd['7']+' '+pd['8']:'',pd['9']||'',REF.sexo.find(o=>o.v===pd['10'])?.l||''].filter(Boolean).join(' · ');
         const av=pd['10']==='1'?'👨':pd['10']==='2'?'👩':'🧑';
         const tienePCI=!!pd['_pci'];
-        return `<div class="persona-item">
+        const isDraftPer = pd['_draft']===true;
+        return `<div class="persona-item" style="${isDraftPer?'border-left:3px solid var(--yellow)':''}">
           <div class="persona-avatar">${av}</div>
           <div class="persona-info">
-            <div class="persona-nombre">${esc(nombre)}${tienePCI?` <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(56,199,147,.15);color:var(--green);border:1px solid rgba(56,199,147,.3)">PCI ✓</span>`:''}</div>
+            <div class="persona-nombre">${esc(nombre)}${tienePCI?` <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(56,199,147,.15);color:var(--green);border:1px solid rgba(56,199,147,.3)">PCI ✓</span>`:''}${pd['_draft']===true?` <span style="font-size:9px;font-weight:700;color:var(--yellow);background:rgba(255,180,50,.12);border:1px solid var(--yellow);border-radius:4px;padding:1px 4px">📝 BORRADOR</span>`:''}</div>
             <div class="persona-meta">${esc(meta)}</div>
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
@@ -4619,8 +4719,11 @@ function renderPersona(){
     ${showMotivo37?multi3('motivoNoAtencionAguda','37',d['37']||[],false):''}
   </div>
   ${renderTamizajesBlock(d)}
-  <div class="bottom-bar">
+  <div class="bottom-bar" style="flex-wrap:nowrap;gap:6px">
     <button class="btn btn-secondary" onclick="navigate('familia_t3',{editFamId:'${STATE.editFamId}'})">Cancelar</button>
+    <button class="btn" onclick="savePersonaBorrador()" title="Guarda la información actual aunque esté incompleta"
+      style="background:#2a2000;color:var(--yellow);border:1.5px solid var(--yellow);font-size:12px;white-space:nowrap;padding:10px 10px;flex:0 0 auto">
+      📝 Borrador</button>
     <button class="btn btn-primary" onclick="savePersona()">💾 Guardar persona</button>
   </div>`;}
 
@@ -5253,6 +5356,7 @@ async function savePersona(){
   if(!fam)return toast('Error: familia no encontrada','err');
   const ebsCode=fam.ebs_code||calcEBS(fam.d2||{});
   const now=new Date().toISOString();
+  d['_draft'] = false; // Guardado completo: limpiar marca de borrador
   if(STATE.editPerId){
     const per=fam.personas.find(p=>p.id===STATE.editPerId);
     if(per){
@@ -5270,6 +5374,34 @@ async function savePersona(){
   navigate('familia_t3',{editFamId:STATE.editFamId});
 }
 
+async function savePersonaBorrador(){
+  const d=STATE.draft3;
+  // Mínimo: que tenga al menos el primer nombre
+  if(!d['3']&&!d['5']){
+    return toast('Ingrese al menos el primer nombre o apellido antes de guardar como borrador','warn');
+  }
+  const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
+  if(!fam)return toast('Error: familia no encontrada','err');
+  const ebsCode=fam.ebs_code||calcEBS(fam.d2||{});
+  const now=new Date().toISOString();
+  d['_draft'] = true; // Marca de borrador
+  if(STATE.editPerId){
+    const per=fam.personas.find(p=>p.id===STATE.editPerId);
+    if(per){
+      per.d3={...d};
+      await writeRecord('personas',{id:per.id,familia_id:fam.id,ebs_code:ebsCode,d3:{...d},updated_at:now,created_by:per.created_by,created_at:per.created_at});
+    }
+  } else {
+    if(!fam.personas)fam.personas=[];
+    const id=uid();
+    fam.personas.push({id,d3:{...d}});
+    await writeRecord('personas',{id,familia_id:fam.id,ebs_code:ebsCode,d3:{...d},created_by:STATE.auth?.user?.id,created_at:now,updated_at:now});
+  }
+  fam.d2['55']=String(fam.personas.length);
+  toast('📝 Borrador de persona guardado — recuerda completarla para el reporte PISIS','warn');
+  navigate('familia_t3',{editFamId:STATE.editFamId});
+}
+
 // ============================================================
 // PANTALLA EXPORT + GENERADOR PISIS
 // ============================================================
@@ -5279,7 +5411,11 @@ function renderExport(){
   const allFams=STATE.familias.filter(f=>!f.deleted_at);
   const myId=STATE.auth?.user?.id;
   const fams=isAdmin() ? allFams : allFams.filter(f=>f.created_by===myId);
-  const totalT3=fams.reduce((s,f)=>(f.personas||[]).length+s,0);
+  // Separate drafts from ready records
+  const famsReady=fams.filter(f=>!f.d2?.['_draft']);
+  const famsDraft=fams.filter(f=>f.d2?.['_draft']);
+  const totalT3=famsReady.reduce((s,f)=>(f.personas||[]).filter(p=>!p.d3?.['_draft']).length+s,0);
+  const totalT3Draft=fams.reduce((s,f)=>(f.personas||[]).filter(p=>p.d3?.['_draft']).length+s,0);
   const confOk=c.nit&&c.fechaInicio&&c.fechaFin;
   const fechaC=(c.fechaFin||'').replace(/-/g,'');
   const nitPad=String(c.nit||'').padStart(12,'0');
@@ -5290,13 +5426,18 @@ function renderExport(){
   const scopeNote=isAdmin()
     ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:10px">👑 Modo administrador — se incluyen datos de TODOS los usuarios (${allFams.length} familias total).</div>`
     : `<div style="font-size:11px;color:var(--blue);margin-bottom:10px">👤 Exportando solo tus datos (${fams.length} familias). El administrador puede exportar todo.</div>`;
+  const draftNote=(famsDraft.length>0||totalT3Draft>0)
+    ? `<div style="font-size:11px;color:var(--yellow);background:rgba(255,180,50,.08);border:1px solid var(--yellow);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+        📝 <b>${famsDraft.length} familia(s) borrador</b> y <b>${totalT3Draft} persona(s) borrador</b> están excluidas del archivo PISIS. Completa su información y guárdalas para incluirlas en el reporte.
+      </div>`
+    : '';
   return `<div class="card">
     <div class="card-title">Resumen del archivo plano PISIS</div>
-    ${scopeNote}
+    ${scopeNote}${draftNote}
     <div class="config-row"><span>Entidad</span><span class="config-val">${esc(c.tipoEntidad)} — ${esc(c.nit||'—')}</span></div>
     <div class="config-row"><span>Período</span><span class="config-val">${esc(c.fechaInicio||'—')} / ${esc(c.fechaFin||'—')}</span></div>
-    <div class="config-row"><span>Familias (Tipo 2)</span><span class="config-val">${fams.length}</span></div>
-    <div class="config-row"><span>Personas (Tipo 3)</span><span class="config-val">${totalT3}</span></div>
+    <div class="config-row"><span>Familias para PISIS (T2)</span><span class="config-val">${famsReady.length}${famsDraft.length>0?` <span style="font-size:10px;color:var(--yellow)">(+${famsDraft.length} borrador)</span>`:''}</span></div>
+    <div class="config-row"><span>Personas para PISIS (T3)</span><span class="config-val">${totalT3}${totalT3Draft>0?` <span style="font-size:10px;color:var(--yellow)">(+${totalT3Draft} borrador)</span>`:''}</span></div>
     <div class="config-row"><span>Archivo TXT</span><span class="config-val" style="font-size:10px">${esc(fileName)}</span></div>
   </div>
   ${!confOk?`<div class="card" style="border-color:var(--yellow)"><div style="color:var(--yellow)">⚠ Configure primero el NIT y el período de reporte para el archivo PISIS.</div></div>`:''}
@@ -5340,8 +5481,10 @@ function resolveCustomVal(val, refKey) {
 }
 
 function buildFile(){
-  const c=STATE.config, fams=STATE.familias.filter(f=>!f.deleted_at);
-  const totalT3=fams.reduce((s,f)=>(f.personas||[]).length+s,0);
+  const c=STATE.config;
+  // Excluir familias en borrador y personas en borrador del archivo PISIS
+  const fams=STATE.familias.filter(f=>!f.deleted_at && !f.d2?.['_draft']);
+  const totalT3=fams.reduce((s,f)=>(f.personas||[]).filter(p=>!p.d3?.['_draft']).length+s,0);
   let consec=0;
   const lines=[];
   // Tipo 1
@@ -5389,7 +5532,7 @@ function buildFile(){
       d['81']||'',d['82']||'',d['83']||'',numIdFam
     ];
     lines.push(t2.join('|'));
-    (fam.personas||[]).forEach(per=>{
+    (fam.personas||[]).filter(per=>!per.d3?.['_draft']).forEach(per=>{
       consec++;
       const pd=per.d3||{};
       const numIdInt=numIdFam+(pd['7']||'')+(pd['8']||'');
@@ -6541,7 +6684,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v2.4</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v2.5</div>
   </div>
 </div>
 
@@ -6605,10 +6748,14 @@ ${personas.length>0 ? `<h2 style="font-size:13px;color:#4a6fa5;margin:16px 0 6px
 // ============================================================
 // TOAST
 // ============================================================
-function toast(msg,type='ok'){
+function toast(msg,type='ok',ms=null){
   const el=document.getElementById('toast');
+  if(!el)return;
   el.textContent=msg; el.className='toast show '+type;
-  setTimeout(()=>{el.className='toast';},3500);
+  // Mensajes de sync/warn son más largos para ser legibles
+  const dur = ms ?? (type==='warn'||msg.length>60 ? 5500 : 3500);
+  clearTimeout(el._tid);
+  el._tid=setTimeout(()=>{el.className='toast';},dur);
 }
 
 // ============================================================
@@ -6641,8 +6788,11 @@ async function init() {
     if (isAdmin()) await loadAdminUsers();
   }
   initConnectivity();
+  startAutoSync();
   render();
   updateSyncUI();
+  // Actualizar label de "última sincronización" cada minuto
+  setInterval(_updateSyncTimestamp, 60000);
   // Service Worker
   if ('serviceWorker' in navigator && location.protocol!=='file:')
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
