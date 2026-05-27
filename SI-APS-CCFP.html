@@ -1039,20 +1039,24 @@ async function pullFromCloud() {
       document.getElementById('btn-analytics').style.display = '';
     }
   } catch(e){}
-  // Familias — no sobreescribir registros marcados como eliminados localmente
-  const fams = await sbFetch('/rest/v1/familias?deleted_at=is.null&select=*');
+  // Familias — admin usa RPC SECURITY DEFINER para ver todas sin filtro RLS
+  const isAdminNow = STATE.profile?.rol === 'admin';
+  const fams = isAdminNow
+    ? await sbFetch('/rest/v1/rpc/get_all_familias', {method:'POST', body:'{}'})
+    : await sbFetch('/rest/v1/familias?deleted_at=is.null&select=*');
   for (const f of (fams||[])) {
     const existing = await idb.get('familias', f.id);
     if (!existing?.deleted_at) {
       // Preserve ebs_code from local record if the server didn't return it
-      // (prevents breaking the IDB index when Supabase omits the column)
       const record = {...f};
       if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
       await idb.put('familias', record);
     }
   }
-  // Personas
-  const pers = await sbFetch('/rest/v1/personas?deleted_at=is.null&select=*');
+  // Personas — admin usa RPC para ver todas sin filtro RLS
+  const pers = isAdminNow
+    ? await sbFetch('/rest/v1/rpc/get_all_personas', {method:'POST', body:'{}'})
+    : await sbFetch('/rest/v1/personas?deleted_at=is.null&select=*');
   for (const p of (pers||[])) {
     const existing = await idb.get('personas', p.id);
     const record = {...p};
