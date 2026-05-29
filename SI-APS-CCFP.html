@@ -835,7 +835,7 @@ async function loadProfile() {
 // ============================================================
 // INDEXEDDB (offline store)
 // ============================================================
-const DB_NAME='siaps_v2', DB_VER=1;
+const DB_NAME='siaps_v2', DB_VER=2;
 let _db = null;
 
 async function openDB() {
@@ -862,6 +862,10 @@ async function openDB() {
         db.createObjectStore('sync_pending',{keyPath:'id',autoIncrement:true});
       if (!db.objectStoreNames.contains('profiles'))
         db.createObjectStore('profiles',{keyPath:'id'});
+      if (!db.objectStoreNames.contains('planes_familiar')) {
+        const pf = db.createObjectStore('planes_familiar',{keyPath:'id'});
+        pf.createIndex('familia_id','familia_id',{unique:false});
+      }
     };
     req.onsuccess = e=>{ _db=e.target.result; res(_db); };
     req.onerror  = e=>rej(e.target.error);
@@ -1064,6 +1068,19 @@ async function pullFromCloud() {
     if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
     await idb.put('personas', record);
   }
+  // Planes de Cuidado Familiar
+  const planes = isAdminNow
+    ? await sbFetch('/rest/v1/rpc/get_all_planes_familiar', {method:'POST', body:'{}'})
+    : await sbFetch('/rest/v1/planes_familiar?deleted_at=is.null&select=*');
+  for (const pl of (planes||[])) {
+    const existing = await idb.get('planes_familiar', pl.id);
+    if (!existing?.deleted_at) {
+      const record = {...pl};
+      if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
+      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
+      await idb.put('planes_familiar', record);
+    }
+  }
   // Opciones custom
   const opts = await sbFetch('/rest/v1/opciones_custom?activo=eq.true&select=*');
   await idb.clear('opciones_custom');
@@ -1114,11 +1131,14 @@ async function rebuildAppState() {
   // Deduplicar por id (protección contra doble escritura en IDB o Supabase)
   const _seenFam = new Set();
   fams = fams.filter(f=>{ if(_seenFam.has(f.id))return false; _seenFam.add(f.id); return true; });
-  // Attach personas
+  // Attach personas y planes
+  const allPlanes = await idb.getAll('planes_familiar');
   for (const f of fams) {
     const ps = await idb.getAllByIndex('personas','familia_id',f.id);
     f.personas = ps.filter(p=>!p.deleted_at).map(p=>({id:p.id, d3:p.d3}));
+    f.plan = allPlanes.find(pl=>pl.familia_id===f.id && !pl.deleted_at) || null;
   }
+  STATE.planesFamiliar = allPlanes.filter(pl=>!pl.deleted_at);
   STATE.familias = fams;
   // Load custom options into REF
   const opts = await idb.getAll('opciones_custom');
@@ -1223,7 +1243,14 @@ const STATE = {
   fieldConfig: {t2:{}, t3:{}},
   // EBS list: [{num:'001', label:'EBS 001 — Municipio'}]. If empty, derived from user codes.
   ebsList: [],
-  busquedaFamilia: ''
+  busquedaFamilia: '',
+  // Plan de Cuidado Familiar
+  planesFamiliar: [],
+  editPCFId: null,
+  draftPCF: {},
+  draftVisita: {},
+  editVisitaIdx: null,
+  _pcfFamId: null
 };
 
 function isAdmin() { return STATE.profile?.rol==='admin'; }
@@ -1282,7 +1309,9 @@ const SCREEN_META = {
   familia_t3: {t:'Integrantes', s:'Registro Tipo 3 — Personas', back:true},
   persona:    {t:'', s:'Registro Tipo 3', back:true},
   export:     {t:'Exportar Archivo', s:'Archivo plano PISIS', back:true},
-  analytics:  {t:'📊 Análisis', s:'Indicadores y tendencias', back:true}
+  analytics:  {t:'📊 Análisis', s:'Indicadores y tendencias', back:true},
+  pcf:        {t:'Plan de Cuidado Familiar', s:'Seguimiento familiar — Riesgos y visitas', back:true},
+  pcf_visita: {t:'Registrar Visita', s:'Plan de Cuidado Familiar', back:true}
 };
 
 function navigate(screen, extra={}) {
@@ -1299,7 +1328,8 @@ function goBack() {
   const backs = {
     config:'home', admin:'home', export:'home', analytics:'home',
     familia_t2:'home', familia_t3:'home',
-    persona:'familia_t3'
+    persona:'familia_t3',
+    pcf:'home', pcf_visita:'pcf'
   };
   navigate(backs[STATE.screen]||'home');
 }
@@ -1336,7 +1366,9 @@ function render() {
     admin: renderAdmin,
     familia_t2: renderT2, familia_t3: renderT3List,
     persona: renderPersona, export: renderExport,
-    analytics: renderAnalytics
+    analytics: renderAnalytics,
+    pcf: renderPCF,
+    pcf_visita: renderPCFVisita
   };
   m.innerHTML = (renders[STATE.screen]||renderHome)();
 }
@@ -1741,6 +1773,7 @@ function buildFamiliaListHtml(q, fams) {
         <button class="btn btn-secondary btn-sm" onclick="editFamilia('${f.id}')" title="Editar familia">✏</button>
         <button class="btn btn-secondary btn-sm" onclick="navigate('familia_t3',{editFamId:'${f.id}'})" title="Integrantes">👥</button>
         <button class="btn btn-secondary btn-sm" onclick="imprimirCaracterizacion('${f.id}')" title="Imprimir / PDF">🖨</button>
+        <button class="btn btn-secondary btn-sm" onclick="abrirPCF('${f.id}')" title="Plan de Cuidado Familiar" style="${f.plan?'color:var(--green)':''}">📋</button>
         <button class="btn btn-danger btn-sm" onclick="deleteFamilia('${f.id}')" title="Eliminar">🗑</button>
       </div>
     </div>`;
@@ -5489,6 +5522,7 @@ function renderExport(){
     <button class="btn btn-success btn-block" onclick="downloadFile()" ${!confOk?'disabled':''}>⬇ Descargar archivo PISIS (${esc(fileName)})</button>
     <button class="btn btn-primary btn-block" onclick="downloadExcel()">📊 Exportar Excel (T2 + T3)</button>
     <button class="btn btn-primary btn-block" style="background:var(--purple)" onclick="downloadExcelPCI()">📋 Exportar Planes de Cuidado Individual (PCI)</button>
+    <button class="btn btn-primary btn-block" style="background:var(--green);color:#0d1117" onclick="downloadExcelPCFTodos()">📋 Exportar Planes de Cuidado Familiar (PCF)</button>
     <button class="btn btn-secondary btn-block" onclick="downloadJSON()">📄 Exportar JSON (backup)</button>
   </div>`;}
 
@@ -6773,6 +6807,617 @@ ${personas.length>0 ? `<h2 style="font-size:13px;color:#4a6fa5;margin:16px 0 6px
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   // Revocar la URL de blob después de 90 s para liberar memoria
   setTimeout(() => URL.revokeObjectURL(url), 90000);
+}
+
+// ============================================================
+// PLAN DE CUIDADO FAMILIAR (PCF)
+// ============================================================
+
+// Riesgos del campo 36 — se usan tanto en PCF como en las visitas
+const PCF_RIESGOS = [
+  {v:'1', l:'Objetos cortantes o punzantes al alcance de niños'},
+  {v:'2', l:'Sustancias químicas al alcance de niños'},
+  {v:'3', l:'Medicamentos al alcance de niños'},
+  {v:'4', l:'Velas, velones, incienso encendido en la vivienda'},
+  {v:'5', l:'Conexiones eléctricas en mal estado o sobrecargadas'},
+  {v:'6', l:'Botones, canicas u objetos pequeños al alcance de niños'},
+  {v:'7', l:'Pasillos obstruidos con juguetes, sillas u otros objetos'},
+  {v:'8', l:'Superficies resbaladizas, suelos con agua, grasas, aceites'},
+  {v:'9', l:'Tanques o recipientes de almacenamiento de agua sin tapa'},
+  {v:'10',l:'Escaleras sin protección'},
+  {v:'11',l:'Ninguno'}
+];
+
+function abrirPCF(famId) {
+  navigate('pcf', {_pcfFamId: famId});
+}
+
+// ── renderPCF ── pantalla principal del plan ────────────────
+function renderPCF() {
+  const famId = STATE._pcfFamId;
+  const fam   = STATE.familias.find(f=>f.id===famId);
+  if (!fam) return `<div class="card"><p style="color:var(--muted)">Familia no encontrada.</p></div>`;
+
+  const d2    = fam.d2||{};
+  const lugar = d2['8']||d2['5']||'(sin ubicación)';
+  const plan  = fam.plan;
+
+  // Mostrar formulario si no hay plan o si se está editando
+  if (!plan || STATE._pcfEditing) {
+    STATE._pcfEditing = false;
+    return renderPCFForm(famId, fam);
+  }
+
+  // ── Encabezado del plan ────────────────────────────────────
+  const pdata = plan.data||{};
+  const estado= pdata.estado||'abierto';
+  const estadoColor = estado==='cerrado'?'var(--muted)':estado==='seguimiento'?'var(--yellow)':'var(--green)';
+  const estadoLabel = estado==='cerrado'?'Cerrado':estado==='seguimiento'?'En seguimiento':'Abierto';
+  const visitas= pdata.visitas||[];
+  const nVis   = visitas.length;
+  const indColor= nVis>=3?'var(--green)':nVis>=1?'var(--yellow)':'var(--red)';
+
+  const riesgosSelec = (pdata.riesgos||[]).map(v=>{
+    const r=PCF_RIESGOS.find(x=>x.v===v); return r?r.l:v;
+  });
+  if (pdata.riesgos_otros) riesgosSelec.push('Otros: '+pdata.riesgos_otros);
+
+  let html = `
+  <div class="card" style="border-left:4px solid var(--green);margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div>
+        <div style="font-weight:700;font-size:15px">🏠 ${esc(lugar)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Plan de Cuidado Familiar</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <span style="background:${estadoColor}22;color:${estadoColor};border:1px solid ${estadoColor};border-radius:12px;padding:3px 10px;font-size:11px;font-weight:700">${estadoLabel}</span>
+        <div style="margin-top:4px;font-size:10px;color:${indColor};font-weight:700">🏠 ${nVis} visita${nVis!==1?'s':''} ${nVis>=3?'✓':nVis===0?'⚠️':''}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Riesgos identificados -->
+  <div class="card" style="margin-bottom:8px">
+    <div class="card-title" style="font-size:12px;margin-bottom:6px">⚠️ Riesgos identificados (Campo 36)</div>
+    ${riesgosSelec.length
+      ? riesgosSelec.map(r=>`<div style="padding:3px 0 3px 10px;font-size:12px;border-left:2px solid var(--yellow);margin-bottom:3px">• ${esc(r)}</div>`).join('')
+      : '<div style="color:var(--muted);font-size:12px">Sin riesgos seleccionados.</div>'
+    }
+  </div>
+
+  <!-- Compromiso -->
+  <div class="card" style="margin-bottom:8px">
+    <div class="card-title" style="font-size:12px;margin-bottom:4px">🤝 Compromiso familiar</div>
+    <div style="font-size:12px;line-height:1.5;white-space:pre-wrap">${esc(pdata.compromiso||'—')}</div>
+    <div style="margin-top:6px;font-size:11px;color:var(--muted)">Responsable: <strong style="color:var(--fg)">${esc(pdata.responsable_nombre||'—')}</strong></div>
+  </div>
+
+  <!-- Acciones -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    ${estado!=='cerrado'?`<button class="btn btn-secondary btn-sm" onclick="editarPCF('${famId}')">✏ Editar plan</button>`:''}
+    ${estado!=='cerrado'?`<button class="btn btn-secondary btn-sm" onclick="navigate('pcf_visita',{_pcfFamId:'${famId}',editVisitaIdx:null})">➕ Nueva visita</button>`:''}
+    <button class="btn btn-secondary btn-sm" onclick="imprimirPCF('${famId}')">🖨 Imprimir</button>
+    ${isAdmin()&&estado!=='cerrado'?`<button class="btn btn-danger btn-sm" onclick="cerrarPCF('${famId}')">🔒 Cerrar plan</button>`:''}
+  </div>
+
+  <!-- Lista de visitas -->
+  <div class="card-title" style="font-size:12px;margin-bottom:6px;margin-top:4px">📅 Visitas realizadas</div>`;
+
+  if (!visitas.length) {
+    html += `<div style="color:var(--muted);font-size:12px;padding:8px 0">Sin visitas registradas aún.</div>`;
+  } else {
+    visitas.forEach((v,i)=>{
+      const recibio = v.recibio_nombre||_pcfPersonaNombre(famId,v.recibio_id)||v.recibio_id||'—';
+      const identif = (v.identificado||[]).map(k=>{const r=PCF_RIESGOS.find(x=>x.v===k);return r?r.l:k;});
+      if (v.identificado_otros) identif.push('Otros: '+v.identificado_otros);
+      html += `
+      <div class="card" style="margin-bottom:6px;border-left:3px solid var(--blue)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700;font-size:12px">Visita ${i+1} — ${esc(v.fecha||'—')}</div>
+          <div style="display:flex;gap:6px">
+            ${estado!=='cerrado'?`<button class="btn btn-secondary btn-sm" style="padding:2px 7px;font-size:10px" onclick="navigate('pcf_visita',{_pcfFamId:'${famId}',editVisitaIdx:${i}})">✏</button>`:''}
+            ${estado!=='cerrado'?`<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:10px" onclick="eliminarVisitaPCF('${famId}',${i})">🗑</button>`:''}
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin:2px 0">Recibió: ${esc(recibio)}</div>
+        ${v.acciones?`<div style="font-size:11px;margin-top:4px;white-space:pre-wrap">${esc(v.acciones)}</div>`:''}
+        ${identif.length?`<div style="margin-top:4px;font-size:10px;color:var(--yellow)">Identificado: ${identif.map(r=>`<span style="background:rgba(255,180,50,.15);padding:1px 5px;border-radius:3px;margin:1px">${esc(r)}</span>`).join(' ')}</div>`:''}
+      </div>`;
+    });
+  }
+
+  html += `<div style="height:16px"></div>`;
+  return html;
+}
+
+// ── renderPCFForm ── crear / editar el encabezado del plan ──
+function renderPCFForm(famId, fam) {
+  fam = fam || STATE.familias.find(f=>f.id===famId);
+  const d2   = fam?.d2||{};
+  const lugar= d2['8']||d2['5']||'(sin ubicación)';
+  const plan = fam?.plan;
+  // Pre-llenar con riesgos del campo 36 de la familia si es plan nuevo
+  const campo36 = (d2['36']||'').split(',').map(v=>v.trim()).filter(Boolean);
+  const draft = STATE.draftPCF;
+  const riesgosAct = draft._loaded ? (draft.riesgos||[]) : (plan?plan.data?.riesgos||[]:campo36);
+  const compromisoAct = draft._loaded ? (draft.compromiso||'') : (plan?.data?.compromiso||'');
+  const respAct = draft._loaded ? (draft.responsable_nombre||'') : (plan?.data?.responsable_nombre||'');
+  const otrosAct = draft._loaded ? (draft.riesgos_otros||'') : (plan?.data?.riesgos_otros||'');
+  const isEdit = !!plan;
+
+  STATE.draftPCF = {_loaded:true, riesgos:[...riesgosAct], riesgos_otros:otrosAct, compromiso:compromisoAct, responsable_nombre:respAct};
+
+  return `
+  <div class="card" style="border-left:4px solid var(--purple);margin-bottom:8px">
+    <div style="font-weight:700;font-size:14px">🏠 ${esc(lugar)}</div>
+    <div style="font-size:11px;color:var(--muted)">${isEdit?'Editar':'Nuevo'} Plan de Cuidado Familiar</div>
+  </div>
+
+  <div class="card" style="margin-bottom:8px">
+    <div class="card-title" style="font-size:12px;margin-bottom:8px">⚠️ Riesgos identificados</div>
+    <div style="margin-bottom:8px">
+    ${PCF_RIESGOS.map(r=>`
+      <label style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;cursor:pointer">
+        <input type="checkbox" value="${r.v}" id="pcf-r-${r.v}"
+          onchange="STATE.draftPCF.riesgos=(STATE.draftPCF.riesgos||[]);if(this.checked)STATE.draftPCF.riesgos.push(this.value);else STATE.draftPCF.riesgos=STATE.draftPCF.riesgos.filter(x=>x!==this.value)"
+          ${riesgosAct.includes(r.v)?'checked':''}
+          style="margin-top:2px;flex-shrink:0;accent-color:var(--green)">
+        <span style="font-size:12px;line-height:1.3">${esc(r.l)}</span>
+      </label>`).join('')}
+    </div>
+    <div class="field">
+      <div class="field-label" style="font-size:11px">Otros riesgos (texto libre)</div>
+      <input class="field-input" style="font-size:12px" type="text" maxlength="300"
+        placeholder="Describe otros riesgos identificados…"
+        value="${esc(otrosAct)}"
+        oninput="STATE.draftPCF.riesgos_otros=this.value">
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:8px">
+    <div class="card-title" style="font-size:12px;margin-bottom:6px">🤝 Compromiso con la familia</div>
+    <div class="field">
+      <div class="field-label" style="font-size:11px">Compromiso del profesional <span class="req">*</span></div>
+      <textarea class="field-input" rows="4" maxlength="1000"
+        placeholder="Describe los compromisos para mitigar los riesgos identificados…"
+        oninput="STATE.draftPCF.compromiso=this.value"
+        style="resize:vertical;font-size:12px">${esc(compromisoAct)}</textarea>
+    </div>
+    <div class="field">
+      <div class="field-label" style="font-size:11px">Nombre del responsable familiar <span class="req">*</span></div>
+      <input class="field-input" style="font-size:12px" type="text" maxlength="120"
+        placeholder="Nombre completo del responsable del hogar"
+        value="${esc(respAct)}"
+        oninput="STATE.draftPCF.responsable_nombre=this.value">
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-primary" onclick="guardarPCF('${famId}')">💾 ${isEdit?'Actualizar plan':'Crear plan'}</button>
+    <button class="btn btn-secondary" onclick="STATE.draftPCF={};${isEdit?`navigate('pcf',{_pcfFamId:'${famId}'})`:'goBack()'}">✕ Cancelar</button>
+  </div>`;
+}
+
+// ── renderPCFVisita ── formulario de visita ─────────────────
+function renderPCFVisita() {
+  const famId  = STATE._pcfFamId;
+  const fam    = STATE.familias.find(f=>f.id===famId);
+  const plan   = fam?.plan;
+  if (!plan) return `<div class="card"><p>Plan no encontrado.</p></div>`;
+
+  const visitas = plan.data?.visitas||[];
+  const idx    = STATE.editVisitaIdx;
+  const existing= (idx!=null && idx>=0) ? (visitas[idx]||{}) : {};
+  const draft  = STATE.draftVisita;
+  const isEdit  = idx!=null && idx>=0;
+
+  const fechaAct   = draft._loaded?(draft.fecha||''):(existing.fecha||today());
+  const accionesAct= draft._loaded?(draft.acciones||''):(existing.acciones||'');
+  const reciboId   = draft._loaded?(draft.recibio_id||''):(existing.recibio_id||'');
+  const reciboNom  = draft._loaded?(draft.recibio_nombre||''):(existing.recibio_nombre||'');
+  const identifAct = draft._loaded?(draft.identificado||[]):(existing.identificado||[]);
+  const identifOtros=draft._loaded?(draft.identificado_otros||''):(existing.identificado_otros||'');
+
+  STATE.draftVisita={_loaded:true,fecha:fechaAct,acciones:accionesAct,recibio_id:reciboId,recibio_nombre:reciboNom,identificado:[...identifAct],identificado_otros:identifOtros};
+
+  // Personas del T3 para selector de quién recibió
+  const personas = (fam.personas||[]).map(p=>{
+    const d3=p.d3||{};
+    const nom=[d3['3'],d3['4']].filter(Boolean).join(' ')||'Persona sin nombre';
+    return {id:p.id, nom};
+  });
+
+  const d2   = fam.d2||{};
+  const lugar= d2['8']||d2['5']||'(sin ubicación)';
+
+  return `
+  <div class="card" style="border-left:4px solid var(--blue);margin-bottom:8px">
+    <div style="font-weight:700;font-size:13px">🏠 ${esc(lugar)}</div>
+    <div style="font-size:11px;color:var(--muted)">${isEdit?'Editar visita '+(idx+1):'Nueva visita'} — Plan de Cuidado Familiar</div>
+  </div>
+
+  <div class="card" style="margin-bottom:8px">
+    <div class="field">
+      <div class="field-label" style="font-size:11px">Fecha de la visita <span class="req">*</span></div>
+      <input class="field-input" type="date" value="${esc(fechaAct)}"
+        oninput="STATE.draftVisita.fecha=this.value">
+    </div>
+
+    <div class="field">
+      <div class="field-label" style="font-size:11px">¿Quién recibió la visita? <span class="req">*</span></div>
+      <select class="field-select" onchange="STATE.draftVisita.recibio_id=this.value;STATE.draftVisita.recibio_nombre='';document.getElementById('campo-otro-recibio').style.display=(this.value==='__otro__')?'':'none'">
+        <option value="">— Seleccionar integrante —</option>
+        ${personas.map(p=>`<option value="${p.id}" ${reciboId===p.id?'selected':''}>${esc(p.nom)}</option>`).join('')}
+        <option value="__otro__" ${reciboId==='__otro__'?'selected':''}>Otro (no registrado)</option>
+      </select>
+    </div>
+    <div class="field" id="campo-otro-recibio" style="${reciboId==='__otro__'?'':'display:none'}">
+      <div class="field-label" style="font-size:11px">Nombre de quien recibió</div>
+      <input class="field-input" type="text" maxlength="120" placeholder="Nombre completo"
+        value="${esc(reciboNom)}"
+        oninput="STATE.draftVisita.recibio_nombre=this.value">
+    </div>
+
+    <div class="field">
+      <div class="field-label" style="font-size:11px">Acciones realizadas en la visita <span class="req">*</span></div>
+      <textarea class="field-input" rows="4" maxlength="1000"
+        placeholder="Describe las acciones realizadas durante la visita…"
+        oninput="STATE.draftVisita.acciones=this.value"
+        style="resize:vertical;font-size:12px">${esc(accionesAct)}</textarea>
+    </div>
+
+    <div class="field">
+      <div class="field-label" style="font-size:11px">¿Qué se identificó en esta visita?</div>
+      <div style="margin-bottom:6px">
+      ${PCF_RIESGOS.map(r=>`
+        <label style="display:flex;align-items:flex-start;gap:8px;padding:4px 0;cursor:pointer">
+          <input type="checkbox" value="${r.v}"
+            onchange="STATE.draftVisita.identificado=(STATE.draftVisita.identificado||[]);if(this.checked)STATE.draftVisita.identificado.push(this.value);else STATE.draftVisita.identificado=STATE.draftVisita.identificado.filter(x=>x!==this.value)"
+            ${identifAct.includes(r.v)?'checked':''}
+            style="margin-top:2px;flex-shrink:0;accent-color:var(--blue)">
+          <span style="font-size:12px;line-height:1.3">${esc(r.l)}</span>
+        </label>`).join('')}
+      </div>
+      <input class="field-input" style="font-size:12px" type="text" maxlength="300"
+        placeholder="Otros hallazgos (texto libre)…"
+        value="${esc(identifOtros)}"
+        oninput="STATE.draftVisita.identificado_otros=this.value">
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-primary" onclick="guardarVisitaPCF('${famId}',${idx??'null'})">💾 ${isEdit?'Actualizar visita':'Registrar visita'}</button>
+    <button class="btn btn-secondary" onclick="STATE.draftVisita={};navigate('pcf',{_pcfFamId:'${famId}'})">✕ Cancelar</button>
+  </div>`;
+}
+
+// ── Funciones de lógica PCF ─────────────────────────────────
+
+function _pcfPersonaNombre(famId, personaId) {
+  if (!personaId || personaId==='__otro__') return null;
+  const fam = STATE.familias.find(f=>f.id===famId);
+  const per = (fam?.personas||[]).find(p=>p.id===personaId);
+  if (!per) return null;
+  const d3=per.d3||{};
+  return [d3['3'],d3['4']].filter(Boolean).join(' ')||null;
+}
+
+async function guardarPCF(famId) {
+  const draft = STATE.draftPCF;
+  if (!draft.compromiso?.trim()) { toast('El compromiso es obligatorio','warn'); return; }
+  if (!draft.responsable_nombre?.trim()) { toast('El nombre del responsable es obligatorio','warn'); return; }
+
+  const fam  = STATE.familias.find(f=>f.id===famId);
+  const plan = fam?.plan;
+  const ebsCode = (fam?.d2 && calcEBS(fam.d2)) || fam?.ebs_code || '';
+
+  const planId = plan?.id || uid();
+  const nowIso = new Date().toISOString();
+
+  const dataObj = {
+    ...(plan?.data||{}),
+    estado: plan?.data?.estado||'abierto',
+    riesgos: draft.riesgos||[],
+    riesgos_otros: draft.riesgos_otros||'',
+    compromiso: draft.compromiso.trim(),
+    responsable_nombre: draft.responsable_nombre.trim(),
+    visitas: plan?.data?.visitas||[]
+  };
+
+  const record = {
+    id: planId,
+    familia_id: famId,
+    ebs_code: ebsCode,
+    created_by: STATE.auth?.user?.id,
+    created_at: plan?.created_at||nowIso,
+    updated_at: nowIso,
+    deleted_at: null,
+    data: dataObj
+  };
+
+  await writeRecord('planes_familiar', record);
+  STATE.draftPCF = {};
+  await rebuildAppState();
+  toast('Plan guardado correctamente','ok');
+  navigate('pcf', {_pcfFamId: famId});
+}
+
+function editarPCF(famId) {
+  STATE.draftPCF = {_loaded: false};
+  navigate('pcf', {_pcfFamId: famId, _pcfEditing: true});
+}
+
+async function cerrarPCF(famId) {
+  if (!confirm('¿Cerrar el plan? Solo el administrador puede reactivarlo.')) return;
+  const fam  = STATE.familias.find(f=>f.id===famId);
+  const plan = fam?.plan;
+  if (!plan) return;
+  const nowIso = new Date().toISOString();
+  const record = {...plan, updated_at: nowIso, data: {...plan.data, estado:'cerrado'}};
+  await writeRecord('planes_familiar', record);
+  await rebuildAppState();
+  toast('Plan cerrado','ok');
+  navigate('pcf', {_pcfFamId: famId});
+}
+
+async function guardarVisitaPCF(famId, editIdx) {
+  const draft = STATE.draftVisita;
+  if (!draft.fecha) { toast('La fecha es obligatoria','warn'); return; }
+  if (!draft.recibio_id && !draft.recibio_nombre?.trim()) { toast('Indica quién recibió la visita','warn'); return; }
+  if (!draft.acciones?.trim()) { toast('Las acciones realizadas son obligatorias','warn'); return; }
+
+  const fam  = STATE.familias.find(f=>f.id===famId);
+  const plan = fam?.plan;
+  if (!plan) return;
+
+  const visitas = [...(plan.data?.visitas||[])];
+  const visitaObj = {
+    id: (editIdx!=null&&editIdx>=0)?visitas[editIdx]?.id||uid():uid(),
+    fecha: draft.fecha,
+    recibio_id: draft.recibio_id||'__otro__',
+    recibio_nombre: draft.recibio_nombre||'',
+    acciones: draft.acciones.trim(),
+    identificado: draft.identificado||[],
+    identificado_otros: draft.identificado_otros||''
+  };
+
+  if (editIdx!=null&&editIdx>=0) { visitas[editIdx]=visitaObj; }
+  else { visitas.push(visitaObj); }
+
+  // Actualizar estado a 'seguimiento' automáticamente si al menos 1 visita
+  const nuevoEstado = plan.data?.estado==='cerrado'?'cerrado':(visitas.length>0?'seguimiento':'abierto');
+
+  const nowIso = new Date().toISOString();
+  const record = {...plan, updated_at: nowIso,
+    data: {...plan.data, visitas, estado: nuevoEstado}};
+
+  await writeRecord('planes_familiar', record);
+  STATE.draftVisita = {};
+  await rebuildAppState();
+  toast('Visita guardada correctamente','ok');
+  navigate('pcf', {_pcfFamId: famId});
+}
+
+async function eliminarVisitaPCF(famId, idx) {
+  if (!confirm('¿Eliminar esta visita?')) return;
+  const fam  = STATE.familias.find(f=>f.id===famId);
+  const plan = fam?.plan;
+  if (!plan) return;
+  const visitas = [...(plan.data?.visitas||[])];
+  visitas.splice(idx,1);
+  const nuevoEstado = plan.data?.estado==='cerrado'?'cerrado':(visitas.length>0?'seguimiento':'abierto');
+  const nowIso = new Date().toISOString();
+  const record = {...plan, updated_at: nowIso, data:{...plan.data, visitas, estado:nuevoEstado}};
+  await writeRecord('planes_familiar', record);
+  await rebuildAppState();
+  toast('Visita eliminada','ok');
+  navigate('pcf', {_pcfFamId: famId});
+}
+
+
+// ── imprimirPCF ─────────────────────────────────────────────
+async function imprimirPCF(famId) {
+  const fam  = STATE.familias.find(f=>f.id===famId);
+  const plan = fam?.plan;
+  if (!plan) { toast('Sin plan para imprimir','warn'); return; }
+
+  const d2   = fam.d2||{};
+  const lugar= d2['8']||d2['5']||'(sin ubicación)';
+  const mun  = d2['5']||'—';
+  const pdata= plan.data||{};
+  const visitas= pdata.visitas||[];
+
+  const riesgosTexto = (pdata.riesgos||[]).map(v=>{
+    const r=PCF_RIESGOS.find(x=>x.v===v); return r?r.l:v;
+  });
+  if (pdata.riesgos_otros) riesgosTexto.push('Otros: '+pdata.riesgos_otros);
+
+  // Banner base64 (reutilizar el mismo mecanismo que imprimirCaracterizacion)
+  let bannerSrc='./banner.png';
+  try {
+    const resp=await fetch('./banner.png');
+    if(resp.ok){const blob=await resp.blob();bannerSrc=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(blob);});}
+  }catch(e){}
+
+  const visHtml = visitas.length===0
+    ? `<tr><td colspan="4" style="text-align:center;color:#aaa;font-style:italic;padding:10px">Sin visitas registradas</td></tr>`
+    : visitas.map((v,i)=>{
+        const recibio=v.recibio_nombre||_pcfPersonaNombre(famId,v.recibio_id)||v.recibio_id||'—';
+        const identif=(v.identificado||[]).map(k=>{const r=PCF_RIESGOS.find(x=>x.v===k);return r?r.l:k;});
+        if(v.identificado_otros)identif.push('Otros: '+v.identificado_otros);
+        return `<tr>
+          <td style="padding:5px 8px;border:1px solid #ddd;width:5%;text-align:center;font-weight:700">${i+1}</td>
+          <td style="padding:5px 8px;border:1px solid #ddd;width:14%">${esc(v.fecha||'—')}</td>
+          <td style="padding:5px 8px;border:1px solid #ddd;width:20%">${esc(recibio)}</td>
+          <td style="padding:5px 8px;border:1px solid #ddd">
+            ${v.acciones?`<div style="margin-bottom:3px">${esc(v.acciones)}</div>`:''}
+            ${identif.length?`<div style="font-size:9.5px;color:#666">Identificado: ${identif.map(r=>`• ${esc(r)}`).join('; ')}</div>`:''}
+          </td>
+        </tr>`;
+      }).join('');
+
+  const estadoMap={abierto:'Abierto',seguimiento:'En seguimiento',cerrado:'Cerrado'};
+  const estadoColor={'abierto':'#38c793','seguimiento':'#ffb432','cerrado':'#aaa'};
+  const est=pdata.estado||'abierto';
+
+  const html=`<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plan de Cuidado Familiar — ${esc(lugar)}</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:16px 20px}
+.hdr-wrap{display:flex;align-items:stretch;border-radius:6px;overflow:hidden;margin-bottom:14px;border:1px solid #e0e0e0}
+.hdr-left{background:#1a1a3e;color:#fff;padding:10px 18px;min-width:200px;display:flex;flex-direction:column;justify-content:center}
+.hdr-left h1{font-size:14px;font-weight:700;line-height:1.2}
+.hdr-left h2{font-size:10px;font-weight:400;margin-top:2px;opacity:.8}
+.hdr-right{background:#f5f5f5;padding:10px 14px;flex:1;display:flex;align-items:center;justify-content:space-between}
+.hdr-right img{height:54px;width:auto}
+.hdr-meta{font-size:10px;text-align:right;color:#444}
+.hdr-meta strong{color:#1a1a3e}
+.sec{margin-top:12px}
+.sec-title{font-size:11px;font-weight:700;color:#fff;background:#1a1a3e;padding:5px 10px;margin-bottom:6px;border-radius:3px}
+.tbl{width:100%;border-collapse:collapse;font-size:10.5px}
+.tbl th{background:#e8ecf4;padding:5px 8px;text-align:left;border:1px solid #ccc;font-weight:600}
+.tbl td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}
+.sign-box{border:1px solid #999;min-height:50px;border-radius:4px;margin-top:4px}
+.estado-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;border:1px solid ${estadoColor[est]};color:${estadoColor[est]};background:${estadoColor[est]}22}
+.no-print{margin-top:16px;text-align:center}
+@page{size:A4;margin:15mm 12mm}
+@media print{.no-print{display:none!important}}
+</style>
+</head>
+<body>
+<div style="width:calc(100%+40px);margin:-16px -20px 12px;line-height:0;overflow:hidden">
+  <img src="${bannerSrc}" alt="ESE HRNO" style="width:100%;height:auto;display:block">
+</div>
+<div class="hdr-wrap">
+  <div class="hdr-left">
+    <h1>Plan de Cuidado Familiar</h1>
+    <h2>ESE Hospital Regional Noroccidental</h2>
+    <h2>Programa de Salud Pública · EBS</h2>
+  </div>
+  <div class="hdr-right">
+    <div style="font-size:10px;color:#444">
+      <div><strong>Familia:</strong> ${esc(lugar)}</div>
+      <div><strong>Municipio:</strong> ${esc(mun)}</div>
+      <div><strong>Fecha generación:</strong> ${new Date().toLocaleDateString('es-CO')}</div>
+      <div style="margin-top:4px"><span class="estado-badge">${estadoMap[est]||est}</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <div class="sec-title">⚠️ Riesgos Identificados (Campo 36 — Riesgo de Accidente)</div>
+  ${riesgosTexto.length
+    ? `<table class="tbl" style="margin-bottom:4px"><tr><td style="padding:6px 10px">
+        ${riesgosTexto.map((r,i)=>`<div style="padding:2px 0">• ${esc(r)}</div>`).join('')}
+      </td></tr></table>`
+    : `<p style="color:#aaa;font-style:italic;padding:4px 0">Sin riesgos seleccionados.</p>`
+  }
+</div>
+
+<div class="sec">
+  <div class="sec-title">🤝 Compromiso Familiar</div>
+  <table class="tbl">
+    <tr><td style="padding:8px 10px;white-space:pre-wrap">${esc(pdata.compromiso||'—')}</td></tr>
+  </table>
+  <div style="margin-top:10px;display:flex;gap:20px">
+    <div style="flex:1">
+      <div style="font-size:10px;font-weight:600;margin-bottom:4px">Firma del profesional responsable:</div>
+      <div class="sign-box"></div>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:10px;font-weight:600;margin-bottom:2px">Responsable familiar: <span style="font-weight:400">${esc(pdata.responsable_nombre||'—')}</span></div>
+      <div style="font-size:10px;margin-bottom:4px">Firma:</div>
+      <div class="sign-box"></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <div class="sec-title">📅 Registro de Visitas de Seguimiento</div>
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th style="width:5%">#</th>
+        <th style="width:14%">Fecha</th>
+        <th style="width:20%">Recibió la visita</th>
+        <th>Acciones realizadas / Lo identificado</th>
+      </tr>
+    </thead>
+    <tbody>${visHtml}</tbody>
+  </table>
+  ${visitas.length<3?`
+  <div style="margin-top:6px;font-size:9.5px;color:#e08a00">⚠ Se requieren mínimo 3 visitas de seguimiento (${visitas.length}/3 realizadas)</div>`:''}
+</div>
+
+<div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v2.6</span>
+  <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
+</div>
+
+<div class="no-print">
+  <button onclick="window.print()" style="background:#1a1a3e;color:#fff;border:none;padding:10px 28px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600">🖨 Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:#444;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-size:14px;cursor:pointer;margin-left:8px">✕ Cerrar</button>
+</div>
+</body>
+</html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.target='_blank';a.rel='noopener';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),90000);
+}
+
+// ── downloadExcelPCF ── Excel con todos los planes ──────────
+async function downloadExcelPCFTodos() {
+  const planes = STATE.planesFamiliar;
+  if (!planes.length) { toast('Sin planes para exportar','warn'); return; }
+
+  if (typeof XLSX==='undefined') {
+    toast('Cargando librería Excel…','warn');
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const rows=[['ID Plan','Familia (Lugar)','Municipio','EBS','Estado','Riesgos','Otros riesgos','Compromiso','Responsable',
+    'Visita 1 Fecha','Visita 1 Recibió','Visita 1 Acciones','Visita 1 Identificado',
+    'Visita 2 Fecha','Visita 2 Recibió','Visita 2 Acciones','Visita 2 Identificado',
+    'Visita 3 Fecha','Visita 3 Recibió','Visita 3 Acciones','Visita 3 Identificado']];
+
+  for (const pl of planes) {
+    const fam  = STATE.familias.find(f=>f.id===pl.familia_id);
+    const d2   = fam?.d2||{};
+    const lugar= d2['8']||d2['5']||'(sin ubicación)';
+    const mun  = d2['5']||'';
+    const pd   = pl.data||{};
+    const riesgosStr=(pd.riesgos||[]).map(v=>{const r=PCF_RIESGOS.find(x=>x.v===v);return r?r.l:v;}).join('; ');
+    const visitas=pd.visitas||[];
+    const visRow=[];
+    for(let i=0;i<3;i++){
+      const v=visitas[i]||{};
+      const recibio=v.recibio_nombre||_pcfPersonaNombre(pl.familia_id,v.recibio_id)||v.recibio_id||'';
+      const identif=(v.identificado||[]).map(k=>{const r=PCF_RIESGOS.find(x=>x.v===k);return r?r.l:k;}).join('; ')+(v.identificado_otros?'; Otros: '+v.identificado_otros:'');
+      visRow.push(v.fecha||'',recibio,v.acciones||'',identif);
+    }
+    rows.push([pl.id,lugar,mun,pl.ebs_code||'',pd.estado||'',riesgosStr,pd.riesgos_otros||'',pd.compromiso||'',pd.responsable_nombre||'',...visRow]);
+  }
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:20},{wch:25},{wch:15},{wch:18},{wch:12},{wch:40},{wch:25},{wch:40},{wch:20},{wch:12},{wch:20},{wch:35},{wch:35},{wch:12},{wch:20},{wch:35},{wch:35},{wch:12},{wch:20},{wch:35},{wch:35}];
+  XLSX.utils.book_append_sheet(wb,ws,'Planes Cuidado Familiar');
+  XLSX.writeFile(wb,`Planes_Cuidado_Familiar_${today()}.xlsx`);
+  toast('Excel descargado','ok');
 }
 
 // ============================================================
