@@ -1043,67 +1043,79 @@ async function pullFromCloud() {
       document.getElementById('btn-analytics').style.display = '';
     }
   } catch(e){}
-  // Familias — admin usa RPC SECURITY DEFINER para ver todas sin filtro RLS
+  // Familias — siempre usa RPC SECURITY DEFINER (garantiza auth.uid() correcto)
   const isAdminNow = STATE.profile?.rol === 'admin';
-  const fams = isAdminNow
-    ? await sbFetch('/rest/v1/rpc/get_all_familias', {method:'POST', body:'{}'})
-    : await sbFetch('/rest/v1/familias?deleted_at=is.null&select=*');
-  for (const f of (fams||[])) {
-    const existing = await idb.get('familias', f.id);
-    if (!existing?.deleted_at) {
-      // Preserve ebs_code from local record if the server didn't return it
-      const record = {...f};
-      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
-      await idb.put('familias', record);
+  const _famRpc = isAdminNow ? 'get_all_familias' : 'get_my_familias';
+  try {
+    const fams = await sbFetch(`/rest/v1/rpc/${_famRpc}`, {method:'POST', body:'{}'});
+    for (const f of (fams||[])) {
+      const existing = await idb.get('familias', f.id);
+      if (!existing?.deleted_at) {
+        const record = {...f};
+        if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
+        await idb.put('familias', record);
+      }
     }
-  }
-  // Personas — admin usa RPC para ver todas sin filtro RLS
-  const pers = isAdminNow
-    ? await sbFetch('/rest/v1/rpc/get_all_personas', {method:'POST', body:'{}'})
-    : await sbFetch('/rest/v1/personas?deleted_at=is.null&select=*');
-  for (const p of (pers||[])) {
-    const existing = await idb.get('personas', p.id);
-    const record = {...p};
-    // Preserve familia_id from local record if server didn't return it
-    if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
-    await idb.put('personas', record);
-  }
-  // Planes de Cuidado Familiar
-  const planes = isAdminNow
-    ? await sbFetch('/rest/v1/rpc/get_all_planes_familiar', {method:'POST', body:'{}'})
-    : await sbFetch('/rest/v1/planes_familiar?deleted_at=is.null&select=*');
-  for (const pl of (planes||[])) {
-    const existing = await idb.get('planes_familiar', pl.id);
-    if (!existing?.deleted_at) {
-      const record = {...pl};
+    console.log(`[sync] familias descargadas: ${(fams||[]).length}`);
+  } catch(e) { console.warn('[sync] error familias:', e.message); }
+
+  // Personas — siempre usa RPC SECURITY DEFINER
+  const _perRpc = isAdminNow ? 'get_all_personas' : 'get_my_personas';
+  try {
+    const pers = await sbFetch(`/rest/v1/rpc/${_perRpc}`, {method:'POST', body:'{}'});
+    for (const p of (pers||[])) {
+      const existing = await idb.get('personas', p.id);
+      const record = {...p};
       if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
-      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
-      await idb.put('planes_familiar', record);
+      await idb.put('personas', record);
     }
-  }
+    console.log(`[sync] personas descargadas: ${(pers||[]).length}`);
+  } catch(e) { console.warn('[sync] error personas:', e.message); }
+
+  // Planes de Cuidado Familiar — siempre usa RPC SECURITY DEFINER
+  const _plRpc = isAdminNow ? 'get_all_planes_familiar' : 'get_my_planes_familiar';
+  try {
+    const planes = await sbFetch(`/rest/v1/rpc/${_plRpc}`, {method:'POST', body:'{}'});
+    for (const pl of (planes||[])) {
+      const existing = await idb.get('planes_familiar', pl.id);
+      if (!existing?.deleted_at) {
+        const record = {...pl};
+        if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
+        if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
+        await idb.put('planes_familiar', record);
+      }
+    }
+    console.log(`[sync] planes descargados: ${(planes||[]).length}`);
+  } catch(e) { console.warn('[sync] error planes:', e.message); }
   // Opciones custom
-  const opts = await sbFetch('/rest/v1/opciones_custom?activo=eq.true&select=*');
-  await idb.clear('opciones_custom');
-  for (const o of (opts||[])) await idb.put('opciones_custom', o);
+  try {
+    const opts = await sbFetch('/rest/v1/opciones_custom?activo=eq.true&select=*');
+    await idb.clear('opciones_custom');
+    for (const o of (opts||[])) await idb.put('opciones_custom', o);
+  } catch(e) { console.warn('[sync] error opciones_custom:', e.message); }
   // Config (reportConfig + field_cfg + any other keys)
-  const cfgs = await sbFetch('/rest/v1/config?select=*');
-  for (const c of (cfgs||[])) {
-    await idb.put('config', c);
-    // Apply field_cfg immediately so form renders use fresh config
-    if (c.key==='field_cfg' && c.value) {
-      STATE.fieldConfig = {t2:{}, t3:{}, ...c.value};
+  try {
+    const cfgs = await sbFetch('/rest/v1/config?select=*');
+    for (const c of (cfgs||[])) {
+      await idb.put('config', c);
+      if (c.key==='field_cfg' && c.value) {
+        STATE.fieldConfig = {t2:{}, t3:{}, ...c.value};
+      }
     }
-  }
+  } catch(e) { console.warn('[sync] error config:', e.message); }
   // Profiles (admin only) — via RPC to bypass RLS+select bug
   if (STATE.profile?.rol==='admin') {
-    const profs = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
-    STATE.adminUsers = profs||[];
-    for (const p of (profs||[])) await idb.put('profiles', p);
+    try {
+      const profs = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
+      STATE.adminUsers = profs||[];
+      for (const p of (profs||[])) await idb.put('profiles', p);
+    } catch(e) { console.warn('[sync] error profiles:', e.message); }
   }
+  // rebuildAppState y render siempre se ejecutan, independiente de errores parciales
   await rebuildAppState();
-  // Re-render to reflect fresh data (profile name, config, etc.)
   render();
   updateSyncUI();
+  console.log(`[sync] rebuildAppState completo — ${STATE.familias.length} familia(s) visibles`);
 }
 
 async function rebuildAppState() {
