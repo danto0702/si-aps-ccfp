@@ -755,15 +755,23 @@ async function sbFetch(path, opts={}) {
 }
 
 async function sbFn(name, body, tok) {
-  const res = await fetch(`${SB_FUNC}/${name}`, {
-    method:'POST',
-    headers:{
-      'apikey':SB_ANON,
-      'Authorization':`Bearer ${tok||STATE.auth?.access_token||SB_ANON}`,
-      'Content-Type':'application/json'
-    },
-    body: JSON.stringify(body)
+  const _headers = () => ({
+    'apikey': SB_ANON,
+    'Authorization': `Bearer ${tok||STATE.auth?.access_token||SB_ANON}`,
+    'Content-Type': 'application/json'
   });
+  let res = await fetch(`${SB_FUNC}/${name}`, {
+    method:'POST', headers: _headers(), body: JSON.stringify(body)
+  });
+  // Si el token expiró, refrescar y reintentar una vez
+  if ((res.status===401 || res.status===403) && !tok) {
+    const refreshed = await doRefresh();
+    if (refreshed) {
+      res = await fetch(`${SB_FUNC}/${name}`, {
+        method:'POST', headers: _headers(), body: JSON.stringify(body)
+      });
+    }
+  }
   const text = await res.text();
   if (!res.ok) throw new Error(text);
   return text ? JSON.parse(text) : null;
@@ -2231,6 +2239,8 @@ async function submitCreateUser() {
   if (pass.length<8) { showErr(err,'La contraseña debe tener mínimo 8 caracteres'); return; }
   btn.textContent='Creando...'; btn.disabled=true;
   try {
+    // Refrescar token antes de llamar a la Edge Function para evitar "Token inválido"
+    await doRefresh();
     const result = await sbFn('create-user', {email, password:pass, nombre, rol, ebs_codes});
     toast('Usuario creado: '+email,'ok');
     closeModal();
