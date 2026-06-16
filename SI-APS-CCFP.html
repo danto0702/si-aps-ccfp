@@ -3570,12 +3570,21 @@ function calcPCI(ea,em,sexo,cond){
   /* ══ 2. PRIMERA INFANCIA (0–5 años) ══ */
   if(ea>=0&&ea<=5){
     plan.paciente.ciclo_vital_asignado='Primera Infancia (0 a 5 años)';
-    const sch=[{lbl:'1 mes',max:1},{lbl:'2-3 meses',max:3},{lbl:'4-5 meses',max:5},
-      {lbl:'6-8 meses',max:8},{lbl:'9-11 meses',max:11},{lbl:'12-18 meses',max:18},
-      {lbl:'18-24 meses',max:24},{lbl:'24-30 meses',max:30},{lbl:'30-36 meses',max:36},
-      {lbl:'3 años',max:48},{lbl:'4 años',max:60},{lbl:'5 años',max:72}];
-    const pend=sch.filter(s=>etm<s.max).map(s=>s.lbl);
-    pg.medicina_general.push('Control de Crecimiento y Desarrollo — '+(pend.length?'Próximas citas: '+pend.join(', '):'Cronograma completado — continuar con ciclo Infancia'));
+    // Controles CyD — Intercalado estricto Enfermería / Medicina (Res. 3280)
+    const schEnfPI=[
+      {lbl:'1 mes',mes:1},{lbl:'4 meses',mes:4},{lbl:'8 meses',mes:8},
+      {lbl:'12 meses',mes:12},{lbl:'18 meses',mes:18},{lbl:'24 meses',mes:24},
+      {lbl:'3 años',mes:36},{lbl:'4 años',mes:48},{lbl:'5 años',mes:60}
+    ];
+    const schMedPI=[
+      {lbl:'2-3 meses',mes:3},{lbl:'5-6 meses',mes:6},{lbl:'9-11 meses',mes:11},
+      {lbl:'15 meses',mes:15},{lbl:'30 meses',mes:30}
+    ];
+    const pendEPI=schEnfPI.filter(s=>etm<s.mes).map(s=>s.lbl);
+    const pendMPI=schMedPI.filter(s=>etm<s.mes).map(s=>s.lbl);
+    pg.medicina_general.push('Control CyD — Intercalado con Enfermería (Res. 3280)'+(pendMPI.length?' · Próximas citas Medicina: '+pendMPI.join(', '):'· Controles de Medicina en Primera Infancia completados'));
+    pg.enfermeria.push('Control CyD — Controles exclusivos de Enfermería (Res. 3280)'+(pendEPI.length?' · Próximas citas: '+pendEPI.join(', '):'· Controles de Enfermería en Primera Infancia completados'));
+    pg.enfermeria.push('Instrumentos Enfermería: EAD-3 (Escala Abreviada del Desarrollo), Tamizaje Auditivo (Vale), Gráficas de Crecimiento OMS');
     if(etm>=6) pg.odontologia.push('Aplicación de Barniz de Flúor — cada 6 meses (desde los 6 meses)');
     if(etm>=12) pg.odontologia.push('Consulta Odontológica programada: 12M, 2A, 3A, 4A, 5A');
     if(ea>=3)   pg.odontologia.push('Profilaxis Dental — 2 veces al año (desde los 3 años)');
@@ -3589,18 +3598,51 @@ function calcPCI(ea,em,sexo,cond){
   /* ══ 3. INFANCIA (6–11 años) ══ */
   }else if(ea>=6&&ea<=11){
     plan.paciente.ciclo_vital_asignado='Infancia (6 a 11 años)';
-    pg.medicina_general.push('Control de Crecimiento y Desarrollo — Anual');
+    // Cronograma alternado por edad (Res. 3280)
+    const cronInf=[
+      {edad:6,prof:'E'},{edad:7,prof:'M'},{edad:8,prof:'E'},
+      {edad:9,prof:'M'},{edad:10,prof:'E'},{edad:11,prof:'M'}
+    ];
+    const pendInfE=cronInf.filter(c=>c.edad>=ea&&c.prof==='E').map(c=>c.edad+' años');
+    const pendInfM=cronInf.filter(c=>c.edad>=ea&&c.prof==='M').map(c=>c.edad+' años');
+    if(pendInfM.length)
+      pg.medicina_general.push('Control CyD — Alternado con Enfermería (Res. 3280) · Medicina General: '+pendInfM.join(', '));
+    else
+      pg.medicina_general.push('Control CyD — Controles de Medicina en Infancia completados');
+    if(pendInfE.length)
+      pg.enfermeria.push('Control CyD — Alternado con Medicina (Res. 3280) · Enfermería: '+pendInfE.join(', '));
+    else
+      pg.enfermeria.push('Control CyD — Controles de Enfermería en Infancia completados');
+    pg.enfermeria.push('Instrumentos Enfermería: Agudeza Visual (Snellen), Seguimiento Escolar, Salud Mental y Violencias');
+    pg.enfermeria.push('Desparasitación — 2 veces al año');
     pg.odontologia.push('Consulta Odontológica — Anual');
     pg.odontologia.push('Profilaxis Dental — 2 veces al año');
     pg.odontologia.push('Aplicación de Barniz de Flúor — 2 veces al año');
     pg.psicologia.push('Tamizaje RQC (Riesgo Psicosocial del Desarrollo) — Anual');
-    pg.enfermeria.push('Desparasitación — 2 veces al año');
     if(rMal){pg.nutricion.push('Derivación a Nutrición por Riesgo de Malnutrición');
       plan.alertas.push('Riesgo de malnutrición detectado: Evaluar estado nutricional y hábitos alimentarios.');}
   /* ══ 4. ADOLESCENCIA (12–17 años) ══ */
   }else if(ea>=12&&ea<=17){
     plan.paciente.ciclo_vital_asignado='Adolescencia (12 a 17 años)';
-    pg.medicina_general.push('Consulta Integral de Adolescentes / Control CyD — Anual');
+    // Cronograma alternado obligatorio año por medio (Res. 3280)
+    const cronAdol=[
+      {edad:12,prof:'M',enfoque:'Desarrollo físico y tamizajes clínicos'},
+      {edad:13,prof:'E',enfoque:'Salud sexual, hábitos y entorno social'},
+      {edad:14,prof:'M',enfoque:'Desarrollo físico y tamizajes clínicos'},
+      {edad:15,prof:'E',enfoque:'Salud sexual, hábitos y entorno social'},
+      {edad:16,prof:'M',enfoque:'Desarrollo físico y tamizajes clínicos'},
+      {edad:17,prof:'E',enfoque:'Preparación para la transición a la juventud'}
+    ];
+    const pendAdolE=cronAdol.filter(c=>c.edad>=ea&&c.prof==='E');
+    const pendAdolM=cronAdol.filter(c=>c.edad>=ea&&c.prof==='M');
+    if(pendAdolM.length)
+      pg.medicina_general.push('Consulta Integral Adolescentes — Alternado con Enfermería (Res. 3280) · Medicina General: '+pendAdolM.map(c=>c.edad+' años ('+c.enfoque+')').join(' · '));
+    else
+      pg.medicina_general.push('Consulta Integral Adolescentes — Controles de Medicina en Adolescencia completados');
+    if(pendAdolE.length)
+      pg.enfermeria.push('Consulta Integral Adolescentes — Alternado con Medicina (Res. 3280) · Enfermería: '+pendAdolE.map(c=>c.edad+' años ('+c.enfoque+')').join(' · '));
+    else
+      pg.enfermeria.push('Consulta Integral Adolescentes — Controles de Enfermería en Adolescencia completados');
     pg.odontologia.push('Consulta Odontológica — Anual');
     pg.odontologia.push('Profilaxis Dental — 2 veces al año');
     pg.odontologia.push('Aplicación de Barniz de Flúor — 2 veces al año');
