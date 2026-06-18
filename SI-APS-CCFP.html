@@ -7068,7 +7068,8 @@ function renderPCFForm(famId, fam) {
   const lugar= d2['8']||d2['5']||'(sin ubicación)';
   const plan = fam?.plan;
   // Pre-llenar con riesgos del campo 36 de la familia si es plan nuevo
-  const campo36 = (d2['36']||'').split(',').map(v=>v.trim()).filter(Boolean);
+  const _f36 = d2['36']||'';
+  const campo36 = Array.isArray(_f36) ? _f36.filter(Boolean) : _f36.split(',').map(v=>v.trim()).filter(Boolean);
   const draft = STATE.draftPCF;
   const riesgosAct = draft._loaded ? (draft.riesgos||[]) : (plan?plan.data?.riesgos||[]:campo36);
   const compromisoAct = draft._loaded ? (draft.compromiso||'') : (plan?.data?.compromiso||'');
