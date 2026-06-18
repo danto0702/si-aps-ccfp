@@ -1264,6 +1264,7 @@ const STATE = {
   // EBS list: [{num:'001', label:'EBS 001 — Municipio'}]. If empty, derived from user codes.
   ebsList: [],
   busquedaFamilia: '',
+  filtroEBS: '', filtroMuni: '', filtroDesde: '', filtroHasta: '',
   // Plan de Cuidado Familiar
   planesFamiliar: [],
   editPCFId: null,
@@ -1650,7 +1651,8 @@ async function adminSendRecovery(email) {
 // SCREEN: HOME
 // ============================================================
 function renderHome() {
-  const fams = STATE.familias.filter(f=>!f.deleted_at);
+  const allFams = STATE.familias.filter(f=>!f.deleted_at);
+  const fams = applyFiltros(allFams);
   const totalP = fams.reduce((s,f)=>(f.personas||[]).length+s,0);
   const confOk = STATE.config.nit && STATE.config.fechaInicio && STATE.config.fechaFin;
   const user   = STATE.profile;
@@ -1671,8 +1673,9 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.5</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.6</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
+        <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
       </div>
     </div>
@@ -1700,6 +1703,7 @@ function renderHome() {
       <div id="busq-count" style="font-size:11px;color:var(--muted);margin-top:6px;min-height:14px"></div>
     </div>`;
 
+  const filtroBarHtml = buildFiltroBar(allFams);
   const listHtml = `<div id="familia-list">${buildFamiliaListHtml(STATE.busquedaFamilia, fams)}</div>`;
 
   const bannerHtml = `<div class="home-banner"><img src="./banner.png" alt="ESE Hospital Regional Noroccidental — Salud Pública" loading="eager"></div>`;
@@ -1714,7 +1718,7 @@ function renderHome() {
     </div>
   </div>`;
 
-  return bannerHtml+userInfo+statsHtml+buscadorHtml+listHtml+
+  return bannerHtml+userInfo+statsHtml+buscadorHtml+filtroBarHtml+listHtml+
     `<div style="height:20px"></div>
      ${syncBtn}
      <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
@@ -1802,20 +1806,80 @@ function buildFamiliaListHtml(q, fams) {
 
 function filtrarFamilias(q) {
   STATE.busquedaFamilia = (q||'').trim();
-  const fams = STATE.familias.filter(f=>!f.deleted_at);
+  const allFams = STATE.familias.filter(f=>!f.deleted_at);
+  const fams = applyFiltros(allFams);
   const term = STATE.busquedaFamilia.toLowerCase();
-  // Actualizar valor del input (útil al limpiar con el botón ✕)
   const inp = document.getElementById('buscador-familia');
   if (inp && inp.value !== (q||'')) inp.value = q||'';
-  // Actualizar lista sin re-render completo para no perder foco del input
   const listEl = document.getElementById('familia-list');
   if (listEl) listEl.innerHTML = buildFamiliaListHtml(STATE.busquedaFamilia, fams);
-  // Mostrar/ocultar botón limpiar
   const clrEl = document.getElementById('busq-clear');
   if (clrEl) clrEl.style.display = term ? '' : 'none';
-  // Limpiar contador si no hay búsqueda activa
   const cntEl = document.getElementById('busq-count');
   if (cntEl && !term) cntEl.textContent = '';
+}
+
+function applyFiltros(fams) {
+  return fams.filter(f => {
+    const d = f.d2 || {};
+    if (STATE.filtroEBS) {
+      const en = (d['16']||'').padStart(3,'0') || f.ebs_code?.slice(-3) || '';
+      if (en !== STATE.filtroEBS) return false;
+    }
+    if (STATE.filtroMuni) {
+      if ((d['5']||'') !== STATE.filtroMuni) return false;
+    }
+    if (STATE.filtroDesde) {
+      if ((d['25']||'') < STATE.filtroDesde) return false;
+    }
+    if (STATE.filtroHasta) {
+      if ((d['25']||'') > STATE.filtroHasta) return false;
+    }
+    return true;
+  });
+}
+
+function setFiltro(key, val) {
+  STATE[key] = val;
+  render();
+}
+
+function limpiarFiltros() {
+  STATE.filtroEBS = ''; STATE.filtroMuni = ''; STATE.filtroDesde = ''; STATE.filtroHasta = '';
+  render();
+}
+
+function buildFiltroBar(famsBase) {
+  const ebsSet = new Set(), muniSet = new Set();
+  famsBase.forEach(f => {
+    const d = f.d2 || {};
+    const en = (d['16']||'').padStart(3,'0') || f.ebs_code?.slice(-3) || '';
+    if (en && en !== '000') ebsSet.add(en);
+    if (d['5']) muniSet.add(d['5']);
+  });
+  const selSt = `background:var(--bg2,#161b22);color:var(--text,#e6edf3);border:1px solid var(--border,#30363d);border-radius:7px;padding:6px 8px;font-size:12px;flex:1;min-width:85px;max-width:145px`;
+  const dateSt = `background:var(--bg2,#161b22);color:var(--text,#e6edf3);border:1px solid var(--border,#30363d);border-radius:7px;padding:5px 8px;font-size:12px;flex:1;min-width:110px;max-width:140px`;
+  const mkSel = (key, dflt, opts) =>
+    `<select style="${selSt}" onchange="setFiltro('${key}',this.value)"><option value="">${dflt}</option>${opts}</select>`;
+  const ebsOpts = [...ebsSet].sort().map(e=>`<option value="${esc(e)}"${STATE.filtroEBS===e?' selected':''}>EBS ${e}</option>`).join('');
+  const muniOpts = [...muniSet].sort().map(m=>`<option value="${esc(m)}"${STATE.filtroMuni===m?' selected':''}>${esc(MUNIS_NS[m]||m)}</option>`).join('');
+  const hasF = STATE.filtroEBS||STATE.filtroMuni||STATE.filtroDesde||STATE.filtroHasta;
+  const badgeParts = [
+    STATE.filtroEBS ? 'EBS '+STATE.filtroEBS : '',
+    STATE.filtroMuni ? (MUNIS_NS[STATE.filtroMuni]||STATE.filtroMuni) : '',
+    (STATE.filtroDesde||STATE.filtroHasta) ? (STATE.filtroDesde||'...')+' → '+(STATE.filtroHasta||'...') : ''
+  ].filter(Boolean);
+  const badge = hasF ? `<div style="font-size:10px;color:var(--yellow);margin-top:5px">⚠ Activos: ${badgeParts.join(' · ')}</div>` : '';
+  return `<div class="card" style="padding:9px 12px;margin-bottom:4px">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted);font-weight:700;flex-shrink:0;text-transform:uppercase;letter-spacing:.4px">Filtrar</span>
+      ${mkSel('filtroEBS','Todos los EBS',ebsOpts)}
+      ${mkSel('filtroMuni','Todos los municipios',muniOpts)}
+      <input type="date" style="${dateSt}" title="Fecha desde" value="${esc(STATE.filtroDesde)}" onchange="setFiltro('filtroDesde',this.value)">
+      <input type="date" style="${dateSt}" title="Fecha hasta" value="${esc(STATE.filtroHasta)}" onchange="setFiltro('filtroHasta',this.value)">
+      ${hasF?`<button class="btn btn-secondary btn-sm" onclick="limpiarFiltros()" style="flex-shrink:0;font-size:11px;white-space:nowrap">✕ Limpiar</button>`:''}
+    </div>${badge}
+  </div>`;
 }
 
 // ============================================================
@@ -5737,7 +5801,7 @@ function chartOpts(extra={}){
 // ── Cómputo de indicadores ────────────────────────────────────
 function computeAn() {
   const myId = STATE.auth?.user?.id;
-  const fams = STATE.familias.filter(f=>!f.deleted_at && (isAdmin()||f.created_by===myId));
+  const fams = applyFiltros(STATE.familias.filter(f=>!f.deleted_at && (isAdmin()||f.created_by===myId)));
 
   // KPIs
   let totalFam=fams.length, totalPer=0, totalGest=0;
@@ -5830,10 +5894,14 @@ function computeAn() {
 
 // ── HTML del módulo ───────────────────────────────────────────
 function renderAnalytics() {
+  const myId = STATE.auth?.user?.id;
+  const allFams = STATE.familias.filter(f=>!f.deleted_at && (isAdmin()||f.created_by===myId));
+  const filtroBarHtml = buildFiltroBar(allFams);
   const D = computeAn();
+  const hasF = STATE.filtroEBS||STATE.filtroMuni||STATE.filtroDesde||STATE.filtroHasta;
   const scope = isAdmin()
-    ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:12px">👑 Viendo datos de TODOS los usuarios</div>`
-    : `<div style="font-size:11px;color:#93c5fd;margin-bottom:12px">👤 Viendo solo tus datos</div>`;
+    ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:12px">👑 Viendo datos de TODOS los usuarios${hasF?' · <span style="color:var(--red)">Filtro activo</span>':''}</div>`
+    : `<div style="font-size:11px;color:#93c5fd;margin-bottom:12px">👤 Viendo solo tus datos${hasF?' · <span style="color:var(--red)">Filtro activo</span>':''}</div>`;
 
   // KPIs
   const vacPct = D.totalPer() ? Math.round(D.byVac.si/(D.byVac.si+D.byVac.no||1)*100) : 0;
@@ -5911,7 +5979,7 @@ function renderAnalytics() {
     setTimeout(()=>drawAnalyticsCharts(D),80);
   }).catch(e=>toast('Chart.js: '+e.message,'err'));
 
-  return scope+kpis+tabBar+content;
+  return filtroBarHtml+scope+kpis+tabBar+content;
 }
 
 // ── Dibujo de gráficas ────────────────────────────────────────
@@ -7535,6 +7603,22 @@ async function init() {
   // Service Worker
   if ('serviceWorker' in navigator && location.protocol!=='file:')
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+async function forzarActualizacion() {
+  toast('Limpiando caché y recargando…', 'info');
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+    }
+  } catch(_) {}
+  // Forzar recarga sin caché añadiendo timestamp a la URL
+  location.href = location.pathname + '?t=' + Date.now();
 }
 
 init();
