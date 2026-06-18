@@ -1058,11 +1058,12 @@ async function pullFromCloud() {
     const fams = await sbFetch(`/rest/v1/rpc/${_famRpc}`, {method:'POST', body:'{}'});
     for (const f of (fams||[])) {
       const existing = await idb.get('familias', f.id);
-      if (!existing?.deleted_at) {
-        const record = {...f};
-        if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
-        await idb.put('familias', record);
-      }
+      // El servidor es autoritativo: los RPCs solo devuelven deleted_at IS NULL,
+      // así que siempre escribimos — evita que registros activos queden "ocultos"
+      // por un deleted_at residual en el IDB local.
+      const record = {...f};
+      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
+      await idb.put('familias', record);
     }
     console.log(`[sync] familias descargadas: ${(fams||[]).length}`);
   } catch(e) { console.warn('[sync] error familias:', e.message); }
@@ -1086,12 +1087,11 @@ async function pullFromCloud() {
     const planes = await sbFetch(`/rest/v1/rpc/${_plRpc}`, {method:'POST', body:'{}'});
     for (const pl of (planes||[])) {
       const existing = await idb.get('planes_familiar', pl.id);
-      if (!existing?.deleted_at) {
-        const record = {...pl};
-        if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
-        if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
-        await idb.put('planes_familiar', record);
-      }
+      // Mismo criterio que familias: servidor autoritativo
+      const record = {...pl};
+      if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
+      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
+      await idb.put('planes_familiar', record);
     }
     console.log(`[sync] planes descargados: ${(planes||[]).length}`);
   } catch(e) { console.warn('[sync] error planes:', e.message); }
