@@ -6489,7 +6489,11 @@ async function imprimirCaracterizacion(famId) {
   const fam = STATE.familias.find(f => f.id === famId);
   if (!fam) { toast('Familia no encontrada','err'); return; }
 
-  // Pre-cargar banner como data URL para que funcione en contexto blob:
+  // Abrir ventana ANTES del primer await para no romper el gesto del usuario
+  const win = window.open('', '_blank');
+  if (!win) { toast('Permite ventanas emergentes para este sitio y vuelve a intentar','warn'); return; }
+  win.document.write('<html><body style="font-family:sans-serif;padding:20px;color:#333">Generando documento…</body></html>');
+
   let bannerSrc = './banner.png';
   try {
     const _resp = await fetch('./banner.png');
@@ -6499,7 +6503,7 @@ async function imprimirCaracterizacion(famId) {
       _r.onload = e => res(e.target.result);
       _r.readAsDataURL(_blob);
     });
-  } catch(_e) { /* mantener ruta relativa como fallback */ }
+  } catch(_e) {}
 
   const d2 = fam.d2 || {};
   const personas = fam.personas || [];
@@ -6931,14 +6935,9 @@ ${personas.length>0 ? `<h2 style="font-size:13px;color:#4a6fa5;margin:16px 0 6px
 </body>
 </html>`;
 
-  // Abrir como pestaña nueva (anchor click) — más compatible que window.open con popup features
-  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
-  const url  = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  // Revocar la URL de blob después de 90 s para liberar memoria
-  setTimeout(() => URL.revokeObjectURL(url), 90000);
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
 // ============================================================
@@ -7353,6 +7352,11 @@ async function imprimirPCF(famId) {
   const plan = fam?.plan;
   if (!plan) { toast('Sin plan para imprimir','warn'); return; }
 
+  // Abrir ventana ANTES del primer await para no romper el gesto del usuario
+  const win = window.open('', '_blank');
+  if (!win) { toast('Permite ventanas emergentes para este sitio y vuelve a intentar','warn'); return; }
+  win.document.write('<html><body style="font-family:sans-serif;padding:20px;color:#333">Generando documento…</body></html>');
+
   const d2   = fam.d2||{};
   const lugar= d2['8']||d2['5']||'(sin ubicación)';
   const mun  = d2['5']||'—';
@@ -7364,7 +7368,6 @@ async function imprimirPCF(famId) {
   });
   if (pdata.riesgos_otros) riesgosTexto.push('Otros: '+pdata.riesgos_otros);
 
-  // Banner base64 (reutilizar el mismo mecanismo que imprimirCaracterizacion)
   let bannerSrc='./banner.png';
   try {
     const resp=await fetch('./banner.png');
@@ -7498,12 +7501,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </body>
 </html>`;
 
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.target='_blank';a.rel='noopener';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),90000);
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
 // ── downloadExcelPCF ── Excel con todos los planes ──────────
