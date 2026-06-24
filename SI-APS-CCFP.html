@@ -741,11 +741,13 @@ async function sbFetch(path, opts={}) {
     ...(opts.headers||{})
   };
   let res = await fetch(SB_URL+path, {...opts, headers});
-  if (res.status===401 && tok) {
+  if (res.status===401 && tok && !opts.skipRefresh) {
     const ok = await doRefresh();
     if (ok) {
       headers['Authorization'] = `Bearer ${STATE.auth.access_token}`;
       res = await fetch(SB_URL+path, {...opts, headers});
+    } else {
+      flagSessionExpired();
     }
   }
   if (res.status===204||res.status===201&&opts.noBody) return null;
@@ -789,6 +791,7 @@ async function doLogin(email, password) {
   };
   await loadProfile();
   await idb.put('auth', {id:'session', ...STATE.auth, profile: STATE.profile});
+  _sessionExpiredWarned = false;
   return STATE.profile;
 }
 
@@ -812,14 +815,31 @@ async function doRefresh() {
     const rt = STATE.auth?.refresh_token;
     if (!rt) return false;
     const data = await sbFetch('/auth/v1/token?grant_type=refresh_token', {
-      method:'POST', body: JSON.stringify({refresh_token:rt})
+      method:'POST', body: JSON.stringify({refresh_token:rt}), skipRefresh:true
     });
     STATE.auth.access_token  = data.access_token;
     STATE.auth.refresh_token = data.refresh_token;
     const sess = await idb.get('auth','session');
     if (sess) await idb.put('auth',{...sess, access_token:data.access_token, refresh_token:data.refresh_token});
+    _sessionExpiredWarned = false;
     return true;
   } catch(e){ return false; }
+}
+
+// Se activa cuando el access_token expiró Y el refresh_token también falló al renovarse.
+// Antes esto fallaba en silencio (solo console.warn) dejando la app mostrando datos
+// locales desactualizados/parciales sin que el usuario lo notara. Ahora avisa de forma
+// visible y persistente para que el usuario sepa que debe cerrar sesión y volver a entrar.
+let _sessionExpiredWarned = false;
+function flagSessionExpired() {
+  if (_sessionExpiredWarned) return;
+  _sessionExpiredWarned = true;
+  toast('Tu sesión expiró y no se pudo renovar. Cierra sesión y vuelve a iniciar sesión para sincronizar tus datos más recientes.', 'warn');
+  const banner = document.getElementById('conn-banner');
+  if (banner) {
+    banner.className = 'conn-banner offline';
+    banner.textContent = '⚠ Sesión expirada — cierra sesión y vuelve a entrar para sincronizar';
+  }
 }
 
 async function doLogout() {
@@ -1673,7 +1693,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.6</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.7</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -7491,7 +7511,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v2.6</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v2.7</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 

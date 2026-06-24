@@ -1,5 +1,5 @@
-/* Service Worker — SI-APS CCFP v2.6 — sync fix */
-const CACHE = 'siaps-ccfp-v40';
+/* Service Worker — SI-APS CCFP v2.7 — fix sesión expirada silenciosa */
+const CACHE = 'siaps-ccfp-v41';
 const ASSETS = [
   './SI-APS-CCFP.html',
   './manifest.json',
