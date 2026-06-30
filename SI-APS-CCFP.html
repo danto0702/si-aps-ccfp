@@ -493,6 +493,7 @@ const REF = {
   familiograma:[{v:'1',l:'Biológicos'},{v:'2',l:'Psicológicos'},{v:'3',l:'Sociales'}],
   apgar:[{v:'1',l:'Alta funcionalidad (7-10 pts)'},{v:'2',l:'Disfunción moderada (4-6 pts)'},{v:'3',l:'Disfunción severa (0-3 pts)'}],
   zarit:[{v:'1',l:'Ausencia de sobrecarga (≤ 46)'},{v:'2',l:'Sobrecarga ligera (47-55)'},{v:'3',l:'Sobrecarga intensa (≥ 56)'}],
+  igef:[{v:'1',l:'Bajo / Tendencia a la Equidad (5-11 pts)'},{v:'2',l:'Moderado / Roles Tradicionales (12-18 pts)'},{v:'3',l:'Alto / Dinámica Machista Arraigada (19-25 pts)'}],
   ecomapa:[{v:'1',l:'Positivo'},{v:'2',l:'Tenue'},{v:'3',l:'Estresante'},{v:'4',l:'Fluye'},{v:'5',l:'Intenso'}],
   enfermedadTransmisible:[{v:'1',l:'TB (Tuberculosis)'},{v:'2',l:'Lepra'},{v:'3',l:'Escabiosis, enfermedades infecciosas de la piel u otras'},{v:'4',l:'Malaria'},{v:'5',l:'Dengue'},{v:'6',l:'Chagas'},{v:'7',l:'Hepatitis A'},{v:'8',l:'Alguna enfermedad inmunoprevenible (varicela, parotiditis, otra)'},{v:'9',l:'Otras'},{v:'10',l:'Ninguna'}],
   formaAlimentos:[{v:'1',l:'Cultiva'},{v:'2',l:'Cría de animales'},{v:'3',l:'Cacería'},{v:'4',l:'Recolección de alimentos'},{v:'5',l:'Trueque o intercambio'},{v:'6',l:'Compra'},{v:'7',l:'Asistencia del Estado'},{v:'8',l:'Ayuda humanitaria'},{v:'9',l:'Otro'}],
@@ -655,6 +656,7 @@ const ALL_FIELDS_T2 = [
     {id:'70', label:'Familias con prácticas de cuidado de salud críticas de varios de sus integrantes que ponen en riesgo o han afectado la salud (hábitos alimentarios, situaciones de abandono)', type:'sino'},
     {id:'71', label:'Familia con integrantes con antecedentes de Ca, HTA, Diabetes, Asma, Enfermedad cardiaca u otra', type:'sino'},
     {id:'90', label:'¿Algún integrante recibe tratamiento para sus antecedentes crónicos?', type:'sino'},
+    {id:'91', label:'Índice de Equidad de Género en el Entorno Familiar (IGEF)',           type:'sel',   refKey:'igef'},
     {id:'72', label:'Descripción antecedentes crónicos',  type:'text'},
     {id:'73', label:'Forma de obtención de alimentos',    type:'multi', refKey:'formaAlimentos'},
     {id:'74', label:'Descripción otra obtención alimentos',type:'text'},
@@ -2838,6 +2840,112 @@ function guardarZarit(){
 }
 
 // ============================================================
+// ██  IGEF — ÍNDICE DE EQUIDAD DE GÉNERO EN EL ENTORNO FAMILIAR
+// ============================================================
+const IGEF_PREGUNTAS = [
+  'Las labores del hogar y el cuidado de los hijos deben ser responsabilidad principal de las mujeres de la familia.',
+  'El hombre debe tener la última palabra en las decisiones importantes del hogar (económicas, mudanzas, educación).',
+  'Es normal que un hombre controle los horarios, las amistades o la forma de vestir de su pareja o hijas para protegerlas.',
+  'Las mujeres de la familia deben pedir permiso para trabajar, estudiar o salir solas.',
+  'El rol principal del hombre en la familia es proveer dinero, mientras que el de la mujer es mantener la unión familiar.'
+];
+const IGEF_OPTS = [
+  {v:1,l:'Totalmente en desacuerdo'},
+  {v:2,l:'En desacuerdo'},
+  {v:3,l:'Ni de acuerdo ni en desacuerdo'},
+  {v:4,l:'De acuerdo'},
+  {v:5,l:'Totalmente de acuerdo'}
+];
+
+function _igefInterp(s){
+  if(s<=11) return {cat:'1',label:'Bajo / Tendencia a la Equidad',color:'var(--green)'};
+  if(s<=18) return {cat:'2',label:'Moderado / Roles Tradicionales',color:'var(--yellow)'};
+  return {cat:'3',label:'Alto / Dinámica Machista Arraigada',color:'var(--red)'};
+}
+
+function openModalIGEF(){
+  const prev=STATE.draft2['91_answers']||[];
+  STATE._igefAns=prev.length===5?[...prev]:new Array(5).fill(null);
+  const rows=IGEF_PREGUNTAS.map((p,i)=>`
+    <div class="ins-q">
+      <div class="field-label" style="margin-bottom:8px"><span class="field-num">P${i+1}</span>${esc(p)}</div>
+      <div class="scale-opts" style="grid-template-columns:1fr 1fr">
+        ${IGEF_OPTS.map(o=>`
+          <button type="button" class="scale-btn igef-btn${STATE._igefAns[i]===o.v?' sel-ok':''}"
+            data-qi="${i}" data-v="${o.v}" onclick="igefPick(${i},${o.v})">
+            <span class="sv">${o.v}</span>${esc(o.l)}
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-title">⚖️ Índice de Equidad de Género Familiar (IGEF)</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        5 preguntas · Escala Likert 1-5 (1 = Totalmente en desacuerdo · 5 = Totalmente de acuerdo)<br>
+        Rango: <b>5-11</b> Bajo/Equidad · <b>12-18</b> Moderado · <b>19-25</b> Alto/Machista
+      </p>
+      <div class="prog-bar"><div class="prog-fill" id="igef-bar" style="width:${(STATE._igefAns.filter(x=>x!==null).length/5*100).toFixed(0)}%"></div></div>
+      ${rows}
+      <div id="igef-res" style="display:${STATE._igefAns.every(x=>x!==null)?'block':'none'}" class="score-panel">
+        <div style="font-size:11px;color:var(--muted)">PUNTAJE TOTAL</div>
+        <div class="snum" id="igef-num"></div>
+        <div class="slbl" id="igef-lbl"></div>
+        <div class="ssub">5-11 Bajo/Equidad · 12-18 Moderado · 19-25 Alto/Machista</div>
+      </div>
+      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--card);padding-top:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="igef-save" style="flex:1;display:${STATE._igefAns.every(x=>x!==null)?'flex':'none'}" onclick="guardarIGEF()">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+  if(STATE._igefAns.every(x=>x!==null)) _igefUpdate();
+}
+
+function igefPick(qi,v){
+  STATE._igefAns[qi]=v;
+  document.querySelectorAll(`.igef-btn[data-qi="${qi}"]`).forEach(b=>{
+    b.classList.toggle('sel-ok', parseInt(b.dataset.v)===v);
+  });
+  _igefUpdate();
+}
+
+function _igefUpdate(){
+  const ans=STATE._igefAns;
+  const done=ans.filter(x=>x!==null).length;
+  const el=document.getElementById('igef-bar');
+  if(el) el.style.width=(done/5*100).toFixed(0)+'%';
+  if(done===0) return;
+  const score=ans.filter(x=>x!==null).reduce((s,x)=>s+x,0);
+  const all=done===5;
+  const r=_igefInterp(score);
+  const res=document.getElementById('igef-res');
+  if(res){
+    res.style.display='block';
+    const numEl=document.getElementById('igef-num');
+    const lblEl=document.getElementById('igef-lbl');
+    if(numEl){numEl.textContent=all?score:score+'+'; numEl.style.color=r.color;}
+    if(lblEl){lblEl.textContent=r.label; lblEl.style.color=r.color;}
+    const saveBtn=document.getElementById('igef-save');
+    if(saveBtn) saveBtn.style.display=all?'flex':'none';
+  }
+}
+
+function guardarIGEF(){
+  const ans=STATE._igefAns;
+  if(ans.filter(x=>x!==null).length<5) return toast('Complete las 5 preguntas','err');
+  const score=ans.reduce((s,x)=>s+x,0);
+  const r=_igefInterp(score);
+  STATE.draft2['91_answers']=[...ans];
+  STATE.draft2['91_score']=score;
+  STATE.draft2['91']=r.cat;
+  delete STATE._igefAns;
+  closeModal();
+  toast('IGEF guardado — '+score+' pts · '+r.label,'ok');
+  render();
+}
+
+// ============================================================
 // ██  FAMILIOGRAMA  (convenciones estándar de genograma)
 // ============================================================
 // Modelo miembro: {id, nombre, edad, sex:'M'|'F'|'N',
@@ -4639,6 +4747,19 @@ function renderT2Step5(d){
       </div>
     </div>`:'';
 
+  /* ── Bloque IGEF ── */
+  const igefScore=d['91_score'];
+  const igefCat=REF.igef.find(o=>o.v===d['91']);
+  const igefColor=igefScore<=11?'var(--green)':igefScore<=18?'var(--yellow)':'var(--red)';
+  const igefResultHtml=(igefScore!=null)?`
+    <div class="tool-result-chip">
+      <div class="tool-score-big" style="color:${igefColor}">${igefScore}</div>
+      <div class="tool-result-text">
+        <div class="tool-result-label" style="color:${igefColor}">${esc(igefCat?.l||'')}</div>
+        <div class="tool-result-sub">Puntaje sobre 25 pts (5 preguntas Likert 1-5)</div>
+      </div>
+    </div>`:'';
+
   /* ── Bloque Ecomapa ── */
   const ecoData=d['60_data']||{};
   const ECO_NODES=['Trabajo/Estudio','Salud','Familia extensa','Iglesia','Amigos','Recreación','Servicios soc.','Escuela'];
@@ -4686,6 +4807,15 @@ function renderT2Step5(d){
       </button>
       ${zaritResultHtml}
     </div>`:''}
+
+    <!-- ══ IGEF — EQUIDAD DE GÉNERO ══ -->
+    <div class="tool-block">
+      <div class="tool-block-title">Índice de Equidad de Género Familiar (IGEF)</div>
+      <button class="btn btn-secondary btn-block" onclick="openModalIGEF()">
+        ⚖️ ${igefScore!=null?'Editar IGEF (puntaje: '+igefScore+'/25)':'Completar IGEF (5 preguntas Likert)'}
+      </button>
+      ${igefResultHtml}
+    </div>
 
     <!-- ══ ECOMAPA ══ -->
     <div class="tool-block">
