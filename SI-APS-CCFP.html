@@ -6462,7 +6462,7 @@ async function downloadExcel() {
     // ─── Hoja T2 ────────────────────────────────────────────
     const t2Rows = [];
     const t2Keys = Object.keys(T2_LABELS);
-    t2Rows.push(['ID Familia','Código EBS','Creado por','Creado el', ...t2Keys.map(k=>T2_LABELS[k])]);
+    t2Rows.push(['ID Familia','Código EBS','Creado por','Creado el','Teléfono','Correo electrónico', ...t2Keys.map(k=>T2_LABELS[k])]);
     fams.forEach((f,fi) => {
       const d = f.d2||{};
       const idx = fi;
@@ -6478,6 +6478,7 @@ async function downloadExcel() {
       };
       t2Rows.push([
         f.id, ebsCode, f.created_by||'', f.created_at||'',
+        d['_tel']||'', d['_email']||'',
         rv('2'),d['3']||'54',rv('4'),rv('5'),rv('6'),rv('7'),rv('8'),rv('9'),rv('10'),rv('11'),
         numViv,numFam,rv('15')||'1',calcEBS(d).slice(-3),rv('17')||'',rv('18')||'1',
         ebsCode,rv('20')||'',rv('21')||'',rv('22')||'',rv('23')||'',codFicha,rv('25'),
@@ -6496,7 +6497,7 @@ async function downloadExcel() {
     // ─── Hoja T3 ────────────────────────────────────────────
     const t3Rows = [];
     const t3Keys = Object.keys(T3_LABELS);
-    t3Rows.push(['ID Persona','ID Familia','Código EBS','Creado el', ...t3Keys.map(k=>T3_LABELS[k])]);
+    t3Rows.push(['ID Persona','ID Familia','Código EBS','Creado el','Teléfono','Correo electrónico', ...t3Keys.map(k=>T3_LABELS[k])]);
     fams.forEach(f => {
       const ebsCode = calcEBS(f.d2||{});
       (f.personas||[]).forEach(p => {
@@ -6508,6 +6509,7 @@ async function downloadExcel() {
         };
         t3Rows.push([
           p.id, f.id, ebsCode, p.created_at||'',
+          pd['_tel']||'', pd['_email']||'',
           rv3('3'),rv3('4'),rv3('5'),rv3('6'),rv3('7'),rv3('8'),rv3('9'),rv3('10'),
           rv3('11'),rv3('12'),rv3('13'),rv3('14'),rv3('15'),rv3('16'),rv3('17'),
           rv3('18'),rv3('19'),rv3('20'),rv3('21'),rv3('22'),rv3('23'),rv3('24'),
