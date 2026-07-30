@@ -100,6 +100,8 @@ input,select,textarea{touch-action:manipulation}
 
 /* Familia list item */
 .familia-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px}
+.riesgo-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:#e94560;background:rgba(233,69,96,.1);border:1px solid rgba(233,69,96,.35);border-radius:6px;padding:3px 8px;margin-top:4px}
+.riesgo-campo{font-size:10px;color:#e94560;font-weight:600;margin-top:2px;display:block}
 @media(hover:hover){.familia-item:hover{border-color:var(--purple)}}
 .familia-icon{width:38px;height:38px;border-radius:8px;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .familia-info{flex:1;min-width:0}
@@ -512,6 +514,12 @@ const REF = {
   motivoNoAtencionAguda:[{v:'1',l:'No hay servicio disponible en el territorio'},{v:'2',l:'Falta de dinero para desplazarse'},{v:'3',l:'No le dan cita'},{v:'4',l:'No ha considerado necesario'},{v:'5',l:'Usa medicina tradicional o alternativa'},{v:'6',l:'Dificultad de desplazamiento'},{v:'7',l:'Orden público/seguridad'},{v:'8',l:'Otro'}]
 };
 
+REF.genero=[{v:'1',l:'Femenino'},{v:'2',l:'Masculino'}];
+REF.identidadGenero=[{v:'1',l:'Femenino'},{v:'2',l:'Masculino'},{v:'3',l:'Transexual'},{v:'4',l:'Transgénero'},{v:'5',l:'No responde'},{v:'6',l:'Otro'}];
+REF.orientacionSexual=[{v:'1',l:'Heterosexual'},{v:'2',l:'Lesbiana'},{v:'3',l:'Gay'},{v:'4',l:'Bisexual'},{v:'5',l:'No responde'},{v:'6',l:'Otro'}];
+REF.estatusMigratorio=[{v:'1',l:'Regular'},{v:'2',l:'Sin autorización de permanencia'},{v:'3',l:'No aplica'}];
+REF.antecedenteCronico=[{v:'1',l:'Hipertensión Arterial'},{v:'2',l:'Diabetes Mellitus'},{v:'3',l:'Antecedente de Infarto'},{v:'4',l:'Cáncer'},{v:'5',l:'EPOC'},{v:'6',l:'ACV (Accidentes cerebrovasculares)'},{v:'7',l:'Enfermedades Huérfanas'},{v:'8',l:'Otro'}];
+
 // Campos con soporte de opciones personalizadas
 const CAMPOS_CUSTOM = {
   tipoVivienda:'Tipo de vivienda',materialPared:'Material paredes',materialPiso:'Material piso',
@@ -633,6 +641,7 @@ const ALL_FIELDS_T2 = [
     {id:'51', label:'Descripción otro sistema aguas res.',type:'text'},
     {id:'52', label:'Disposición residuos sólidos',       type:'multi', refKey:'disposicionResiduos'},
     {id:'53', label:'Descripción otra disposición res.',  type:'text'},
+    {id:'t2_recursos', label:'Sus recursos económicos suplen sus necesidades básicas', type:'sino'},
   ]},
   {step:5, label:'Paso 5 — Familia y Condiciones', fields:[
     {id:'54', label:'Tipo de familia',                    type:'sel',   refKey:'tipoFamilia'},
@@ -653,11 +662,12 @@ const ALL_FIELDS_T2 = [
     {id:'67', label:'Familia que convive con persona que presenta alguna enfermedad transmisible', type:'multi', refKey:'enfermedadTransmisible'},
     {id:'68', label:'Familia con vivencia de sucesos vitales normativos y no normativos (eventos significativos que inciden de manera positiva o negativa en la persona y familia: ingreso de niños a estudiar, muerte familiar, accidente que genera discapacidad, separación de pareja, entre otros)', type:'sino'},
     {id:'69', label:'Familia en situación de vulnerabilidad social (consumo de SPA/alcohol, explotación sexual, trabajo infantil, conflictos interpersonales, violencia intrafamiliar, trastorno mental, entre otras)', type:'sino'},
+    {id:'t2_desescolar', label:'Hay niños en edad escolar desescolarizados', type:'sino'},
     {id:'70', label:'Familias con prácticas de cuidado de salud críticas de varios de sus integrantes que ponen en riesgo o han afectado la salud (hábitos alimentarios, situaciones de abandono)', type:'sino'},
     {id:'71', label:'Familia con integrantes con antecedentes de Ca, HTA, Diabetes, Asma, Enfermedad cardiaca u otra', type:'sino'},
     {id:'90', label:'¿Algún integrante recibe tratamiento para sus antecedentes crónicos?', type:'sino'},
     {id:'91', label:'Índice de Equidad de Género en el Entorno Familiar (IGEF)',           type:'sel',   refKey:'igef'},
-    {id:'72', label:'Descripción antecedentes crónicos',  type:'text'},
+    {id:'72', label:'Antecedentes crónicos de la familia', type:'multi', refKey:'antecedenteCronico'},
     {id:'73', label:'Forma de obtención de alimentos',    type:'multi', refKey:'formaAlimentos'},
     {id:'74', label:'Descripción otra obtención alimentos',type:'text'},
     {id:'75', label:'¿Hábitos saludables de alimentación?',type:'sino'},
@@ -1695,7 +1705,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v2.7</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.0</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -1813,6 +1823,7 @@ function buildFamiliaListHtml(q, fams) {
       <div class="familia-info">
         <div class="familia-nombre">${hi(lugar, q)}${isDraftFam?` <span style="font-size:10px;font-weight:700;color:var(--yellow);background:rgba(255,180,50,.12);border:1px solid var(--yellow);border-radius:4px;padding:1px 5px;vertical-align:middle">📝 BORRADOR</span>`:''}</div>
         <div class="familia-meta">Mun: ${d['5']||'—'} · EBS: ${esc(ebsCode.slice(-6))} · ${np} persona(s) · ${d['25']||'—'}</div>
+        ${esRiesgoAmbiental(d)?'<div class="riesgo-badge">⬦ Riesgo ambiental</div>':''}
         ${matchBadge}
       </div>
       <div class="familia-actions">
@@ -4671,6 +4682,7 @@ function renderT2Step3(d){
     ${sel(REF.materialTecho,'32',d['32']||'',true)}
     ${s33?txt('33',d['33']||'',30,false,'Especifique el material del techo'):''}
     <div class="grid-2">${num('34',d['34']||'',true,0,99)}${sino('35',d['35']||'',true)}</div>
+    ${d['35']==='1'?'<span class="riesgo-campo">⬦ Hacinamiento detectado — marcar familia en riesgo ambiental</span>':''}
     ${sel(REF.estrato,'85',d['85']||'',false)}
     <div class="grid-2">${num('86',d['86']||'',false,0,99)}${num('87',d['87']||'',false,0,99)}</div>
   </div>`;}
@@ -4684,21 +4696,29 @@ function renderT2Step4(d){
     ${multi('riesgoAccidente','36',d['36']||[],false)}
     ${multi('sitiosAcceso','37',d['37']||[],true)}
     ${multi('fuentesEnergia','38',d['38']||[],true)}
+    ${(d['38']||[]).some(v=>['4','5','6','7','8'].includes(v))?'<span class="riesgo-campo">⬦ Fuente de energía de riesgo ambiental</span>':''}
     ${sino('39',d['39']||'',true)}
+    ${d['39']==='1'?'<span class="riesgo-campo">⬦ Sin acceso a agua para consumo — riesgo ambiental</span>':''}
     ${multi('obsVivienda','40',d['40']||[],true)}
+    ${(d['40']||[]).some(v=>['6','7','8','9','10','11','14','15','18','19'].includes(v))?'<span class="riesgo-campo">⬦ Observación de vivienda de riesgo ambiental</span>':''}
     ${s41?txt('41',d['41']||'',30,false,'Describa el otro lugar o característica'):''}
     ${sino('42',d['42']||'',true)}
     ${multi('animales','43',d['43']||[],true)}
     ${s44?txt('44',d['44']||'',30,true,'Tipo y cantidad de animales'):txt('44',d['44']||'',30,false,'Ej: Perros 2, Gatos 1')}
     ${num('45',d['45']||'',false,0,99)}
     ${multi('fuenteAgua','46',d['46']||[],true)}
+    ${(d['46']||[]).some(v=>['7','8','9','10','11','12','13'].includes(v))?'<span class="riesgo-campo">⬦ Fuente de agua de riesgo ambiental</span>':''}
     ${s47?txt('47',d['47']||'',30,false,'Especifique la otra fuente de agua'):''}
     ${multi('sistemaExcretas','48',d['48']||[],true)}
+    ${(d['48']||[]).some(v=>['5','6','7','8'].includes(v))?'<span class="riesgo-campo">⬦ Sistema de excretas de riesgo ambiental</span>':''}
     ${s49?txt('49',d['49']||'',30,false,'Especifique el otro sistema de excretas'):''}
     ${multi('aguasResiduales','50',d['50']||[],true)}
+    ${(d['50']||[]).some(v=>['2','3','5','6','7'].includes(v))?'<span class="riesgo-campo">⬦ Manejo de aguas residuales de riesgo ambiental</span>':''}
     ${s51?txt('51',d['51']||'',30,false,'Especifique el otro sistema de aguas residuales'):''}
     ${multi('disposicionResiduos','52',d['52']||[],true)}
+    ${(d['52']||[]).some(v=>['2','3','4','5','6'].includes(v))?'<span class="riesgo-campo">⬦ Disposición de residuos de riesgo ambiental</span>':''}
     ${s53?txt('53',d['53']||'',30,false,'Especifique la otra disposición de residuos'):''}
+    ${sino('t2_recursos',d['t2_recursos']||'',false)}
   </div>`;}
 
 function renderT2Step5(d){
@@ -4831,9 +4851,10 @@ function renderT2Step5(d){
     ${sino('66',d['66']||'',true)}
     ${multi('enfermedadTransmisible','67',d['67']||[],false)}
     ${sino('68',d['68']||'',true)}${sino('69',d['69']||'',true)}
+    ${sino('t2_desescolar',d['t2_desescolar']||'',false)}
     ${sino('70',d['70']||'',true)}${sino('71',d['71']||'',true)}
     ${sino('90',d['90']||'',false)}
-    ${sDescAnt?txt('72',d['72']||'',200,false,'Describa los antecedentes crónicos'):''}
+    ${multi('antecedenteCronico','72',d['72']||[],false)}
     ${multi('formaAlimentos','73',d['73']||[],true)}
     ${sDescAl?txt('74',d['74']||'',100,false,'Especifique la otra forma de obtención de alimentos'):''}
     <div class="grid-2">${sino('75',d['75']||'',true)}${sino('76',d['76']||'',true)}</div>
@@ -5020,8 +5041,68 @@ function renderPersona(){
     ${showEAPB?searchField3('16',REF_EAPB,d['16']||'',false):''}
     <div class="grid-2">
       <div class="field"><div class="field-label">Teléfono / Celular <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div><input class="field-input" type="tel" inputmode="numeric" maxlength="15" placeholder="Ej. 3001234567" value="${esc(d['_tel']||'')}" oninput="setDraft3('_tel',this.value.replace(/[^0-9+\\-() ]/g,''))"></div>
-      <div class="field"><div class="field-label">Correo Electrónico <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div><input class="field-input" type="email" inputmode="email" maxlength="80" placeholder="Ej. nombre@correo.com" value="${esc(d['_email']||'')}" oninput="setDraft3('_email',this.value.trim())"></div>
+      <div class="field"><div class="field-label">Teléfono Secundario <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div><input class="field-input" type="tel" inputmode="numeric" maxlength="15" placeholder="Ej. 3001234567" value="${esc(d['t3_tel2']||'')}" oninput="setDraft3('t3_tel2',this.value.replace(/[^0-9+\\-() ]/g,''))"></div>
     </div>
+    <div class="field"><div class="field-label">Correo Electrónico <span style="font-size:10px;color:var(--muted);font-weight:400">(dato complementario)</span></div><input class="field-input" type="email" inputmode="email" maxlength="80" placeholder="Ej. nombre@correo.com" value="${esc(d['_email']||'')}" oninput="setDraft3('_email',this.value.trim())"></div>
+    <div class="grid-2">
+      <div class="field"><div class="field-label">Género</div><select class="field-select" onchange="setDraftSel3('t3_genero',this.value)"><option value="">Seleccione...</option>${REF.genero.map(o=>`<option value="${o.v}" ${d['t3_genero']===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>
+      <div class="field"><div class="field-label">Identidad de Género</div><select class="field-select" onchange="setDraftSel3('t3_identidad',this.value)"><option value="">Seleccione...</option>${REF.identidadGenero.map(o=>`<option value="${o.v}" ${d['t3_identidad']===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><div class="field-label">Orientación Sexual</div><select class="field-select" onchange="setDraftSel3('t3_orientacion',this.value)"><option value="">Seleccione...</option>${REF.orientacionSexual.map(o=>`<option value="${o.v}" ${d['t3_orientacion']===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>
+    <div class="grid-2">
+      <div class="field"><div class="field-label">País de Origen <span style="font-size:10px;color:var(--muted);font-weight:400">(código DANE)</span></div><input class="field-input" type="text" maxlength="5" placeholder="Ej. 170 (Colombia)" value="${esc(d['t3_pais']||'')}" oninput="setDraft3('t3_pais',this.value)"></div>
+      <div class="field"><div class="field-label">Estatus Migratorio</div><select class="field-select" onchange="setDraftSel3('t3_mig',this.value)"><option value="">Seleccione...</option>${REF.estatusMigratorio.map(o=>`<option value="${o.v}" ${d['t3_mig']===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}</select></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Historial Laboral</div>
+    <div class="field"><div class="field-label">¿Tiene o tuvo historial laboral?</div><div class="toggle-group"><button class="toggle-btn${d['t3_histLab']==='1'?' active-si':''}" onclick="setSino3('t3_histLab','1')">SI</button><button class="toggle-btn${d['t3_histLab']==='2'?' active-no':''}" onclick="setSino3('t3_histLab','2')">NO</button></div></div>
+    ${d['t3_histLab']==='1'?`
+    <div style="padding:10px;background:rgba(74,111,165,.08);border-radius:8px;margin-top:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Empleo 1</div>
+      <div class="field"><div class="field-label">Lugar de trabajo</div><input class="field-input" type="text" maxlength="80" value="${esc(d['t3_lab1_lugar']||'')}" oninput="setDraft3('t3_lab1_lugar',this.value)"></div>
+      <div class="field"><div class="field-label">Empleador</div><input class="field-input" type="text" maxlength="80" value="${esc(d['t3_lab1_empleador']||'')}" oninput="setDraft3('t3_lab1_empleador',this.value)"></div>
+      <div class="field"><div class="field-label">Período</div><input class="field-input" type="text" maxlength="30" placeholder="Ej. 2018-2022" value="${esc(d['t3_lab1_periodo']||'')}" oninput="setDraft3('t3_lab1_periodo',this.value)"></div>
+    </div>
+    <div class="field" style="margin-top:10px"><div class="field-label">¿Más empleos?</div><div class="toggle-group"><button class="toggle-btn${d['t3_lab2_masEmpleos']==='1'?' active-si':''}" onclick="setSino3('t3_lab2_masEmpleos','1')">SI</button><button class="toggle-btn${d['t3_lab2_masEmpleos']==='2'?' active-no':''}" onclick="setSino3('t3_lab2_masEmpleos','2')">NO</button></div></div>
+    ${d['t3_lab2_masEmpleos']==='1'?`
+    <div style="padding:10px;background:rgba(74,111,165,.08);border-radius:8px;margin-top:6px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Empleo 2</div>
+      <div class="field"><div class="field-label">Lugar de trabajo</div><input class="field-input" type="text" maxlength="80" value="${esc(d['t3_lab2_lugar']||'')}" oninput="setDraft3('t3_lab2_lugar',this.value)"></div>
+      <div class="field"><div class="field-label">Empleador</div><input class="field-input" type="text" maxlength="80" value="${esc(d['t3_lab2_empleador']||'')}" oninput="setDraft3('t3_lab2_empleador',this.value)"></div>
+      <div class="field"><div class="field-label">Período</div><input class="field-input" type="text" maxlength="30" placeholder="Ej. 2018-2022" value="${esc(d['t3_lab2_periodo']||'')}" oninput="setDraft3('t3_lab2_periodo',this.value)"></div>
+    </div>
+    <div style="padding:10px;background:rgba(74,111,165,.08);border-radius:8px;margin-top:6px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Empleo 3</div>
+      <div class="field"><div class="field-label">Lugar de trabajo</div><input class="field-input" type="text" maxlength="80" value="${esc(d['t3_lab3_lugar']||'')}" oninput="setDraft3('t3_lab3_lugar',this.value)"></div>
+      <div class="field"><div class="field-label">Empleador</div><input class="field-input" type="text" maxlength="80" value="${esc(d['t3_lab3_empleador']||'')}" oninput="setDraft3('t3_lab3_empleador',this.value)"></div>
+      <div class="field"><div class="field-label">Período</div><input class="field-input" type="text" maxlength="30" placeholder="Ej. 2018-2022" value="${esc(d['t3_lab3_periodo']||'')}" oninput="setDraft3('t3_lab3_periodo',this.value)"></div>
+    </div>
+    `:''}
+    `:''}
+  </div>
+  <div class="card">
+    <div class="card-title">Exposición a Asbesto</div>
+    <div class="field"><div class="field-label">¿Realiza o realizó actividad laboral con asbesto?</div><div class="toggle-group"><button class="toggle-btn${d['t3_asb_act']==='1'?' active-si':''}" onclick="setSino3('t3_asb_act','1')">SI</button><button class="toggle-btn${d['t3_asb_act']==='2'?' active-no':''}" onclick="setSino3('t3_asb_act','2')">NO</button></div></div>
+    <div class="field"><div class="field-label">¿Actividad laboral relacionada con asbesto?</div><div class="toggle-group"><button class="toggle-btn${d['t3_asb_actRel']==='1'?' active-si':''}" onclick="setSino3('t3_asb_actRel','1')">SI</button><button class="toggle-btn${d['t3_asb_actRel']==='2'?' active-no':''}" onclick="setSino3('t3_asb_actRel','2')">NO</button></div></div>
+    ${(d['t3_asb_act']==='1'||d['t3_asb_actRel']==='1')?`
+    <div class="field"><div class="field-label">Actividades realizadas con asbesto</div><input class="field-input" type="text" maxlength="200" value="${esc(d['t3_asb_actividades']||'')}" oninput="setDraft3('t3_asb_actividades',this.value)"></div>
+    <div class="field"><div class="field-label">Materiales de interacción</div><input class="field-input" type="text" maxlength="200" value="${esc(d['t3_asb_materiales_interac']||'')}" oninput="setDraft3('t3_asb_materiales_interac',this.value)"></div>
+    <div class="grid-2">
+      <div class="field"><div class="field-label">Material con asbesto</div><input class="field-input" type="text" maxlength="100" value="${esc(d['t3_asb_mat']||'')}" oninput="setDraft3('t3_asb_mat',this.value)"></div>
+      <div class="field"><div class="field-label">Modalidad de exposición</div><input class="field-input" type="text" maxlength="100" value="${esc(d['t3_asb_modalidad']||'')}" oninput="setDraft3('t3_asb_modalidad',this.value)"></div>
+    </div>
+    `:''}
+    <div class="field"><div class="field-label">¿El hogar tiene materiales con asbesto?</div><div class="toggle-group"><button class="toggle-btn${d['t3_asb_hogar']==='1'?' active-si':''}" onclick="setSino3('t3_asb_hogar','1')">SI</button><button class="toggle-btn${d['t3_asb_hogar']==='2'?' active-no':''}" onclick="setSino3('t3_asb_hogar','2')">NO</button></div></div>
+    ${d['t3_asb_hogar']==='1'?`
+    <div class="field"><div class="field-label">Elementos del hogar con asbesto</div><input class="field-input" type="text" maxlength="200" value="${esc(d['t3_asb_elementosHogar']||'')}" oninput="setDraft3('t3_asb_elementosHogar',this.value)"></div>
+    <div class="field"><div class="field-label">Estado del material</div><input class="field-input" type="text" maxlength="100" value="${esc(d['t3_asb_estadoMat']||'')}" oninput="setDraft3('t3_asb_estadoMat',this.value)"></div>
+    `:''}
+    <div class="field"><div class="field-label">¿Convive con alguien expuesto laboralmente a asbesto?</div><div class="toggle-group"><button class="toggle-btn${d['t3_asb_convive']==='1'?' active-si':''}" onclick="setSino3('t3_asb_convive','1')">SI</button><button class="toggle-btn${d['t3_asb_convive']==='2'?' active-no':''}" onclick="setSino3('t3_asb_convive','2')">NO</button></div></div>
+    <div class="field"><div class="field-label">¿Se han realizado reparaciones con materiales de asbesto?</div><div class="toggle-group"><button class="toggle-btn${d['t3_asb_reparaciones']==='1'?' active-si':''}" onclick="setSino3('t3_asb_reparaciones','1')">SI</button><button class="toggle-btn${d['t3_asb_reparaciones']==='2'?' active-no':''}" onclick="setSino3('t3_asb_reparaciones','2')">NO</button></div></div>
+    <div class="field"><div class="field-label">¿Hay actividades con asbesto cerca del hogar?</div><div class="toggle-group"><button class="toggle-btn${d['t3_asb_actCerca']==='1'?' active-si':''}" onclick="setSino3('t3_asb_actCerca','1')">SI</button><button class="toggle-btn${d['t3_asb_actCerca']==='2'?' active-no':''}" onclick="setSino3('t3_asb_actCerca','2')">NO</button></div></div>
+    ${d['t3_asb_actCerca']==='1'?`<div class="field"><div class="field-label">Descripción de actividades cerca del hogar</div><input class="field-input" type="text" maxlength="200" value="${esc(d['t3_asb_actCercaHogar']||'')}" oninput="setDraft3('t3_asb_actCercaHogar',this.value)"></div>`:''}
+    <div class="field"><div class="field-label">¿Algún familiar padece enfermedad relacionada con asbesto?</div><div class="toggle-group"><button class="toggle-btn${d['t3_asb_familiarEnf']==='1'?' active-si':''}" onclick="setSino3('t3_asb_familiarEnf','1')">SI</button><button class="toggle-btn${d['t3_asb_familiarEnf']==='2'?' active-no':''}" onclick="setSino3('t3_asb_familiarEnf','2')">NO</button></div></div>
   </div>
   <div class="card">
     <div class="card-title">Perfil Social y Étnico</div>
@@ -5806,6 +5887,18 @@ function renderExport(){
 
 function arrVal(v){if(!v||!Array.isArray(v))return v||'';return v.join(',');}
 
+function esRiesgoAmbiental(d){
+  const has=(arr,vals)=>(arr||[]).some(v=>vals.includes(v));
+  return d['35']==='1'
+    || has(d['38'],['4','5','6','7','8'])
+    || d['39']==='1'
+    || has(d['40'],['6','7','8','9','10','11','14','15','18','19'])
+    || has(d['46'],['7','8','9','10','11','12','13'])
+    || has(d['48'],['5','6','7','8'])
+    || has(d['50'],['2','3','5','6','7'])
+    || has(d['52'],['2','3','4','5','6']);
+}
+
 function resolveCustomVal(val, refKey) {
   // If a selected value is a custom code, find the "Otro" code and return label for description
   if (!val) return {val, desc:''};
@@ -5823,71 +5916,277 @@ function resolveCustomVal(val, refKey) {
 }
 
 function buildFile(){
+  // Anexo Técnico v7 — Junio 2026 — T1: 6 campos, T2: 125 campos, T3: 119 campos
   const c=STATE.config;
-  // Excluir familias en borrador y personas en borrador del archivo PISIS
   const fams=STATE.familias.filter(f=>!f.deleted_at && !f.d2?.['_draft']);
+  const totalT2=fams.length;
   const totalT3=fams.reduce((s,f)=>(f.personas||[]).filter(p=>!p.d3?.['_draft']).length+s,0);
   let consec=0;
   const lines=[];
-  // Tipo 1
+  // ── T1: Registro de control (6 campos) ──
   const nitPad=String(c.nit||'').padStart(12,'0');
-  lines.push([c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT3)].join('|'));
+  lines.push(['1',c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT2+totalT3)].join('|'));
   fams.forEach((fam,fi)=>{
     consec++;
     const d=fam.d2||{};
     const idx=fi;
     const numViv=calcNumVivienda(d,idx);
     const numFam=calcNumFamilia(d,idx);
-    const codFicha=calcCodFicha(d,idx);
-    const numIdFam=calcNumIdFamilia(d,idx);
     const ebsCode=calcEBS(d);
-
-    // Resolver opciones personalizadas
-    const rv=(field,refKey)=>{const r=resolveCustomVal(d[field],refKey);return {v:r.val,desc:r.desc};};
-
+    // ── T2: Registro de caracterización familiar (125 campos) ──
     const t2=[
-      '2',String(consec),d['2']||'',d['3']||'',d['4']||'',d['5']||'',d['6']||'',d['7']||'',
-      d['8']||'',d['9']||'',d['10']||'',d['11']||'',d['12']||'',
-      numViv,numFam,d['15']||'',d['16']||'',d['17']||'',d['18']||'',
-      ebsCode,d['20']||'',d['21']||'',d['22']||'',d['23']||'',codFicha,d['25']||'',
-      (()=>{const r=rv('26','tipoVivienda');return r.v})(),
-      (()=>{const r=rv('26','tipoVivienda');return r.desc||d['27']||''})(),
-      (()=>{const r=rv('28','materialPared');return r.v})(),
-      (()=>{const r=rv('28','materialPared');return r.desc||d['29']||''})(),
-      (()=>{const r=rv('30','materialPiso');return r.v})(),
-      (()=>{const r=rv('30','materialPiso');return r.desc||d['31']||''})(),
-      (()=>{const r=rv('32','materialTecho');return r.v})(),
-      (()=>{const r=rv('32','materialTecho');return r.desc||d['33']||''})(),
-      d['34']||'',d['35']||'',
-      arrVal(d['36']),arrVal(d['37']),arrVal(d['38']),
-      d['39']||'',arrVal(d['40']),d['41']||'',d['42']||'',
-      arrVal(d['43']),d['44']||'',d['45']||'',
-      arrVal(d['46']),d['47']||'',arrVal(d['48']),d['49']||'',
-      arrVal(d['50']),d['51']||'',arrVal(d['52']),d['53']||'',
-      d['54']||'',d['55']||'',arrVal(d['56']),d['57']||'',
-      d['58']||'',d['59']||'',d['60']||'',
-      d['61']||'',d['62']||'',d['63']||'',d['64']||'',
-      d['65']||'',d['66']||'',arrVal(d['67']),d['68']||'',
-      d['69']||'',d['70']||'',d['71']||'',d['72']||'',
-      arrVal(d['73']),d['74']||'',d['75']||'',d['76']||'',
-      d['77']||'',d['78']||'',d['79']||'',d['80']||'',
-      d['81']||'',d['82']||'',d['83']||'',numIdFam
+      '2',            // [0]  tipo registro
+      String(consec), // [1]  consecutivo
+      d['2']||'',     // [2]  consentimiento
+      d['3']||'',     // [3]  departamento
+      d['4']||'',     // [4]  subregion
+      d['5']||'',     // [5]  municipio
+      d['6']||'',     // [6]  territorio
+      d['7']||'',     // [7]  microterritorio
+      '',             // [8]  tipo_ubicacion (no capturado en v3)
+      d['8']||'',     // [9]  nombre tipo ubicacion (barrio/vereda)
+      '',             // [10] area_ubicacion (no capturado)
+      d['12']||'',    // [11] punto de referencia
+      d['11']||'',    // [12] geopunto longitud
+      d['10']||'',    // [13] geopunto latitud
+      d['9']||'',     // [14] dirección
+      '',             // [15] teléfono vivienda (no capturado)
+      d['85']||'',    // [16] estrato
+      d['86']||'',    // [17] N° hogares en vivienda
+      d['87']||'',    // [18] N° personas en vivienda
+      d['34']||'',    // [19] N° habitaciones
+      '',             // [20] personas por habitación (no capturado)
+      d['35']||'',    // [21] hacinamiento
+      '',             // [22] elementos para dormir (no capturado)
+      '',             // [23] tipo situación (no capturado)
+      '',             // [24] observación situación (no capturado)
+      ebsCode,        // [25] código EBS
+      d['20']||'',    // [26] NIT prestador
+      d['21']||'',    // [27] tipo ID responsable
+      d['22']||'',    // [28] N° ID responsable
+      d['23']||'',    // [29] perfil visita
+      d['25']||'',    // [30] fecha diligenciamiento
+      d['26']||'',    // [31] tipo vivienda
+      arrVal(d['36']),// [32] escenarios riesgo accidente
+      arrVal(d['40']),// [33] cerca de la vivienda hay (obsVivienda)
+      '',             // [34] ambientes con luz natural (no capturado)
+      '',             // [35] ambientes con ventilación (no capturado)
+      '',             // [36] elementos en vivienda (no capturado)
+      '',             // [37] alumbrado predominante (no capturado)
+      arrVal(d['37']),// [38] acceso a la vivienda (sitiosAcceso)
+      d['41']||'',    // [39] otros accesos
+      d['32']||'',    // [40] material techo
+      '',             // [41] cocina separada (no capturado)
+      '',             // [42] baño separado (no capturado)
+      '',             // [43] dormitorios separados (no capturado)
+      '',             // [44] medio transporte (no capturado)
+      '',             // [45] otros medios transporte (no capturado)
+      '',             // [46] seguridad desplazamiento (no capturado)
+      '',             // [47] otros seguridad (no capturado)
+      '',             // [48] desplazamiento >30 min (no capturado)
+      '',             // [49] otros factores desplazamiento (no capturado)
+      d['42']||'',    // [50] actividad económica
+      '',             // [51] área trabajo independiente (no capturado)
+      '',             // [52] familiar afectado (no capturado)
+      arrVal(d['46']),// [53] fuente agua consumo
+      '',             // [54] horas suministro agua (no capturado)
+      '',             // [55] tanque almacenamiento (no capturado)
+      '',             // [56] frecuencia limpieza tanque (no capturado)
+      '',             // [57] distancia tanque-pozo (no capturado)
+      arrVal(d['48']),// [58] sistema excretas
+      arrVal(d['50']),// [59] aguas residuales domésticas
+      '',             // [60] almacenamiento residuos sólidos (no capturado)
+      '',             // [61] otros almacenamiento residuos (no capturado)
+      arrVal(d['52']),// [62] disposición final residuos sólidos
+      '',             // [63] prácticas residuos 1 (no capturado)
+      '',             // [64] prácticas residuos 2 (no capturado)
+      '',             // [65] prácticas residuos 3 (no capturado)
+      '',             // [66] prácticas residuos 4 (no capturado)
+      '',             // [67] prácticas residuos 5 (no capturado)
+      '',             // [68] prácticas residuos 6 (no capturado)
+      '',             // [69] prácticas residuos 7 (no capturado)
+      '',             // [70] prácticas residuos 8 (no capturado)
+      '',             // [71] prácticas residuos 9 (no capturado)
+      '',             // [72] prácticas residuos 10 (no capturado)
+      '',             // [73] prácticas residuos 11 (no capturado)
+      '',             // [74] prácticas separación rurales (no capturado)
+      '',             // [75] otras prácticas separación (no capturado)
+      '',             // [76] limpieza superficies (no capturado)
+      '',             // [77] otras limpieza (no capturado)
+      arrVal(d['38']),// [78] fuente energía cocinar (fuentesEnergia)
+      '',             // [79] otras fuentes energía (no capturado)
+      '',             // [80] fuentes humo (no capturado)
+      '',             // [81] otras fuentes humo (no capturado)
+      '',             // [82] prácticas calidad aire (no capturado)
+      '',             // [83] tipo estufa (no capturado)
+      d['39']||'',    // [84] criaderos vectores
+      '',             // [85] vectores transmisores (no capturado)
+      '',             // [86] otros vectores (no capturado)
+      '',             // [87] medidas control vectores (no capturado)
+      '',             // [88] otras medidas vectores (no capturado)
+      '',             // [89] animales ponzoñosos (no capturado)
+      '',             // [90] otros animales ponzoñosos (no capturado)
+      '',             // [91] medidas riesgo animales ponzoñosos (no capturado)
+      arrVal(d['43']),// [92] animales que conviven con familia
+      '',             // [93] N° perros (no capturado)
+      '',             // [94] N° gatos (no capturado)
+      '',             // [95] N° otros animales (no capturado)
+      '',             // [96] vacunas animales (no capturado)
+      '',             // [97] finalidad tenencia animales (no capturado)
+      '',             // [98] confinamiento animales (no capturado)
+      '',             // [99] desparasitación animales (no capturado)
+      '',             // [100] instalaciones seguras animales (no capturado)
+      '',             // [101] excretas animales (no capturado)
+      '',             // [102] barreras contacto animales (no capturado)
+      '',             // [103] medidas vectores animales (no capturado)
+      '',             // [104] lugar adquiere químicos (no capturado)
+      '',             // [105] disposición residuos químicos (no capturado)
+      '',             // [106] otras prácticas químicos (no capturado)
+      '',             // [107] instrucciones manejo químicos (no capturado)
+      '',             // [108] envase original químicos (no capturado)
+      '',             // [109] protección ventilación químicos (no capturado)
+      d['55']||'',    // [110] N° personas familia
+      '',             // [111] alias familia (no capturado)
+      d['54']||'',    // [112] tipo familia
+      d['57']||'',    // [113] APGAR familiar
+      d['58']||'',    // [114] cuidador principal
+      d['59']||'',    // [115] escala ZARIT
+      '',             // [116] familia con situaciones riesgo (21 opciones — pendiente recaptura)
+      '',             // [117] prácticas vínculos familiares (no capturado)
+      '',             // [118] redes de apoyo social (no capturado)
+      '',             // [119] prácticas cuidado salud hogar (no capturado)
+      '',             // [120] medidas enfermedades respiratorias (no capturado)
+      '',             // [121] otras medidas respiratorias (no capturado)
+      '',             // [122] higiene personal compartida (no capturado)
+      numViv,         // [123] N° identificación vivienda
+      numFam          // [124] N° identificación familia
     ];
     lines.push(t2.join('|'));
+    // ── T3: Registro de caracterización de integrantes (119 campos) ──
     (fam.personas||[]).filter(per=>!per.d3?.['_draft']).forEach(per=>{
       consec++;
       const pd=per.d3||{};
-      const numIdInt=numIdFam+(pd['7']||'')+(pd['8']||'');
-      const t3=['3',String(consec),'',
-        pd['3']||'',pd['4']||'',pd['5']||'',pd['6']||'',
-        pd['7']||'',pd['8']||'',pd['9']||'',pd['10']||'',pd['11']||'',
-        pd['12']||'',pd['13']||'',pd['14']||'',pd['15']||'',pd['16']||'',
-        arrVal(pd['17']),pd['18']||'',arrVal(pd['19']),pd['20']||'',
-        arrVal(pd['21']),pd['22']||'',pd['23']||'',pd['24']||'',pd['25']||'',
-        pd['26']||'',pd['27']||'',arrVal(pd['28']),arrVal(pd['29']),
-        pd['30']||'',pd['31']||'',pd['32']||'',arrVal(pd['33']),
-        pd['34']||'',pd['35']||'',pd['36']||'',arrVal(pd['37']),
-        numIdFam,numIdInt
+      const numIdInt=numFam+(pd['7']||'')+(pd['8']||'');
+      const t3=[
+        '3',                          // [0]   tipo registro
+        String(consec),               // [1]   consecutivo
+        pd['3']||'',                  // [2]   primer nombre
+        pd['4']||'',                  // [3]   segundo nombre
+        pd['5']||'',                  // [4]   primer apellido
+        pd['6']||'',                  // [5]   segundo apellido
+        pd['7']||'',                  // [6]   tipo identificación
+        pd['8']||'',                  // [7]   número identificación
+        pd['9']||'',                  // [8]   fecha nacimiento (AAAA-MM-DD)
+        pd['t3_pais']||'',            // [9]   país de origen
+        pd['t3_mig']||'',             // [10]  estatus migratorio
+        pd['10']||'',                 // [11]  sexo al nacer
+        pd['t3_genero']||'',          // [12]  género
+        pd['t3_identidad']||'',       // [13]  género con que se identifica
+        pd['t3_orientacion']||'',     // [14]  orientación sexual
+        pd['_tel']||'',               // [15]  teléfono principal
+        pd['t3_tel2']||'',            // [16]  teléfono secundario
+        pd['12']||'',                 // [17]  rol dentro de la familia
+        pd['13']||'',                 // [18]  ocupación (código CIUO)
+        pd['14']||'',                 // [19]  nivel educativo
+        pd['15']||'',                 // [20]  régimen de afiliación
+        pd['16']||'',                 // [21]  EAPB
+        arrVal(pd['17']),             // [22]  sujeto de protección constitucional
+        '',                           // [23]  modalidad violencia (no capturado)
+        pd['18']||'',                 // [24]  pertenencia étnica
+        pd['20']||'',                 // [25]  pueblo/comunidad étnica
+        '',                           // [26]  prácticas saberes ancestrales (no capturado)
+        '',                           // [27]  prácticas derecho a la salud (no capturado)
+        '',                           // [28]  prácticas cuidado y salud (no capturado)
+        pd['28']||'',                 // [29]  atenciones pendientes promoción
+        arrVal(pd['21']),             // [30]  condición de discapacidad
+        '',                           // [31]  certificación RLCPD (no capturado)
+        '',                           // [32]  intención reproductiva (no capturado)
+        pd['11']||'',                 // [33]  gestación actual confirmada
+        '',                           // [34]  atenciones ruta materno perinatal (no capturado)
+        pd['29']||'',                 // [35]  motivo no recibió atenciones
+        pd['31']||'',                 // [36]  lactancia exclusiva <6 meses
+        pd['22']||'',                 // [37]  peso (kg)
+        pd['23']||'',                 // [38]  talla (cm)
+        '',                           // [39]  IMC mayores 5 años (no capturado)
+        '',                           // [40]  circunferencia cintura (no capturado)
+        pd['33']||'',                 // [41]  signos desnutrición aguda
+        pd['24']||'',                 // [42]  clasificación nutricional P/T o IMC
+        '',                           // [43]  se lava manos con agua y jabón (no capturado)
+        '',                           // [44]  TA sistólica (no capturado)
+        '',                           // [45]  TA diastólica (no capturado)
+        '',                           // [46]  clasificación TA (no capturado)
+        '',                           // [47]  urgencias último año (no capturado)
+        '',                           // [48]  enfermedades último mes (no capturado)
+        '',                           // [49]  otras enfermedades (no capturado)
+        '',                           // [50]  acción ante afección (no capturado)
+        '',                           // [51]  otras acciones (no capturado)
+        '',                           // [52]  trastornos ánimo últimas 2 semanas (no capturado)
+        '',                           // [53]  cómo se sintió últimos 8 días (no capturado)
+        '',                           // [54]  riesgos salud física/mental (no capturado)
+        '',                           // [55]  situación salud limita actividades (no capturado)
+        pd['26']||'',                 // [56]  tiene diagnóstico (condición salud crónica)
+        '',                           // [57]  signos/síntomas sin diagnóstico (no capturado)
+        '',                           // [58]  condición salud transmisible (no capturado)
+        '',                           // [59]  enfermedad no transmisible (no capturado)
+        '',                           // [60]  zona endémica / signos-síntomas (no capturado)
+        pd['36']||'',                 // [61]  recibe atención y tratamiento actual
+        '',                           // [62]  motivos no recibió atención (no capturado)
+        '',                           // [63]  consume SPA (no capturado)
+        '',                           // [64]  consume tabaco (no capturado)
+        '',                           // [65]  cigarrillos diario (no capturado)
+        '',                           // [66]  años fumando (no capturado)
+        '',                           // [67]  puntaje ASSIST (no capturado)
+        '',                           // [68]  puntaje AUDIT (no capturado)
+        '',                           // [69]  puntaje CRAFFT (no capturado)
+        '',                           // [70]  fecha última menstruación (no capturado)
+        '',                           // [71]  mujer en edad fértil (no capturado)
+        '',                           // [72]  en embarazo (no capturado)
+        '',                           // [73]  conoce signos alarma embarazo (no capturado)
+        '',                           // [74]  conoce IVE (no capturado)
+        '',                           // [75]  inició atenciones prenatales (no capturado)
+        '',                           // [76]  inició oportunamente prenatal (no capturado)
+        '',                           // [77]  acceso MAC postparto (no capturado)
+        '',                           // [78]  clasificación riesgo gestacional (no capturado)
+        '',                           // [79]  clasificación riesgo preeclampsia (no capturado)
+        '',                           // [80]  N° atenciones prenatales (no capturado)
+        '',                           // [81]  atención preconcepcional (no capturado)
+        '',                           // [82]  atención prenatal controles (no capturado)
+        '',                           // [83]  sesiones maternidad/paternidad (no capturado)
+        '',                           // [84]  fecha evento obstétrico (no capturado)
+        '',                           // [85]  atención puerperio 48h (no capturado)
+        '',                           // [86]  seguimiento puerperio 3-5 días (no capturado)
+        '',                           // [87]  apoyo lactancia materna (no capturado)
+        '',                           // [88]  atención RN primeras 24h (no capturado)
+        '',                           // [89]  control RN 3-5 días (no capturado)
+        '',                           // [90]  vacunación RN (no capturado)
+        '',                           // [91]  MAC postparto inmediato (no capturado)
+        pd['t3_histLab']||'',         // [92]  cuenta con historial laboral
+        pd['t3_lab1_lugar']||'',      // [93]  lugar trabajo más reciente
+        pd['t3_lab1_empleador']||'',  // [94]  nombre empleador más reciente
+        pd['t3_lab1_meses']||'',      // [95]  período laboral (meses)
+        pd['t3_lab2_masEmpleos']||'', // [96]  cuenta con más empleos previos
+        pd['t3_lab2_lugar']||'',      // [97]  lugar trabajo 2
+        pd['t3_lab2_empleador']||'',  // [98]  empleador 2
+        pd['t3_lab2_meses']||'',      // [99]  período 2 (meses)
+        pd['t3_lab3_lugar']||'',      // [100] lugar trabajo 3
+        pd['t3_lab3_empleador']||'',  // [101] empleador 3
+        pd['t3_lab3_meses']||'',      // [102] período 3 (meses)
+        pd['t3_asb_act']||'',         // [103] actividad con asbesto en trabajo
+        pd['t3_asb_actRel']||'',      // [104] actividad relacionada con asbesto
+        arrVal(pd['t3_asb_actividades']),     // [105] actividades asbesto realizadas
+        pd['t3_asb_materiales_interac']||'',  // [106] interactuó con materiales asbesto
+        arrVal(pd['t3_asb_mat']),     // [107] materiales asbesto con los que interactuó
+        pd['t3_asb_modalidad']||'',   // [108] modalidad empleo con mayor exposición
+        pd['t3_asb_hogar']||'',       // [109] materiales asbesto en hogar
+        arrVal(pd['t3_asb_elementosHogar']),  // [110] elementos hogar con asbesto
+        pd['t3_asb_estadoMat']||'',   // [111] estado materiales asbesto en vivienda
+        pd['t3_asb_convive']||'',     // [112] convive con quien trabajó asbesto
+        pd['t3_asb_reparaciones']||'',// [113] reparaciones con materiales asbesto
+        pd['t3_asb_actCerca']||'',    // [114] actividad asbesto cerca del hogar
+        pd['t3_asb_actCercaHogar']||'',       // [115] cuáles actividades cerca del hogar
+        pd['t3_asb_familiarEnf']||'', // [116] familiares con enfermedades por asbesto
+        numFam,                       // [117] N° identificación familia (T2[124])
+        numIdInt                      // [118] N° identificación único integrante
       ];
       lines.push(t3.join('|'));
     });
@@ -7036,7 +7335,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v2.5</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.0</div>
   </div>
 </div>
 
@@ -7643,7 +7942,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v2.7</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.0</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
