@@ -1402,8 +1402,11 @@ function navigate(screen, extra={}) {
   render();
   window.scrollTo(0,0);
   document.getElementById('main').scrollTop=0;
-  // Refresh admin users list whenever entering admin panel
   if (screen === 'admin') loadAdminUsers(true);
+  if (screen === 'compl_v7') setTimeout(()=>{
+    const first=document.querySelector('[id^="compl-sec-"][data-done="false"]');
+    if(first){first.scrollIntoView({behavior:'smooth',block:'start'});}
+  },200);
 }
 
 function goBack() {
@@ -6468,6 +6471,13 @@ function _cv73Multi(famId, perIdx, key, val, label, refKey){
     }).join('')}</div></div>`;
 }
 
+function complV7ScrollNext(){
+  const all=[...document.querySelectorAll('[id^="compl-sec-"]')];
+  const incomplete=all.filter(s=>s.dataset.done==='false');
+  if(!incomplete.length){document.getElementById('compl-v7-guardar')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+  incomplete[0].scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 function renderComplV7(){
   const famId=STATE.complFamId;
   const fam=STATE.familias.find(f=>f.id===famId);
@@ -6478,18 +6488,34 @@ function renderComplV7(){
   const tienePerros=(d['43']||[]).includes('1');
   const tieneGatos=(d['43']||[]).includes('2');
 
-  // Contador de campos completados
   const totalCamposT2=8;
   const completadosT2=[d['v7_dormir'],d['v7_alumbrado'],d['v7_transporte'],d['v7_horasAgua'],d['v7_almResid'],d['v7_sitRiesgo'],d['v7_luzNat'],d['v7_ventNat']].filter(v=>v&&(Array.isArray(v)?v.length>0:true)).length;
 
-  const seccion=(titulo,contenido,color='var(--purple)')=>`
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-title" style="color:${color};font-size:13px;text-transform:uppercase;letter-spacing:.5px">${titulo}</div>
+  // Completitud por sección
+  const doneHab=!!(d['v7_dormir']&&d['v7_alumbrado']&&d['v7_luzNat']&&d['v7_ventNat']);
+  const doneTrans=!!(d['v7_transporte']?.length);
+  const doneAgua=!!(d['v7_horasAgua']);
+  const doneResid=!!(d['v7_almResid']);
+  const doneAire=!!(d['v7_fuentesHumo']?.length);
+  const doneVect=!!(d['v7_vectoresTrans']?.length&&d['v7_ponzonosos']?.length);
+  const doneAnim=!tieneAnimales||(!!d['v7_finalidadAnim']?.length&&!!d['v7_vacunas']);
+  const doneFam=!!(d['v7_sitRiesgo']?.length);
+  const donePer=personas.length===0||personas.every(p=>!hasIncompleteV7(p.d3));
+  const totalSecs=[doneHab,doneTrans,doneAgua,doneResid,doneAire,doneVect,doneAnim,doneFam,donePer].filter(Boolean).length;
+  const allDone=totalSecs===9;
+
+  const seccion=(id,titulo,contenido,done,color='var(--purple)')=>`
+    <div class="card" id="compl-sec-${id}" data-done="${done}" style="margin-bottom:10px;border-left:3px solid ${done?'var(--green)':'var(--red)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="card-title" style="color:${color};font-size:13px;text-transform:uppercase;letter-spacing:.5px;margin:0">${titulo}</div>
+        <span style="font-size:11px;font-weight:600;color:${done?'var(--green)':'var(--red)'};white-space:nowrap;margin-left:8px">${done?'✓':'⚠'}</span>
+      </div>
       ${contenido}
+      ${!done?`<button class="btn btn-secondary" style="margin-top:8px;font-size:12px;padding:6px 10px;border-color:var(--purple);color:var(--purple)" onclick="complV7ScrollNext()">Siguiente incompleto ↓</button>`:''}
     </div>`;
 
   // ── T2: Habitabilidad ──────────────────────────────────
-  const sHab=seccion('🛏 Habitabilidad y Condiciones de la Vivienda',`
+  const sHab=seccion('HAB','🛏 Habitabilidad y Condiciones de la Vivienda',`
     ${_cv7Sel(famId,'v7_dormir',d['v7_dormir']||'','Elementos predominantes para dormir','v7Dormir')}
     ${_cv7Sino(famId,'v7_luzNat',d['v7_luzNat']||'','¿La vivienda tiene ambientes con luz natural?')}
     ${_cv7Sino(famId,'v7_ventNat',d['v7_ventNat']||'','¿La vivienda tiene ventilación natural?')}
@@ -6498,48 +6524,48 @@ function renderComplV7(){
     ${_cv7Sino(famId,'v7_cocinaSepar',d['v7_cocinaSepar']||'','¿La cocina es un espacio separado?')}
     ${_cv7Sino(famId,'v7_banoSepar',d['v7_banoSepar']||'','¿El baño es un espacio separado?')}
     ${_cv7Sino(famId,'v7_dormSepar',d['v7_dormSepar']||'','¿Los dormitorios son espacios separados?')}
-  `);
+  `,doneHab);
 
   // ── T2: Transporte ─────────────────────────────────────
-  const sTrans=seccion('🚶 Transporte y Desplazamiento',`
+  const sTrans=seccion('TRANS','🚶 Transporte y Desplazamiento',`
     ${_cv7Multi(famId,'v7_transporte',d['v7_transporte']||[],'Medios de transporte que utiliza la familia','v7Transporte')}
     ${_cv7Multi(famId,'v7_segDespl',d['v7_segDespl']||[],'Factores de seguridad en el desplazamiento','v7SegDespl')}
     ${_cv7Sino(famId,'v7_despl30min',d['v7_despl30min']||'','¿El desplazamiento al servicio de salud tarda más de 30 minutos?')}
-  `);
+  `,doneTrans);
 
   // ── T2: Agua ───────────────────────────────────────────
-  const sAgua=seccion('💧 Suministro de Agua',`
+  const sAgua=seccion('AGUA','💧 Suministro de Agua',`
     ${_cv7Sel(famId,'v7_horasAgua',d['v7_horasAgua']||'','Horas de suministro de agua al día','v7HorasAgua')}
     ${_cv7Sino(famId,'v7_tanque',d['v7_tanque']||'','¿La familia tiene tanque de almacenamiento de agua?')}
     ${d['v7_tanque']==='1'?_cv7Sel(famId,'v7_limpTanque',d['v7_limpTanque']||'','Frecuencia de limpieza del tanque','v7LimpTanque'):''}
     ${d['v7_tanque']==='1'?_cv7Sel(famId,'v7_distTanque',d['v7_distTanque']||'','Distancia entre el tanque y el pozo/fuente de agua','v7DistTanque'):''}
-  `);
+  `,doneAgua);
 
   // ── T2: Residuos ───────────────────────────────────────
-  const sResid=seccion('🗑 Residuos Sólidos',`
+  const sResid=seccion('RESID','🗑 Residuos Sólidos',`
     ${_cv7Sel(famId,'v7_almResid',d['v7_almResid']||'','¿Cómo almacena los residuos sólidos en la vivienda?','v7AlmResid')}
     ${_cv7Sino(famId,'v7_pracSepFuente',d['v7_pracSepFuente']||'','¿La familia practica separación en la fuente?')}
     ${_cv7Sino(famId,'v7_pracLimpExt',d['v7_pracLimpExt']||'','¿Realizan limpieza de zonas exteriores de la vivienda?')}
     ${_cv7Sel(famId,'v7_limpSuper',d['v7_limpSuper']||'','Frecuencia de limpieza de superficies interiores','v7LimpSuper')}
-  `);
+  `,doneResid);
 
   // ── T2: Calidad del aire ───────────────────────────────
-  const sAire=seccion('💨 Calidad del Aire Intradomiciliario',`
+  const sAire=seccion('AIRE','💨 Calidad del Aire Intradomiciliario',`
     ${_cv7Multi(famId,'v7_fuentesHumo',d['v7_fuentesHumo']||[],'Fuentes de humo en la vivienda','v7FuentesHumo')}
     ${(d['v7_fuentesHumo']||[]).some(v=>v!=='5')?_cv7Sel(famId,'v7_tipoEstufa',d['v7_tipoEstufa']||'','Tipo de estufa o fogón que usa la familia','v7TipoEstufa'):''}
     ${_cv7Multi(famId,'v7_pracAire',d['v7_pracAire']||[],'Prácticas para la calidad del aire en la vivienda (ventilación, etc.)','v7MedResp')}
-  `);
+  `,doneAire);
 
   // ── T2: Vectores ───────────────────────────────────────
-  const sVect=seccion('🦟 Vectores y Animales Ponzoñosos',`
+  const sVect=seccion('VECT','🦟 Vectores y Animales Ponzoñosos',`
     ${_cv7Multi(famId,'v7_vectoresTrans',d['v7_vectoresTrans']||[],'Vectores transmisores de enfermedades observados','v7Vectores')}
     ${(d['v7_vectoresTrans']||[]).some(v=>v!=='9')?_cv7Multi(famId,'v7_medVectores',d['v7_medVectores']||[],'Medidas de control de vectores que aplica la familia','v7MedVectores'):''}
     ${_cv7Multi(famId,'v7_ponzonosos',d['v7_ponzonosos']||[],'Animales ponzoñosos presentes en el entorno','v7Ponzonosos')}
     ${(d['v7_ponzonosos']||[]).some(v=>v!=='5')?_cv7Multi(famId,'v7_medPonz',d['v7_medPonz']||[],'Medidas de protección contra animales ponzoñosos','v7MedPonz'):''}
-  `);
+  `,doneVect);
 
   // ── T2: Animales domésticos ────────────────────────────
-  const sAnim=tieneAnimales?seccion('🐾 Animales Domésticos',`
+  const sAnim=tieneAnimales?seccion('ANIM','🐾 Animales Domésticos',`
     ${tienePerros?`<div class="field"><div class="field-label">Número de perros</div>
       <input class="field-input" type="number" min="0" max="99" value="${esc(d['v7_numPerros']||'')}"
         oninput="setComplV7('${famId}','v7_numPerros',this.value)"></div>`:''}
@@ -6554,70 +6580,72 @@ function renderComplV7(){
     ${_cv7Sino(famId,'v7_excretasAnim',d['v7_excretasAnim']||'','¿Las excretas de los animales tienen manejo adecuado?')}
     ${_cv7Sino(famId,'v7_barrerasAnim',d['v7_barrerasAnim']||'','¿Existen barreras de contacto entre animales y personas?')}
     ${_cv7Multi(famId,'v7_medVectAnim',d['v7_medVectAnim']||[],'Medidas para el control de vectores en los animales','v7MedVectAnim')}
-  `):'';
+  `,doneAnim):'';
 
   // ── T2: Familia y Riesgo ───────────────────────────────
-  const sFam=seccion('👨‍👩‍👧 Familia, Riesgo Social y Redes de Apoyo',`
+  const sFam=seccion('FAM','👨‍👩‍👧 Familia, Riesgo Social y Redes de Apoyo',`
     ${_cv7Multi(famId,'v7_sitRiesgo',d['v7_sitRiesgo']||[],'Situaciones de riesgo identificadas en la familia','v7SitRiesgo')}
     ${_cv7Multi(famId,'v7_vincFam',d['v7_vincFam']||[],'Prácticas de vínculos familiares saludables observadas','v7VincFam')}
     ${_cv7Multi(famId,'v7_redesApoyo',d['v7_redesApoyo']||[],'Redes de apoyo social con que cuenta la familia','v7RedesApoyo')}
     ${_cv7Multi(famId,'v7_cuidadoSalud',d['v7_cuidadoSalud']||[],'Prácticas de cuidado de la salud en el hogar','v7CuidadoSalud')}
     ${_cv7Multi(famId,'v7_medResp',d['v7_medResp']||[],'Medidas para prevención de enfermedades respiratorias','v7MedResp')}
     ${_cv7Sino(famId,'v7_higieneComp',d['v7_higieneComp']||'','¿La familia comparte elementos de higiene personal?')}
-  `);
+  `,doneFam);
 
   // ── T3: Por persona ────────────────────────────────────
-  const sPersonas=personas.length===0?'':`
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-title" style="color:var(--blue);font-size:13px;text-transform:uppercase;letter-spacing:.5px">🩺 Datos Clínicos por Persona</div>
-      ${personas.map((per,idx)=>{
-        const pd=per.d3||{};
-        const nombre=[pd['3'],pd['4'],pd['5'],pd['6']].filter(Boolean).join(' ')||`Persona ${idx+1}`;
-        const fnac=pd['9']||'';
-        const edadA=fnac?Math.floor((Date.now()-new Date(fnac).getTime())/31557600000):99;
-        const may5=edadA>=5;
-        const incPer=hasIncompleteV7(pd);
-        return `<details style="border:1px solid ${incPer?'var(--red)':'var(--border)'};border-radius:8px;margin-bottom:8px;overflow:hidden">
-          <summary style="padding:10px 12px;cursor:pointer;background:var(--card);font-weight:600;font-size:13px;list-style:none;display:flex;align-items:center;gap:8px">
-            <span style="font-size:16px">${pd['10']==='1'?'👨':pd['10']==='2'?'👩':'🧑'}</span>
-            <span style="flex:1">${esc(nombre)}</span>
-            <span style="font-size:11px;color:${incPer?'var(--red)':'var(--green)'}">${incPer?'⚠ Pendiente':'✓ Completo'}</span>
-          </summary>
-          <div style="padding:10px 12px">
-            ${may5?`<div class="field"><div class="field-label">Circunferencia de cintura (cm)</div>
-              <input class="field-input" type="number" min="30" max="200" step="0.1" placeholder="Ej: 78.5" value="${esc(pd['v7_circCintura']||'')}"
-                oninput="setComplV73('${famId}',${idx},'v7_circCintura',this.value)"></div>`:''}
-            ${may5?`<div class="field"><div class="field-label">Tensión arterial sistólica (mmHg)</div>
-              <input class="field-input" type="number" min="50" max="300" placeholder="Ej: 120" value="${esc(pd['v7_taSist']||'')}"
-                oninput="setComplV73('${famId}',${idx},'v7_taSist',this.value)"></div>`:''}
-            ${may5?`<div class="field"><div class="field-label">Tensión arterial diastólica (mmHg)</div>
-              <input class="field-input" type="number" min="30" max="200" placeholder="Ej: 80" value="${esc(pd['v7_taDiast']||'')}"
-                oninput="setComplV73('${famId}',${idx},'v7_taDiast',this.value)"></div>`:''}
-            ${may5?_cv73Sel(famId,idx,'v7_clasifTA',pd['v7_clasifTA']||'','Clasificación de tensión arterial','v7ClasifTA'):''}
-            ${_cv73Multi(famId,idx,'v7_enfMes',pd['v7_enfMes']||[],'Enfermedad presentada en el último mes','v7EnfMes')}
-            ${(pd['v7_enfMes']||[]).some(v=>v!=='9'&&v)?`<div class="field"><div class="field-label">¿Qué hizo ante la afección de salud?</div>
-              <select class="field-select" onchange="setComplV73('${famId}',${idx},'v7_accionAfec',this.value);render()">
-                <option value="">Seleccione...</option>
-                ${(REF.v7AccionAfec||[]).map(o=>`<option value="${esc(o.v)}" ${pd['v7_accionAfec']===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}
-              </select></div>`:''}
-          </div>
-        </details>`;
-      }).join('')}
-    </div>`;
+  const personasHtml=personas.length===0?'':`
+    ${personas.map((per,idx)=>{
+      const pd=per.d3||{};
+      const nombre=[pd['3'],pd['4'],pd['5'],pd['6']].filter(Boolean).join(' ')||`Persona ${idx+1}`;
+      const fnac=pd['9']||'';
+      const edadA=fnac?Math.floor((Date.now()-new Date(fnac).getTime())/31557600000):99;
+      const may5=edadA>=5;
+      const incPer=hasIncompleteV7(pd);
+      return `<details style="border:1px solid ${incPer?'var(--red)':'var(--border)'};border-radius:8px;margin-bottom:8px;overflow:hidden" ${!incPer?'':'open'}>
+        <summary style="padding:10px 12px;cursor:pointer;background:var(--card);font-weight:600;font-size:13px;list-style:none;display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">${pd['10']==='1'?'👨':pd['10']==='2'?'👩':'🧑'}</span>
+          <span style="flex:1">${esc(nombre)}</span>
+          <span style="font-size:11px;font-weight:600;color:${incPer?'var(--red)':'var(--green)'}">${incPer?'⚠':'✓'}</span>
+        </summary>
+        <div style="padding:10px 12px">
+          ${may5?`<div class="field"><div class="field-label">Circunferencia de cintura (cm)</div>
+            <input class="field-input" type="number" min="30" max="200" step="0.1" placeholder="Ej: 78.5" value="${esc(pd['v7_circCintura']||'')}"
+              oninput="setComplV73('${famId}',${idx},'v7_circCintura',this.value)"></div>`:''}
+          ${may5?`<div class="field"><div class="field-label">Tensión arterial sistólica (mmHg)</div>
+            <input class="field-input" type="number" min="50" max="300" placeholder="Ej: 120" value="${esc(pd['v7_taSist']||'')}"
+              oninput="setComplV73('${famId}',${idx},'v7_taSist',this.value)"></div>`:''}
+          ${may5?`<div class="field"><div class="field-label">Tensión arterial diastólica (mmHg)</div>
+            <input class="field-input" type="number" min="30" max="200" placeholder="Ej: 80" value="${esc(pd['v7_taDiast']||'')}"
+              oninput="setComplV73('${famId}',${idx},'v7_taDiast',this.value)"></div>`:''}
+          ${may5?_cv73Sel(famId,idx,'v7_clasifTA',pd['v7_clasifTA']||'','Clasificación de tensión arterial','v7ClasifTA'):''}
+          ${_cv73Multi(famId,idx,'v7_enfMes',pd['v7_enfMes']||[],'Enfermedad presentada en el último mes','v7EnfMes')}
+          ${(pd['v7_enfMes']||[]).some(v=>v!=='9'&&v)?`<div class="field"><div class="field-label">¿Qué hizo ante la afección de salud?</div>
+            <select class="field-select" onchange="setComplV73('${famId}',${idx},'v7_accionAfec',this.value);render()">
+              <option value="">Seleccione...</option>
+              ${(REF.v7AccionAfec||[]).map(o=>`<option value="${esc(o.v)}" ${pd['v7_accionAfec']===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}
+            </select></div>`:''}
+        </div>
+      </details>`;
+    }).join('')}`;
+  const sPersonas=personas.length===0?'':seccion('PER','🩺 Datos Clínicos por Persona',personasHtml,donePer,'var(--blue)');
 
-  const progPct=Math.round(completadosT2/totalCamposT2*100);
+  const progPct=Math.round(totalSecs/9*100);
+  const pendientes=9-totalSecs;
   return `
     <div style="padding:12px">
-      <div style="background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--border)">
+      <div style="background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:10px;border:1px solid var(--border)">
         <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Familia — ${esc(d['8']||d['5']||'—')}</div>
-        <div style="font-size:11px;color:var(--muted)">Campos clave T2 completados: ${completadosT2}/${totalCamposT2}</div>
-        <div style="height:6px;background:var(--border);border-radius:3px;margin-top:6px;overflow:hidden">
-          <div style="height:100%;width:${progPct}%;background:${progPct===100?'var(--green)':'var(--purple)'};border-radius:3px;transition:width .3s"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:11px;color:var(--muted)">Secciones completadas: ${totalSecs}/9</div>
+          ${!allDone?`<span style="font-size:11px;color:var(--red);font-weight:600">${pendientes} pendiente${pendientes!==1?'s':''}</span>`:'<span style="font-size:11px;color:var(--green);font-weight:600">✓ Todo completo</span>'}
         </div>
-        <div style="font-size:10px;color:var(--muted);margin-top:3px">Los campos vacíos se exportan en blanco — PISIS puede rechazarlos si son obligatorios</div>
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${progPct}%;background:${allDone?'var(--green)':'var(--purple)'};border-radius:3px;transition:width .3s"></div>
+        </div>
       </div>
+      ${!allDone?`<button class="btn btn-primary btn-block" style="margin-bottom:10px" onclick="complV7ScrollNext()">↓ Ir al siguiente campo incompleto</button>`:''}
       ${sHab}${sTrans}${sAgua}${sResid}${sAire}${sVect}${sAnim}${sFam}${sPersonas}
-      <button class="btn btn-success btn-block" style="margin-top:4px" onclick="navigate('familia_t3')">✓ Guardar y volver</button>
+      <button id="compl-v7-guardar" class="btn ${allDone?'btn-success':'btn-secondary'} btn-block" style="margin-top:4px" onclick="navigate('familia_t3')">${allDone?'✓ Guardar y volver':'← Volver (guardar cambios)'}</button>
     </div>`;
 }
 
