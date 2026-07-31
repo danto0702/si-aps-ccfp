@@ -1908,31 +1908,30 @@ async function autoCompletarV7() {
       const pd = per.d3 || {};
       let changed = false;
       const sexo = pd['10']; // '1'=Hombre, '2'=Mujer, '3'=Indeterminado
-      // Género (REF invertido respecto a sexo: '1'=Femenino, '2'=Masculino)
-      if (!pd['t3_genero'] && sexo && sexo !== '3') {
-        pd['t3_genero'] = sexo === '1' ? '2' : '1';
-        changed = true;
+
+      // Género: SIEMPRE según sexo biológico (REF: '1'=Femenino, '2'=Masculino)
+      if (sexo === '1' || sexo === '2') {
+        const genero = sexo === '1' ? '2' : '1';
+        if (pd['t3_genero'] !== genero) { pd['t3_genero'] = genero; changed = true; }
+        if (pd['t3_identidad'] !== genero) { pd['t3_identidad'] = genero; changed = true; }
       }
-      // Identidad de género: misma lógica
-      if (!pd['t3_identidad'] && sexo && sexo !== '3') {
-        pd['t3_identidad'] = sexo === '1' ? '2' : '1';
-        changed = true;
-      }
-      // Orientación sexual: Heterosexual como predeterminado según sexo biológico
-      if (!pd['t3_orientacion'] && sexo && sexo !== '3') {
+
+      // Orientación sexual: Heterosexual solo si está vacía
+      if (!pd['t3_orientacion']) {
         pd['t3_orientacion'] = '1';
         changed = true;
       }
-      // País de origen: Colombia (170) si tipo doc es CC, TI o RC
-      if (!pd['t3_pais'] && ['CC','TI','RC'].includes(pd['7'])) {
-        pd['t3_pais'] = '170';
-        changed = true;
+
+      // País de origen: SIEMPRE Colombia (170) si tipo doc es CC, TI o RC
+      if (['CC','TI','RC'].includes(pd['7'])) {
+        if (pd['t3_pais'] !== '170') { pd['t3_pais'] = '170'; changed = true; }
       }
-      // Estatus migratorio: No aplica (3) si es Colombia
-      if (!pd['t3_mig'] && pd['t3_pais'] === '170') {
-        pd['t3_mig'] = '3';
-        changed = true;
+
+      // Estatus migratorio: SIEMPRE No aplica (3) si país es Colombia
+      if (pd['t3_pais'] === '170') {
+        if (pd['t3_mig'] !== '3') { pd['t3_mig'] = '3'; changed = true; }
       }
+
       if (changed) {
         per.d3 = pd;
         const ebsCode = fam.ebs_code || calcEBS(fam.d2||{});
@@ -1946,7 +1945,7 @@ async function autoCompletarV7() {
     }
   }
   if (count > 0) {
-    toast(`✔ ${count} persona(s) completadas automáticamente`, 'ok');
+    toast(`✔ ${count} persona(s) actualizadas`, 'ok');
     render();
   } else {
     toast('No hay campos vacíos para completar con las reglas v7', 'ok');
