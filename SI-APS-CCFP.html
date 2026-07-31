@@ -1931,7 +1931,11 @@ function hasIncompleteV7(pd) {
   // Campos auto-completables v7
   if (!pd['t3_pais'] || !pd['t3_mig'] || !pd['t3_genero'] || !pd['t3_identidad'] || !pd['t3_orientacion']) return true;
   // Campos complemento v7 (clínicos y de salud)
-  return !pd['v7_enfMes'] || !pd['v7_accionAfec'];
+  if (!pd['v7_enfMes'] || !pd['v7_enfMes'].length) return true;
+  // v7_accionAfec solo es obligatorio si hubo alguna enfermedad (no "Ninguna")
+  const tieneEnf=(pd['v7_enfMes']||[]).some(v=>v!=='9'&&v);
+  if (tieneEnf && !pd['v7_accionAfec']) return true;
+  return false;
 }
 function hasFamIncompleteV7(d) {
   if (!d) return false;
