@@ -16,10 +16,10 @@
 <style>
 /* ── Variables y reset ─────────────────────────────────────── */
 :root{
-  --bg:#0d1117;--card:#161b22;--border:#30363d;
-  --purple:#7c1d6f;--purple-l:#a855f7;--red:#e94560;
-  --green:#38c793;--yellow:#ffb432;--blue:#4a6fa5;
-  --text:#e6edf3;--muted:#8b949e;--input-bg:#0d1117;
+  --bg:#ffffff;--card:#f3f4f6;--border:#d1d5db;
+  --purple:#7c1d6f;--purple-l:#7c1d6f;--red:#dc2626;
+  --green:#16a34a;--yellow:#d97706;--blue:#2563eb;
+  --text:#111827;--muted:#6b7280;--input-bg:#ffffff;
   /* iOS safe areas */
   --sat:env(safe-area-inset-top,0px);
   --sar:env(safe-area-inset-right,0px);
@@ -41,7 +41,7 @@ input,select,textarea{touch-action:manipulation}
 /* ── Header ── safe-area-top para iPhone con muesca/Dynamic Island */
 .hdr{
   position:sticky;top:0;z-index:100;
-  background:#161b22cc;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  background:rgba(255,255,255,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 1px 0 var(--border);
   border-bottom:1px solid var(--border);
   display:flex;align-items:center;gap:8px;
   padding:10px 14px;
@@ -61,8 +61,8 @@ input,select,textarea{touch-action:manipulation}
 @media(hover:hover){.btn-icon:hover{background:var(--border);color:var(--text)}}
 
 .conn-banner{display:none;text-align:center;padding:6px;font-size:12px;font-weight:600}
-.conn-banner.offline{display:block;background:#7c2d2d;color:#fca5a5}
-.conn-banner.syncing{display:block;background:#1a3a5c;color:#93c5fd}
+.conn-banner.offline{display:block;background:#fee2e2;color:#991b1b}
+.conn-banner.syncing{display:block;background:#dbeafe;color:#1e40af}
 
 /* ── Banner institucional (pantalla inicio) ── */
 .home-banner{
@@ -126,9 +126,9 @@ input,select,textarea{touch-action:manipulation}
 .btn-primary{background:var(--purple);color:#fff}
 @media(hover:hover){.btn-primary:hover{background:#9b2d8f}}
 .btn-secondary{background:var(--border);color:var(--text)}
-@media(hover:hover){.btn-secondary:hover{background:#3d444d}}
-.btn-success{background:#1a4731;color:var(--green);border:1px solid var(--green)}
-.btn-danger{background:#3d1a1a;color:var(--red);border:1px solid var(--red)}
+@media(hover:hover){.btn-secondary:hover{background:#d1d5db}}
+.btn-success{background:#dcfce7;color:#15803d;border:1px solid var(--green)}
+.btn-danger{background:#fee2e2;color:#991b1b;border:1px solid var(--red)}
 .btn-block{width:100%;margin-bottom:8px}
 .btn-sm{padding:8px 10px;font-size:12px;min-height:36px}
 /* Active state feedback (visible on touch) */
@@ -142,7 +142,7 @@ input,select,textarea{touch-action:manipulation}
   width:56px;height:56px;border-radius:50%;
   background:var(--purple);color:#fff;
   font-size:28px;display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 20px rgba(124,29,111,.6);
+  box-shadow:0 4px 20px rgba(124,29,111,.3);
   z-index:200;touch-action:manipulation;
 }
 .fab:active{transform:scale(.94)}
@@ -164,7 +164,7 @@ input,select,textarea{touch-action:manipulation}
 /* ── Campos de formulario ── */
 .field{margin-bottom:14px}
 .field-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
-.field-num{font-size:11px;color:var(--purple-l);font-weight:700;background:#2d1a3a;padding:1px 5px;border-radius:4px;flex-shrink:0}
+.field-num{font-size:11px;color:var(--purple-l);font-weight:700;background:#ede9fe;padding:1px 5px;border-radius:4px;flex-shrink:0}
 .req{color:var(--red)}
 
 /*
@@ -204,7 +204,7 @@ input[type="number"].field-input::-webkit-outer-spin-button,
 input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:none}
 
 .field-note{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
-.field-ro{background:#1a1f27;border:1px solid var(--border);border-radius:8px;padding:11px 14px;font-size:12px;color:var(--muted);font-family:monospace;word-break:break-all;line-height:1.5}
+.field-ro{background:#f3f4f6;border:1px solid var(--border);border-radius:8px;padding:11px 14px;font-size:12px;color:var(--muted);font-family:monospace;word-break:break-all;line-height:1.5}
 
 /* Grid 2 columnas — colapsa en pantallas muy pequeñas */
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -213,8 +213,8 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 /* Toggle SI/NO — altura mínima 46px */
 .toggle-group{display:grid;grid-template-columns:1fr 1fr;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
 .toggle-btn{padding:12px;text-align:center;font-weight:700;font-size:14px;background:transparent;color:var(--muted);transition:.15s;touch-action:manipulation;min-height:46px;-webkit-user-select:none;user-select:none}
-.toggle-btn.active-si{background:#1a4731;color:var(--green)}
-.toggle-btn.active-no{background:#3d1a1a;color:var(--red)}
+.toggle-btn.active-si{background:#dcfce7;color:#15803d}
+.toggle-btn.active-no{background:#fee2e2;color:#991b1b}
 @media(hover:hover){.toggle-btn:hover{background:var(--border)}}
 .toggle-btn:active{opacity:.75}
 
@@ -224,9 +224,9 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .mc-item{display:flex;align-items:flex-start;gap:8px;padding:10px 8px;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:.1s;font-size:13px;touch-action:manipulation;-webkit-user-select:none;user-select:none;line-height:1.4}
 @media(hover:hover){.mc-item:hover{border-color:var(--purple)}}
 .mc-item:active{opacity:.75}
-.mc-item.selected{border-color:var(--green);background:#0d2318}
+.mc-item.selected{border-color:var(--green);background:#f0fdf4}
 .mc-item.custom-opt{border-color:var(--yellow)}
-.mc-item.custom-opt.selected{border-color:var(--yellow);background:#2d2000}
+.mc-item.custom-opt.selected{border-color:var(--yellow);background:#fef3c7}
 .mc-box{width:20px;height:20px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center}
 .mc-item.selected .mc-box{background:var(--green);border-color:var(--green);color:#fff;font-size:11px}
 .mc-item.custom-opt.selected .mc-box{background:var(--yellow);border-color:var(--yellow);color:#000}
@@ -243,11 +243,11 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .pci-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:4px}
 
 .badge{padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700}
-.badge-green{background:#1a4731;color:var(--green)}
-.badge-yellow{background:#3d2a0a;color:var(--yellow)}
-.badge-red{background:#3d1a1a;color:var(--red)}
-.badge-purple{background:#2d1a3a;color:var(--purple-l)}
-.badge-blue{background:#1a2a3d;color:#93c5fd}
+.badge-green{background:#dcfce7;color:#15803d}
+.badge-yellow{background:#fef3c7;color:#92400e}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-purple{background:#f3e8ff;color:#6b21a8}
+.badge-blue{background:#dbeafe;color:#1e40af}
 .empty{text-align:center;padding:48px 16px}
 .empty-icon{font-size:48px;margin-bottom:12px}
 .empty-title{font-size:17px;font-weight:700;margin-bottom:6px}
@@ -265,7 +265,7 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 }
 .bottom-bar .btn{flex:1}
 
-.preview{background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:12px;font-family:monospace;font-size:11px;word-break:break-all;white-space:pre-wrap;color:#7ee787;max-height:180px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.preview{background:#f0fdf4;border:1px solid var(--border);border-radius:8px;padding:12px;font-family:monospace;font-size:11px;word-break:break-all;white-space:pre-wrap;color:#15803d;max-height:180px;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .config-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;gap:12px}
 .config-row:last-child{border-bottom:none}
 .config-val{color:var(--purple-l);font-weight:600;text-align:right;flex:1;min-width:0;word-break:break-word}
@@ -411,8 +411,8 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 @media(max-width:380px){.scale-opts-5{grid-template-columns:1fr 1fr}}
 .scale-btn{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:8px;padding:8px 4px;font-size:11px;font-weight:600;text-align:center;cursor:pointer;touch-action:manipulation;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:.1s;-webkit-user-select:none;user-select:none}
 .scale-btn:active{opacity:.75}
-.scale-btn.sel-ok{border-color:var(--green);background:#0d2318;color:var(--green)}
-.scale-btn.sel-err{border-color:var(--muted);background:#1a1a2e;color:var(--text)}
+.scale-btn.sel-ok{border-color:var(--green);background:#dcfce7;color:var(--green)}
+.scale-btn.sel-err{border-color:var(--muted);background:#f3f4f6;color:var(--text)}
 .scale-btn .sv{font-size:18px;font-weight:900}
 /* Pregunta de instrumento */
 .ins-q{border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px}
@@ -421,7 +421,7 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .prog-bar{height:4px;background:var(--border);border-radius:4px;margin-bottom:14px}
 .prog-fill{height:4px;border-radius:4px;background:var(--purple-l);transition:width .3s}
 /* Resultado destacado */
-.score-panel{text-align:center;background:#0a0c10;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.score-panel{text-align:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
 .score-panel .snum{font-size:48px;font-weight:900;line-height:1}
 .score-panel .slbl{font-size:14px;font-weight:700;margin-top:6px}
 .score-panel .ssub{font-size:11px;color:var(--muted);margin-top:4px}
@@ -429,11 +429,11 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .fam-member-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
 .fam-member-row:last-child{border-bottom:none}
 .fam-sym{width:36px;height:36px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;border:2px solid transparent}
-.fam-sym.M{border-color:var(--blue);background:#1a2a3d}
-.fam-sym.F{border-color:#e879f9;background:#2d1a3a;border-radius:50%}
-.fam-sym.N{border-color:var(--muted);background:#1a1f27}
+.fam-sym.M{border-color:var(--blue);background:#dbeafe}
+.fam-sym.F{border-color:#e879f9;background:#fae8ff;border-radius:50%}
+.fam-sym.N{border-color:var(--muted);background:#f3f4f6}
 /* SVG familiograma */
-.fam-svg-box{background:#0a0c10;border:1px solid var(--border);border-radius:8px;overflow:auto;margin:12px 0;display:flex;justify-content:center}
+.fam-svg-box{background:#f9fafb;border:1px solid var(--border);border-radius:8px;overflow:auto;margin:12px 0;display:flex;justify-content:center}
 /* Ecomapa */
 .eco-node-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .eco-node{border:1px solid var(--border);border-radius:8px;padding:10px 8px;text-align:center;cursor:pointer;touch-action:manipulation;transition:.1s;-webkit-user-select:none;user-select:none}
@@ -442,11 +442,11 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
 .eco-node .eco-name{font-size:11px;font-weight:700;color:var(--text)}
 .eco-node .eco-rel{font-size:10px;margin-top:3px;font-weight:600}
 .eco-node.rel-0{border-color:var(--border)}
-.eco-node.rel-1{border-color:var(--green);background:#0d2318}.eco-node .eco-rel.rel-1{color:var(--green)}
-.eco-node.rel-2{border-color:var(--muted);background:#1a1f27}.eco-node .eco-rel.rel-2{color:var(--muted)}
-.eco-node.rel-3{border-color:var(--red);background:#3d1a1a}.eco-node .eco-rel.rel-3{color:var(--red)}
-.eco-node.rel-4{border-color:var(--blue);background:#1a2a3d}.eco-node .eco-rel.rel-4{color:#93c5fd}
-.eco-node.rel-5{border-color:var(--yellow);background:#2d2000}.eco-node .eco-rel.rel-5{color:var(--yellow)}
+.eco-node.rel-1{border-color:var(--green);background:#dcfce7}.eco-node .eco-rel.rel-1{color:var(--green)}
+.eco-node.rel-2{border-color:var(--muted);background:#f3f4f6}.eco-node .eco-rel.rel-2{color:var(--muted)}
+.eco-node.rel-3{border-color:var(--red);background:#fee2e2}.eco-node .eco-rel.rel-3{color:var(--red)}
+.eco-node.rel-4{border-color:var(--blue);background:#dbeafe}.eco-node .eco-rel.rel-4{color:#1e40af}
+.eco-node.rel-5{border-color:var(--yellow);background:#fef3c7}.eco-node .eco-rel.rel-5{color:var(--yellow)}
 </style>
 </head>
 <body>
@@ -1296,7 +1296,7 @@ const STATE = {
   // EBS list: [{num:'001', label:'EBS 001 — Municipio'}]. If empty, derived from user codes.
   ebsList: [],
   busquedaFamilia: '',
-  filtroEBS: '', filtroMuni: '', filtroDesde: '', filtroHasta: '',
+  filtroEBS: '', filtroMuni: '', filtroDesde: '', filtroHasta: '', filtroIncompleto: false,
   // Plan de Cuidado Familiar
   planesFamiliar: [],
   editPCFId: null,
@@ -1464,7 +1464,7 @@ function renderLogin() {
         <input class="field-input" id="li-email" type="email" inputmode="email" autocomplete="email" placeholder="usuario@ejemplo.com"
           onkeydown="if(event.key==='Enter')forgotPassword()"></div>
       <div id="li-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none"></div>
-      <div id="li-ok" style="color:var(--green);font-size:13px;margin-bottom:10px;display:none;background:#0d2318;border:1px solid var(--green);border-radius:8px;padding:10px 12px"></div>
+      <div id="li-ok" style="color:var(--green);font-size:13px;margin-bottom:10px;display:none;background:#dcfce7;border:1px solid var(--green);border-radius:8px;padding:10px 12px"></div>
       <button class="btn btn-primary btn-block" id="li-btn" onclick="forgotPassword()">📧 Enviar enlace de recuperación</button>
       <div style="text-align:center;margin-top:14px">
         <button class="btn btn-secondary btn-sm" onclick="_loginMode='login';render()">← Volver al inicio de sesión</button>
@@ -1480,7 +1480,7 @@ function renderLogin() {
     <div class="login-title">SI-APS CCFP</div>
     <div class="login-sub">Caracterización Familia y Persona<br>ESE Hospital Regional Noroccidental</div>
     <div class="login-card">
-      ${isSignup ? `<div style="background:#1a2a3d;border:1px solid var(--blue);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#93c5fd">
+      ${isSignup ? `<div style="background:#dbeafe;border:1px solid var(--blue);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1e40af">
         📋 Crear la cuenta de <strong>administrador</strong>. Solo el primer registro se convierte en admin; los demás usuarios los crea el admin desde el panel.
       </div>` : ''}
       ${isSignup ? `<div class="field">
@@ -1742,17 +1742,21 @@ function renderHome() {
 
   const syncBtn = `<div style="margin-bottom:10px">
     <button class="btn btn-block" onclick="syncToCloud(true)"
-      style="background:#1a3a5c;color:#93c5fd;border:1.5px solid #2563eb;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:10px">
+      style="background:#dbeafe;color:#1e40af;border:1.5px solid #2563eb;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:10px">
       🔄 Cargar / Sincronizar datos
     </button>
     <div style="text-align:center;margin-top:5px;font-size:11px;color:var(--muted)">
-      Última sincronización: <span id="last-sync-label" style="color:#93c5fd">${_lastSyncTs?'Hace menos de 1 min':'Nunca (presiona el botón)'}</span>
+      Última sincronización: <span id="last-sync-label" style="color:#1e40af">${_lastSyncTs?'Hace menos de 1 min':'Nunca (presiona el botón)'}</span>
     </div>
   </div>`;
 
   return bannerHtml+userInfo+statsHtml+buscadorHtml+filtroBarHtml+listHtml+
     `<div style="height:20px"></div>
      ${syncBtn}
+     <button class="btn btn-block" onclick="autoCompletarV7()"
+       style="background:#f0fdf4;color:#15803d;border:1.5px solid var(--green);font-size:13px;font-weight:700;margin-bottom:8px">
+       🤖 Completar datos v7 automáticamente
+     </button>
      <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
      <button class="btn btn-primary btn-block" onclick="navigate('analytics')">📊 Ver análisis e indicadores</button>
      ${isAdmin()?`<button class="btn btn-secondary btn-block" onclick="navigate('config')">⚙ Configuración del reporte</button>`:''}
@@ -1818,10 +1822,11 @@ function buildFamiliaListHtml(q, fams) {
     const matchBadge = match
       ? `<div style="font-size:10px;color:var(--green);margin-top:3px">👤 ${hi(match, q)}</div>` : '';
     const isDraftFam = d['_draft']===true;
-    return `<div class="familia-item" style="${isDraftFam?'border-left:3px solid var(--yellow)':''}">
+    const nIncompleto = (f.personas||[]).filter(p => hasIncompleteV7(p.d3)).length;
+    return `<div class="familia-item" style="${isDraftFam?'border-left:3px solid var(--yellow)':nIncompleto?'border-left:3px solid var(--red)':''}">
       <div class="familia-icon">🏠</div>
       <div class="familia-info">
-        <div class="familia-nombre">${hi(lugar, q)}${isDraftFam?` <span style="font-size:10px;font-weight:700;color:var(--yellow);background:rgba(255,180,50,.12);border:1px solid var(--yellow);border-radius:4px;padding:1px 5px;vertical-align:middle">📝 BORRADOR</span>`:''}</div>
+        <div class="familia-nombre">${hi(lugar, q)}${isDraftFam?` <span style="font-size:10px;font-weight:700;color:var(--yellow);background:rgba(255,180,50,.12);border:1px solid var(--yellow);border-radius:4px;padding:1px 5px;vertical-align:middle">📝 BORRADOR</span>`:''}${nIncompleto?` <span style="font-size:10px;font-weight:700;color:#991b1b;background:#fee2e2;border:1px solid var(--red);border-radius:4px;padding:1px 5px;vertical-align:middle">⚠ ${nIncompleto} incompleto(s)</span>`:''}</div>
         <div class="familia-meta">Mun: ${d['5']||'—'} · EBS: ${esc(ebsCode.slice(-6))} · ${np} persona(s) · ${d['25']||'—'}</div>
         ${esRiesgoAmbiental(d)?'<div class="riesgo-badge">⬦ Riesgo ambiental</div>':''}
         ${matchBadge}
@@ -1868,6 +1873,10 @@ function applyFiltros(fams) {
     if (STATE.filtroHasta) {
       if ((d['25']||'') > STATE.filtroHasta) return false;
     }
+    if (STATE.filtroIncompleto) {
+      const tieneIncompleto = (f.personas||[]).some(p => hasIncompleteV7(p.d3));
+      if (!tieneIncompleto) return false;
+    }
     return true;
   });
 }
@@ -1878,8 +1887,70 @@ function setFiltro(key, val) {
 }
 
 function limpiarFiltros() {
-  STATE.filtroEBS = ''; STATE.filtroMuni = ''; STATE.filtroDesde = ''; STATE.filtroHasta = '';
+  STATE.filtroEBS = ''; STATE.filtroMuni = ''; STATE.filtroDesde = ''; STATE.filtroHasta = ''; STATE.filtroIncompleto = false;
   render();
+}
+
+// Detecta si una persona tiene campos v7 requeridos vacíos
+function hasIncompleteV7(pd) {
+  if (!pd || pd['_draft']) return false;
+  return !pd['t3_pais'] || !pd['t3_mig'] || !pd['t3_genero'] || !pd['t3_identidad'] || !pd['t3_orientacion'];
+}
+
+// Auto-rellena campos v7 derivables en todos los registros (solo vacíos)
+async function autoCompletarV7() {
+  let count = 0;
+  const now = new Date().toISOString();
+  for (const fam of STATE.familias) {
+    if (fam.deleted_at) continue;
+    for (const per of (fam.personas || [])) {
+      if (per.d3?._draft) continue;
+      const pd = per.d3 || {};
+      let changed = false;
+      const sexo = pd['10']; // '1'=Hombre, '2'=Mujer, '3'=Indeterminado
+      // Género (REF invertido respecto a sexo: '1'=Femenino, '2'=Masculino)
+      if (!pd['t3_genero'] && sexo && sexo !== '3') {
+        pd['t3_genero'] = sexo === '1' ? '2' : '1';
+        changed = true;
+      }
+      // Identidad de género: misma lógica
+      if (!pd['t3_identidad'] && sexo && sexo !== '3') {
+        pd['t3_identidad'] = sexo === '1' ? '2' : '1';
+        changed = true;
+      }
+      // Orientación sexual: Heterosexual como predeterminado según sexo biológico
+      if (!pd['t3_orientacion'] && sexo && sexo !== '3') {
+        pd['t3_orientacion'] = '1';
+        changed = true;
+      }
+      // País de origen: Colombia (170) si tipo doc es CC, TI o RC
+      if (!pd['t3_pais'] && ['CC','TI','RC'].includes(pd['7'])) {
+        pd['t3_pais'] = '170';
+        changed = true;
+      }
+      // Estatus migratorio: No aplica (3) si es Colombia
+      if (!pd['t3_mig'] && pd['t3_pais'] === '170') {
+        pd['t3_mig'] = '3';
+        changed = true;
+      }
+      if (changed) {
+        per.d3 = pd;
+        const ebsCode = fam.ebs_code || calcEBS(fam.d2||{});
+        await writeRecord('personas', {
+          id: per.id, familia_id: fam.id, ebs_code: ebsCode,
+          d3: {...pd}, updated_at: now,
+          created_by: per.created_by, created_at: per.created_at
+        });
+        count++;
+      }
+    }
+  }
+  if (count > 0) {
+    toast(`✔ ${count} persona(s) completadas automáticamente`, 'ok');
+    render();
+  } else {
+    toast('No hay campos vacíos para completar con las reglas v7', 'ok');
+  }
 }
 
 function buildFiltroBar(famsBase) {
@@ -1890,26 +1961,37 @@ function buildFiltroBar(famsBase) {
     if (en && en !== '000') ebsSet.add(en);
     if (d['5']) muniSet.add(d['5']);
   });
-  const selSt = `background:var(--bg2,#161b22);color:var(--text,#e6edf3);border:1px solid var(--border,#30363d);border-radius:7px;padding:6px 8px;font-size:12px;flex:1;min-width:85px;max-width:145px`;
-  const dateSt = `background:var(--bg2,#161b22);color:var(--text,#e6edf3);border:1px solid var(--border,#30363d);border-radius:7px;padding:5px 8px;font-size:12px;flex:1;min-width:110px;max-width:140px`;
+  const selSt = `background:var(--card,#f3f4f6);color:var(--text,#111827);border:1px solid var(--border,#d1d5db);border-radius:7px;padding:6px 8px;font-size:12px;flex:1;min-width:85px;max-width:145px`;
+  const dateSt = `background:var(--card,#f3f4f6);color:var(--text,#111827);border:1px solid var(--border,#d1d5db);border-radius:7px;padding:5px 8px;font-size:12px;flex:1;min-width:110px;max-width:140px`;
   const mkSel = (key, dflt, opts) =>
     `<select style="${selSt}" onchange="setFiltro('${key}',this.value)"><option value="">${dflt}</option>${opts}</select>`;
   const ebsOpts = [...ebsSet].sort().map(e=>`<option value="${esc(e)}"${STATE.filtroEBS===e?' selected':''}>EBS ${e}</option>`).join('');
   const muniOpts = [...muniSet].sort().map(m=>`<option value="${esc(m)}"${STATE.filtroMuni===m?' selected':''}>${esc(MUNIS_NS[m]||m)}</option>`).join('');
-  const hasF = STATE.filtroEBS||STATE.filtroMuni||STATE.filtroDesde||STATE.filtroHasta;
+  const hasF = STATE.filtroEBS||STATE.filtroMuni||STATE.filtroDesde||STATE.filtroHasta||STATE.filtroIncompleto;
   const badgeParts = [
     STATE.filtroEBS ? 'EBS '+STATE.filtroEBS : '',
     STATE.filtroMuni ? (MUNIS_NS[STATE.filtroMuni]||STATE.filtroMuni) : '',
-    (STATE.filtroDesde||STATE.filtroHasta) ? (STATE.filtroDesde||'...')+' → '+(STATE.filtroHasta||'...') : ''
+    (STATE.filtroDesde||STATE.filtroHasta) ? (STATE.filtroDesde||'...')+' → '+(STATE.filtroHasta||'...') : '',
+    STATE.filtroIncompleto ? '⚠ Solo incompletos' : ''
   ].filter(Boolean);
   const badge = hasF ? `<div style="font-size:10px;color:var(--yellow);margin-top:5px">⚠ Activos: ${badgeParts.join(' · ')}</div>` : '';
+  const mkDate = (key, ph) => {
+    const val = STATE[key]||'';
+    return `<input type="text" style="${dateSt}" placeholder="${ph}" title="${ph}" maxlength="10" value="${esc(val)}"
+      oninput="const v=this.value.trim();if(v===''||/^\\d{4}-\\d{2}-\\d{2}$/.test(v))setFiltro('${key}',v)">`;
+  };
+  const incompletoBtnSt = STATE.filtroIncompleto
+    ? `background:#fee2e2;color:#991b1b;border:1.5px solid var(--red);font-weight:700`
+    : `background:var(--card);color:var(--muted);border:1px solid var(--border)`;
   return `<div class="card" style="padding:9px 12px;margin-bottom:4px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <span style="font-size:11px;color:var(--muted);font-weight:700;flex-shrink:0;text-transform:uppercase;letter-spacing:.4px">Filtrar</span>
       ${mkSel('filtroEBS','Todos los EBS',ebsOpts)}
       ${mkSel('filtroMuni','Todos los municipios',muniOpts)}
-      <input type="date" style="${dateSt}" title="Fecha desde" value="${esc(STATE.filtroDesde)}" onchange="setFiltro('filtroDesde',this.value)">
-      <input type="date" style="${dateSt}" title="Fecha hasta" value="${esc(STATE.filtroHasta)}" onchange="setFiltro('filtroHasta',this.value)">
+      ${mkDate('filtroDesde','AAAA-MM-DD desde')}
+      ${mkDate('filtroHasta','AAAA-MM-DD hasta')}
+      <button class="btn btn-sm" style="${incompletoBtnSt};flex-shrink:0;font-size:11px;white-space:nowrap"
+        onclick="setFiltro('filtroIncompleto',${!STATE.filtroIncompleto})">⚠ Incompletos</button>
       ${hasF?`<button class="btn btn-secondary btn-sm" onclick="limpiarFiltros()" style="flex-shrink:0;font-size:11px;white-space:nowrap">✕ Limpiar</button>`:''}
     </div>${badge}
   </div>`;
@@ -2478,7 +2560,7 @@ function openFieldConfig(form, id, label, type, refKey) {
   // Sección "Opciones de lista" — solo para campos que no son ya multi/sel con REF, o para todo texto/num/dec
   const canAddList = ['text','num','dec','sel'].includes(type);
   const listSection = canAddList ? `
-    <div class="card" style="background:#0d1117;margin-bottom:12px">
+    <div class="card" style="background:var(--card);margin-bottom:12px">
       <div class="card-title" style="color:var(--yellow)">📋 Opciones de lista desplegable</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Al agregar opciones, el campo se convierte en menú desplegable.</div>
       ${opts.length===0 && refCustoms.length===0
@@ -2511,7 +2593,7 @@ function openFieldConfig(form, id, label, type, refKey) {
         <span style="margin-left:6px">${esc(label)}</span>
       </div>
       ${listSection}
-      <div class="card" style="background:#0d1117;margin-bottom:12px">
+      <div class="card" style="background:var(--card);margin-bottom:12px">
         <div class="card-title" style="color:var(--green)">📌 Valor predeterminado</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Se aplica automáticamente al crear una nueva ficha.</div>
         ${defInput}
@@ -2563,7 +2645,7 @@ function openAddOption(campoId, label) {
   <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
       <div class="modal-title">Nueva opción: ${esc(label)}</div>
-      <div class="card" style="background:#1a1f27;margin-bottom:16px">
+      <div class="card" style="background:var(--card);margin-bottom:16px">
         <div style="font-size:12px;color:var(--yellow)">ℹ Al seleccionarse en el formulario, esta opción usará el código "Otro" del campo y pondrá el texto como descripción en el campo adyacente del archivo PISIS.</div>
       </div>
       <div class="field"><div class="field-label">Texto de la opción <span class="req">*</span></div>
@@ -3330,23 +3412,23 @@ function _famGenSVG(members){
     if(m.tipoHijo==='aborto'){
       S+=`<circle cx="${x}" cy="${y}" r="10" fill="${mc}"/>`;
     }else if(m.tipoHijo==='embarazo'){
-      S+=`<polygon points="${x},${y-SYM} ${x+SYM},${y+SYM} ${x-SYM},${y+SYM}" fill="#161b22" stroke="${mc}" stroke-width="${bw}"/>`;
+      S+=`<polygon points="${x},${y-SYM} ${x+SYM},${y+SYM} ${x-SYM},${y+SYM}" fill="#ffffff" stroke="${mc}" stroke-width="${bw}"/>`;
       if(m.esIdentificado)S+=`<polygon points="${x},${y-SYM-5} ${x+SYM+5},${y+SYM+5} ${x-SYM-5},${y+SYM+5}" fill="none" stroke="${mc}" stroke-width="2"/>`;
     }else if(m.sex==='M'){
-      S+=`<rect x="${x-SYM}" y="${y-SYM}" width="${SYM*2}" height="${SYM*2}" rx="3" fill="#161b22" stroke="${mc}" stroke-width="${bw}"/>`;
+      S+=`<rect x="${x-SYM}" y="${y-SYM}" width="${SYM*2}" height="${SYM*2}" rx="3" fill="#ffffff" stroke="${mc}" stroke-width="${bw}"/>`;
       if(m.esIdentificado)S+=`<rect x="${x-SYM-6}" y="${y-SYM-6}" width="${SYM*2+12}" height="${SYM*2+12}" rx="4" fill="none" stroke="${mc}" stroke-width="2"/>`;
     }else if(m.sex==='F'){
-      S+=`<circle cx="${x}" cy="${y}" r="${SYM}" fill="#161b22" stroke="${mc}" stroke-width="${bw}"/>`;
+      S+=`<circle cx="${x}" cy="${y}" r="${SYM}" fill="#ffffff" stroke="${mc}" stroke-width="${bw}"/>`;
       if(m.esIdentificado)S+=`<circle cx="${x}" cy="${y}" r="${SYM+6}" fill="none" stroke="${mc}" stroke-width="2"/>`;
     }else{
-      S+=`<polygon points="${x},${y-SYM} ${x+SYM},${y} ${x},${y+SYM} ${x-SYM},${y}" fill="#161b22" stroke="${mc}" stroke-width="${bw}"/>`;
+      S+=`<polygon points="${x},${y-SYM} ${x+SYM},${y} ${x},${y+SYM} ${x-SYM},${y}" fill="#ffffff" stroke="${mc}" stroke-width="${bw}"/>`;
       if(m.esIdentificado)S+=`<polygon points="${x},${y-SYM-6} ${x+SYM+6},${y} ${x},${y+SYM+6} ${x-SYM-6},${y}" fill="none" stroke="${mc}" stroke-width="2"/>`;
     }
     if(m.fallecido&&m.tipoHijo!=='aborto'){const d=SYM*0.65;S+=`<line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}" stroke="#e94560" stroke-width="2.5"/><line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}" stroke="#e94560" stroke-width="2.5"/>`;}
     if(m.tipoHijo!=='aborto'){
       const lb=esc((m.nombre||'').slice(0,10));
-      S+=`<text x="${x}" y="${y+SYM+15}" text-anchor="middle" fill="#c9d1d9" font-size="10" font-family="sans-serif">${lb}</text>`;
-      if(m.edad)S+=`<text x="${x}" y="${y+SYM+27}" text-anchor="middle" fill="#8b949e" font-size="9" font-family="sans-serif">${m.edad}a</text>`;
+      S+=`<text x="${x}" y="${y+SYM+15}" text-anchor="middle" fill="#111827" font-size="10" font-family="sans-serif">${lb}</text>`;
+      if(m.edad)S+=`<text x="${x}" y="${y+SYM+27}" text-anchor="middle" fill="#6b7280" font-size="9" font-family="sans-serif">${m.edad}a</text>`;
     }
   });
   let GL='';
@@ -3500,7 +3582,7 @@ function ecoNext(i){
 
 function _ecoGenSVG(data){
   const CX=180, CY=140, R=90, W=360, H=280;
-  const famCircle=`<circle cx="${CX}" cy="${CY}" r="36" fill="#161b22" stroke="#7c1d6f" stroke-width="2.5"/>
+  const famCircle=`<circle cx="${CX}" cy="${CY}" r="36" fill="#f3e8ff" stroke="#7c1d6f" stroke-width="2.5"/>
     <text x="${CX}" y="${CY}" text-anchor="middle" dominant-baseline="middle" fill="#a855f7" font-size="10" font-weight="700" font-family="sans-serif">FAMILIA</text>`;
   const lines=ECO_NODES.map((n,i)=>{
     const rel=data[i]||0;
@@ -3516,8 +3598,8 @@ function _ecoGenSVG(data){
     else if(rel===4) lineEl=`<line x1="${nx}" y1="${ny}" x2="${nx2}" y2="${ny2}" stroke="#93c5fd" stroke-width="2"/><polygon points="${nx2},${ny2} ${nx2-6*Math.cos(angle)-4*Math.sin(angle)},${ny2-6*Math.sin(angle)+4*Math.cos(angle)} ${nx2-6*Math.cos(angle)+4*Math.sin(angle)},${ny2-6*Math.sin(angle)-4*Math.cos(angle)}" fill="#93c5fd"/>`;
     else if(rel===5) lineEl=`<line x1="${nx}" y1="${ny}" x2="${nx2}" y2="${ny2}" stroke="#ffb432" stroke-width="4"/><line x1="${nx+2*Math.sin(angle)}" y1="${ny-2*Math.cos(angle)}" x2="${nx2+2*Math.sin(angle)}" y2="${ny2-2*Math.cos(angle)}" stroke="#ffb432" stroke-width="1.5"/>`;
     const lx=CX+(R+68)*Math.cos(angle), ly=CY+(R+68)*Math.sin(angle);
-    const nodeCircle=`<circle cx="${nx2}" cy="${ny2}" r="12" fill="#161b22" stroke="${r.color}" stroke-width="1.5"/>`;
-    return `${lineEl}${nodeCircle}<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#8b949e" font-size="8" font-family="sans-serif">${esc(n.name.slice(0,8))}</text>`;
+    const nodeCircle=`<circle cx="${nx2}" cy="${ny2}" r="12" fill="#ffffff" stroke="${r.color}" stroke-width="1.5"/>`;
+    return `${lineEl}${nodeCircle}<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#374151" font-size="8" font-family="sans-serif">${esc(n.name.slice(0,8))}</text>`;
   }).join('');
   return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">${lines}${famCircle}</svg>`;
 }
@@ -4950,10 +5032,11 @@ function renderT3List(){
         const av=pd['10']==='1'?'👨':pd['10']==='2'?'👩':'🧑';
         const tienePCI=!!pd['_pci'];
         const isDraftPer = pd['_draft']===true;
-        return `<div class="persona-item" style="${isDraftPer?'border-left:3px solid var(--yellow)':''}">
+        const incompleto = hasIncompleteV7(pd);
+        return `<div class="persona-item" style="${isDraftPer?'border-left:3px solid var(--yellow)':incompleto?'border-left:3px solid var(--red)':''}">
           <div class="persona-avatar">${av}</div>
           <div class="persona-info">
-            <div class="persona-nombre">${esc(nombre)}${tienePCI?` <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(56,199,147,.15);color:var(--green);border:1px solid rgba(56,199,147,.3)">PCI ✓</span>`:''}${pd['_draft']===true?` <span style="font-size:9px;font-weight:700;color:var(--yellow);background:rgba(255,180,50,.12);border:1px solid var(--yellow);border-radius:4px;padding:1px 4px">📝 BORRADOR</span>`:''}</div>
+            <div class="persona-nombre">${esc(nombre)}${tienePCI?` <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(56,199,147,.15);color:var(--green);border:1px solid rgba(56,199,147,.3)">PCI ✓</span>`:''}${pd['_draft']===true?` <span style="font-size:9px;font-weight:700;color:var(--yellow);background:rgba(255,180,50,.12);border:1px solid var(--yellow);border-radius:4px;padding:1px 4px">📝 BORRADOR</span>`:''}${incompleto?` <span style="font-size:9px;font-weight:700;color:#991b1b;background:#fee2e2;border:1px solid var(--red);border-radius:4px;padding:1px 4px">⚠ Campos v7 pendientes</span>`:''}</div>
             <div class="persona-meta">${esc(meta)}</div>
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
@@ -5840,7 +5923,7 @@ function renderExport(){
   const totalT3Draft=fams.reduce((s,f)=>(f.personas||[]).filter(p=>p.d3?.['_draft']).length+s,0);
   const confOk=c.nit&&c.fechaInicio&&c.fechaFin;
   const fechaC=(c.fechaFin||'').replace(/-/g,'');
-  const nitPad=String(c.nit||'').padStart(12,'0');
+  const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
   const fileName=`APS124CCFP${fechaC}${c.tipoEntidad}${nitPad}.TXT`;
   let preview='';
   try{const lines=buildFile();preview=lines.slice(0,6).join('\n')+(lines.length>6?'\n…':'');}
@@ -5924,7 +6007,7 @@ function buildFile(){
   let consec=0;
   const lines=[];
   // ── T1: Registro de control (6 campos) ──
-  const nitPad=String(c.nit||'').padStart(12,'0');
+  const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
   lines.push(['1',c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT2+totalT3)].join('|'));
   fams.forEach((fam,fi)=>{
     consec++;
@@ -6200,7 +6283,7 @@ function downloadFile(){
     const content=lines.join('\n');
     const c=STATE.config;
     const fechaC=(c.fechaFin||'').replace(/-/g,'');
-    const nitPad=String(c.nit||'').padStart(12,'0');
+    const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
     const fileName=`APS124CCFP${fechaC}${c.tipoEntidad}${nitPad}.TXT`;
     const blob=new Blob([content],{type:'text/plain;charset=utf-8'});
     const url=URL.createObjectURL(blob);
@@ -6237,12 +6320,12 @@ function chartOpts(extra={}){
   return {
     responsive:true, maintainAspectRatio:false,
     plugins:{
-      legend:{labels:{color:'#e6edf3',font:{size:11},boxWidth:12,padding:10}},
-      tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e'}
+      legend:{labels:{color:'#111827',font:{size:11},boxWidth:12,padding:10}},
+      tooltip:{backgroundColor:'#ffffff',borderColor:'#d1d5db',borderWidth:1,titleColor:'#111827',bodyColor:'#6b7280'}
     },
     scales:{
-      x:{ticks:{color:'#8b949e',font:{size:11}},grid:{color:'#21262d'}},
-      y:{ticks:{color:'#8b949e',font:{size:11}},grid:{color:'#21262d'}}
+      x:{ticks:{color:'#6b7280',font:{size:11}},grid:{color:'#e5e7eb'}},
+      y:{ticks:{color:'#6b7280',font:{size:11}},grid:{color:'#e5e7eb'}}
     }, ...extra
   };
 }
@@ -6435,7 +6518,7 @@ function renderAnalytics() {
 function mkBar(id,labels,data,colors,horizontal=false){
   const ctx=document.getElementById(id)?.getContext('2d'); if(!ctx)return;
   destroyChart(id);
-  const opts=chartOpts(horizontal?{indexAxis:'y',scales:{x:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'}}}}:{});
+  const opts=chartOpts(horizontal?{indexAxis:'y',scales:{x:{ticks:{color:'#6b7280'},grid:{color:'#e5e7eb'}},y:{ticks:{color:'#6b7280',font:{size:10}},grid:{color:'#e5e7eb'}}}}:{});
   opts.plugins.legend.display=false;
   _charts[id]=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors||AP.slice(0,data.length),borderRadius:4,borderWidth:0}]},options:opts});
 }
@@ -6444,7 +6527,7 @@ function mkDoughnut(id,labels,data,colors){
   destroyChart(id);
   const opts=chartOpts({scales:{}});
   opts.plugins.legend.position='bottom';
-  _charts[id]=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors||AP.slice(0,data.length),borderColor:'#0d1117',borderWidth:2,hoverOffset:6}]},options:opts});
+  _charts[id]=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors||AP.slice(0,data.length),borderColor:'#ffffff',borderWidth:2,hoverOffset:6}]},options:opts});
 }
 function mkLine(id,labels,data){
   const ctx=document.getElementById(id)?.getContext('2d'); if(!ctx)return;
