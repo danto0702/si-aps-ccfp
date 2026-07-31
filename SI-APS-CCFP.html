@@ -1136,6 +1136,18 @@ async function pullFromCloud() {
       const existing = await idb.get('personas', p.id);
       const record = {...p};
       if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
+      // Preservar campos v7_* locales si el servidor no los tiene aún
+      if (existing?.d3) {
+        const serverD3 = record.d3 || {};
+        const merged = {...serverD3};
+        for (const k of Object.keys(existing.d3)) {
+          if (k.startsWith('v7_') && (merged[k] === undefined || merged[k] === null ||
+              (Array.isArray(merged[k]) && !merged[k].length))) {
+            merged[k] = existing.d3[k];
+          }
+        }
+        record.d3 = merged;
+      }
       await idb.put('personas', record);
     }
     console.log(`[sync] personas descargadas: ${(pers||[]).length}`);
@@ -1215,7 +1227,7 @@ async function rebuildAppState() {
   const allPlanes = await idb.getAll('planes_familiar');
   for (const f of fams) {
     const ps = await idb.getAllByIndex('personas','familia_id',f.id);
-    f.personas = ps.filter(p=>!p.deleted_at).map(p=>({id:p.id, d3:p.d3}));
+    f.personas = ps.filter(p=>!p.deleted_at).map(p=>({id:p.id, d3:p.d3, created_by:p.created_by, created_at:p.created_at, ebs_code:p.ebs_code}));
     f.plan = allPlanes.find(pl=>pl.familia_id===f.id && !pl.deleted_at) || null;
   }
   STATE.planesFamiliar = allPlanes.filter(pl=>!pl.deleted_at);
