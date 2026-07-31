@@ -1284,7 +1284,7 @@ const STATE = {
   auth: null, profile: null,
   screen: 'login',
   isOnline: navigator.onLine,
-  config: {tipoEntidad:'NI', nit:'', fechaInicio:'', fechaFin:'', uzpe:''},
+  config: {tipoEntidad:'NI', nit:'', fechaInicio:'', fechaFin:'', uzpe:'', codigoEBS:'', tipoUbicacion:'3'},
   familias: [],
   editFamId: null, editPerId: null,
   t2step: 1, draft2: {}, draft3: {},
@@ -2022,6 +2022,26 @@ function renderConfig() {
         oninput="STATE.config.uzpe=this.value.toUpperCase().replace(/-/g,'')">
       <div class="field-note">7 caracteres, sin guión. Regional Occidente: <strong>41SR002</strong> (muestra como 41-SR00254 en el formulario).</div>
     </div>
+    <div class="field">
+      <div class="field-label">C&#243;digo EBS registrado en PISIS <span class="req">*</span></div>
+      <input class="field-input" id="cfg-ebscode" type="text" maxlength="10"
+        value="${esc(c.codigoEBS||'')}" placeholder="Ej: ESE-EBS001"
+        oninput="STATE.config.codigoEBS=this.value.toUpperCase().slice(0,10)">
+      <div class="field-note">M&#225;ximo 10 caracteres. C&#243;digo registrado en la plataforma PISIS/SISPRO para este equipo EBS. Aparece en campo 25 del T2.</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Tipo de ubicaci&#243;n por defecto (campo T2-8)</div>
+      <select class="field-input" id="cfg-tipubi"
+        onchange="STATE.config.tipoUbicacion=this.value">
+        <option value="1" ${c.tipoUbicacion==='1'?'selected':''}>1 - Corregimiento</option>
+        <option value="2" ${c.tipoUbicacion==='2'?'selected':''}>2 - Centro poblado</option>
+        <option value="3" ${(!c.tipoUbicacion||c.tipoUbicacion==='3')?'selected':''}>3 - Vereda (default EBS rural)</option>
+        <option value="4" ${c.tipoUbicacion==='4'?'selected':''}>4 - Localidad</option>
+        <option value="5" ${c.tipoUbicacion==='5'?'selected':''}>5 - Barrio</option>
+        <option value="6" ${c.tipoUbicacion==='6'?'selected':''}>6 - Resguardo ind&#237;gena</option>
+      </select>
+      <div class="field-note">Se aplica a todas las familias sin tipo de ubicaci&#243;n espec&#237;fico. Cambia seg&#250;n zona de trabajo.</div>
+    </div>
   </div>
   <div class="card">
     <div class="card-title">Período de reporte</div>
@@ -2051,7 +2071,9 @@ async function saveConfig() {
   if (!nit||!STATE.config.fechaInicio||!STATE.config.fechaFin)
     return toast('Complete todos los campos requeridos','err');
   const uzpe = document.getElementById('cfg-uzpe')?.value?.trim().toUpperCase()||'';
-  STATE.config = {...STATE.config, nit, tipoEntidad:tipo, uzpe};
+  const codigoEBS = (document.getElementById('cfg-ebscode')?.value||'').trim().toUpperCase().slice(0,10);
+  const tipoUbi = document.getElementById('cfg-tipubi')?.value||'3';
+  STATE.config = {...STATE.config, nit, tipoEntidad:tipo, uzpe, codigoEBS, tipoUbicacion:tipoUbi};
   const rec = {key:'reportConfig', value:STATE.config, updated_at:new Date().toISOString(), updated_by:STATE.auth?.user?.id};
   await idb.put('config', rec);
   if (STATE.isOnline) {
@@ -3641,6 +3663,12 @@ function ebsTerritoryPrefix(code) {
 }
 function calcNumVivienda(d,idx){const ebs=calcEBS(d);const h=String(d.hogar_num||idx+1).padStart(4,'0');return ebs+'H'+h;}
 function calcNumFamilia(d,idx){const nv=calcNumVivienda(d,idx);return nv+'F'+String(d.familia_num||'1').padStart(4,'0');}
+// IDs con formato exacto Anexo Tecnico v7: dpto+sub+mun+ter+mic+H+hogar (max 26) y +F+familia (max 31)
+function calcPisisViv(d,idx){
+  const p=[String(d['3']||'').slice(0,2),String(d['4']||'').slice(0,7),String(d['5']||'').slice(0,5),String(d['6']||'').slice(0,3),String(d['7']||'').slice(0,4)].join('').replace(/\s/g,'');
+  return p+'H'+String(d.hogar_num||idx+1).padStart(4,'0');
+}
+function calcPisisFam(d,idx){return calcPisisViv(d,idx)+'F'+String(d.familia_num||'1').padStart(4,'0');}
 function calcCodFicha(d,idx){return calcNumFamilia(d,idx)+'CF001';}
 function calcNumIdFamilia(d,idx){return calcNumVivienda(d,idx)+calcNumFamilia(d,idx);}
 
@@ -6012,8 +6040,8 @@ function buildFile(){
     consec++;
     const d=fam.d2||{};
     const idx=fi;
-    const numViv=calcNumVivienda(d,idx);
-    const numFam=calcNumFamilia(d,idx);
+    const numViv=calcPisisViv(d,idx);   // formato PISIS max 26 chars
+    const numFam=calcPisisFam(d,idx);   // formato PISIS max 31 chars
     const ebsCode=calcEBS(d);
     // ── T2: Registro de caracterización familiar (125 campos) ──
     const t2=[
@@ -6025,24 +6053,24 @@ function buildFile(){
       d['5']||'',     // [5]  municipio
       d['6']||'',     // [6]  territorio
       d['7']||'',     // [7]  microterritorio
-      '',             // [8]  tipo_ubicacion (no capturado en v3)
+      c.tipoUbicacion||'3',  // [8]  tipo_ubicacion (Vereda=3 default EBS rural)
       d['8']||'',     // [9]  nombre tipo ubicacion (barrio/vereda)
-      '',             // [10] area_ubicacion (no capturado)
+      '2',            // [10] area_ubicacion (Rural=2 default EBS)
       d['12']||'',    // [11] punto de referencia
       d['11']||'',    // [12] geopunto longitud
       d['10']||'',    // [13] geopunto latitud
       d['9']||'',     // [14] dirección
       '',             // [15] teléfono vivienda (no capturado)
       d['85']||'',    // [16] estrato
-      d['86']||'',    // [17] N° hogares en vivienda
+      (d['86']||'').replace(/^0+/,'')||d['86']||'',  // [17] N hogares vivienda (sin ceros)
       d['87']||'',    // [18] N° personas en vivienda
       d['34']||'',    // [19] N° habitaciones
-      '',             // [20] personas por habitación (no capturado)
+      (d['87']&&d['34'])?String(Math.max(1,Math.round(parseFloat(d['87'])/parseFloat(d['34'])))):''  ,// [20] personas/habitacion (calculado)
       d['35']||'',    // [21] hacinamiento
       '',             // [22] elementos para dormir (no capturado)
-      '',             // [23] tipo situación (no capturado)
-      '',             // [24] observación situación (no capturado)
-      ebsCode,        // [25] código EBS
+      '4',            // [23] tipo situacion (No aplica)
+      'SIN NOVEDAD',  // [24] observacion situacion (default)
+      (c.codigoEBS||'').slice(0,10)||ebsCode.slice(0,10),  // [25] codigo EBS registrado PISIS (max 10)
       d['20']||'',    // [26] NIT prestador
       d['21']||'',    // [27] tipo ID responsable
       d['22']||'',    // [28] N° ID responsable
@@ -6149,13 +6177,21 @@ function buildFile(){
       consec++;
       const pd=per.d3||{};
       const numIdInt=numFam+(pd['7']||'')+(pd['8']||'');
+      // helpers edad para auto-rellenar campos por ciclo de vida
+      const _fnac=pd['9']||'';
+      const _edadMs=_fnac?(new Date()-new Date(_fnac)):0;
+      const _edadA=_fnac?Math.floor(_edadMs/31557600000):99;
+      const _may14=_edadA>=14,_may18=_edadA>=18,_men5=_edadA<5;
+      const _men6m=_edadA===0&&_fnac&&_edadMs<15778800000;
+      const _peso=parseFloat(pd['22']||0),_talla=parseFloat(pd['23']||0);
+      const _imc=(_edadA>5&&_peso>0&&_talla>0)?(_peso/((_talla/100)**2)).toFixed(1):'';
       const t3=[
         '3',                          // [0]   tipo registro
         String(consec),               // [1]   consecutivo
-        pd['3']||'',                  // [2]   primer nombre
-        pd['4']||'',                  // [3]   segundo nombre
-        pd['5']||'',                  // [4]   primer apellido
-        pd['6']||'',                  // [5]   segundo apellido
+        (pd['3']||'').trim(),         // [2]   primer nombre
+        (pd['4']||'').trim(),         // [3]   segundo nombre
+        (pd['5']||'').trim(),         // [4]   primer apellido
+        (pd['6']||'').trim(),         // [5]   segundo apellido
         pd['7']||'',                  // [6]   tipo identificación
         pd['8']||'',                  // [7]   número identificación
         pd['9']||'',                  // [8]   fecha nacimiento (AAAA-MM-DD)
@@ -6176,45 +6212,45 @@ function buildFile(){
         '',                           // [23]  modalidad violencia (no capturado)
         pd['18']||'',                 // [24]  pertenencia étnica
         pd['20']||'',                 // [25]  pueblo/comunidad étnica
-        '',                           // [26]  prácticas saberes ancestrales (no capturado)
-        '',                           // [27]  prácticas derecho a la salud (no capturado)
-        '',                           // [28]  prácticas cuidado y salud (no capturado)
+        '7',                          // [26]  practicas saberes ancestrales (Ninguna)
+        '6',                          // [27]  practicas derecho salud (Ninguna)
+        '9',                          // [28]  practicas cuidado salud (Ninguna)
         pd['28']||'',                 // [29]  atenciones pendientes promoción
         arrVal(pd['21']),             // [30]  condición de discapacidad
-        '',                           // [31]  certificación RLCPD (no capturado)
-        '',                           // [32]  intención reproductiva (no capturado)
+        arrVal(pd['21']).includes('8')?'3':'2', // [31]  RLCPD (No aplica si sin discapacidad)
+        '2',                          // [32]  intencion reproductiva (NO, default)
         pd['11']||'',                 // [33]  gestación actual confirmada
-        '',                           // [34]  atenciones ruta materno perinatal (no capturado)
+        '9',                          // [34]  atenciones ruta materno (No aplica, default)
         pd['29']||'',                 // [35]  motivo no recibió atenciones
         pd['31']||'',                 // [36]  lactancia exclusiva <6 meses
         pd['22']||'',                 // [37]  peso (kg)
         pd['23']||'',                 // [38]  talla (cm)
-        '',                           // [39]  IMC mayores 5 años (no capturado)
+        _imc,                         // [39]  IMC calculado de peso/talla
         '',                           // [40]  circunferencia cintura (no capturado)
         pd['33']||'',                 // [41]  signos desnutrición aguda
         pd['24']||'',                 // [42]  clasificación nutricional P/T o IMC
-        '',                           // [43]  se lava manos con agua y jabón (no capturado)
+        '1',                          // [43]  se lava manos (SI, default)
         '',                           // [44]  TA sistólica (no capturado)
         '',                           // [45]  TA diastólica (no capturado)
         '',                           // [46]  clasificación TA (no capturado)
-        '',                           // [47]  urgencias último año (no capturado)
+        '11',                         // [47]  urgencias (No aplica, default)
         '',                           // [48]  enfermedades último mes (no capturado)
         '',                           // [49]  otras enfermedades (no capturado)
         '',                           // [50]  acción ante afección (no capturado)
         '',                           // [51]  otras acciones (no capturado)
-        '',                           // [52]  trastornos ánimo últimas 2 semanas (no capturado)
-        '',                           // [53]  cómo se sintió últimos 8 días (no capturado)
-        '',                           // [54]  riesgos salud física/mental (no capturado)
-        '',                           // [55]  situación salud limita actividades (no capturado)
+        _may14?'4':'5',               // [52]  trastornos animo (Ninguno/>14 / No aplica/<14)
+        _may14?'2':'3',               // [53]  pensamiento lastimarse (Ninguno/>14 / NoAplica/<14)
+        '21',                         // [54]  riesgos salud (Ninguna, default)
+        '2',                          // [55]  situacion salud limita (NO, default)
         pd['26']||'',                 // [56]  tiene diagnóstico (condición salud crónica)
-        '',                           // [57]  signos/síntomas sin diagnóstico (no capturado)
-        '',                           // [58]  condición salud transmisible (no capturado)
-        '',                           // [59]  enfermedad no transmisible (no capturado)
-        '',                           // [60]  zona endémica / signos-síntomas (no capturado)
+        '2',                          // [57]  signos sin diagnostico (NO, default)
+        '15',                         // [58]  condicion salud transmisible (Ninguna)
+        '10',                         // [59]  enfermedad no transmisible (Ninguna)
+        '7',                          // [60]  zona endemica (Ninguna, default)
         pd['36']||'',                 // [61]  recibe atención y tratamiento actual
-        '',                           // [62]  motivos no recibió atención (no capturado)
-        '',                           // [63]  consume SPA (no capturado)
-        '',                           // [64]  consume tabaco (no capturado)
+        '15',                         // [62]  motivo no atencion (No aplica, default)
+        _may14?'2':'',               // [63]  consume SPA (NO si >14, vacio si <14)
+        '3',                          // [64]  consume tabaco (No aplica, default)
         '',                           // [65]  cigarrillos diario (no capturado)
         '',                           // [66]  años fumando (no capturado)
         '',                           // [67]  puntaje ASSIST (no capturado)
