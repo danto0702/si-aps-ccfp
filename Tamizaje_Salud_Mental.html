@@ -137,10 +137,14 @@ table.admin-tbl tr:hover td{background:rgba(255,255,255,.02)}
 /* ============ PRINT / PDF ============ */
 #print-area{display:none}
 @media print{
-  body *{visibility:hidden}
-  #print-area,#print-area *{visibility:visible}
-  #print-area{display:block;position:absolute;left:0;top:0;width:100%;padding:0;background:#fff;color:#111}
   @page{size:A4;margin:12mm}
+  /* Fondo blanco garantizado (evita que el tema oscuro se imprima como recuadros negros) */
+  html,body{background:#fff !important}
+  /* Ocultar por completo (display:none, NO visibility) para no dejar espacio ni fondo del tema */
+  .wrap,#modal-root,#toast-root,#import-file{display:none !important}
+  /* Mostrar solo el reporte; forzar impresión de colores de fondo (encabezados/etiquetas) */
+  #print-area{display:block !important;position:static;width:100%;padding:0;background:#fff;color:#111;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 #print-area{color:#111;background:#fff;font-size:12px}
 #print-area .p-banner{width:100%;margin-bottom:10px}
