@@ -106,6 +106,13 @@ input::placeholder{color:#586069}
 .note{font-size:11.5px;color:var(--muted);background:var(--card2);border-radius:8px;padding:9px 11px;margin-top:8px;line-height:1.5}
 hr.soft{border:none;border-top:1px solid var(--border);margin:14px 0}
 
+/* Firmas */
+.sig-box .field-label{margin-bottom:8px}
+.sigpad-wrap{border:1px solid var(--border);border-radius:10px;background:#fff;overflow:hidden}
+canvas.sigpad{display:block;width:100%;height:210px;background:#fff;cursor:crosshair;touch-action:none}
+.sig-thumb{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;min-height:64px}
+.sig-thumb img{max-height:56px;max-width:100%;object-fit:contain}
+
 /* Topbar / auth */
 .topbar{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:12px;flex-wrap:wrap}
 .topbar .sync{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);flex:1;min-width:160px}
@@ -161,8 +168,10 @@ table.admin-tbl tr:hover td{background:rgba(255,255,255,.02)}
 #print-area .p-detail{font-size:11px;color:#333;margin-top:3px}
 #print-area .p-detail b{color:#111}
 #print-area .p-item-table td{border-bottom:1px solid #eee;font-size:10.5px}
-#print-area .p-sign{margin-top:26px;display:flex;justify-content:space-between;gap:30px}
-#print-area .p-sign div{flex:1;border-top:1px solid #333;padding-top:4px;font-size:10.5px;text-align:center;color:#333}
+#print-area .p-sign{margin-top:26px;display:flex;justify-content:space-between;gap:30px;align-items:flex-end}
+#print-area .p-sign > div{flex:1;text-align:center}
+#print-area .p-firma{display:block;max-height:60px;max-width:92%;margin:0 auto 2px;object-fit:contain}
+#print-area .p-firma-line{border-top:1px solid #333;padding-top:4px;font-size:10.5px;color:#333}
 #print-area .p-foot{margin-top:14px;font-size:9.5px;color:#777;text-align:center;border-top:1px solid #ddd;padding-top:6px}
 </style>
 </head>
@@ -253,6 +262,14 @@ table.admin-tbl tr:hover td{background:rgba(255,255,255,.02)}
     <div id="ins-hint" class="note hidden"></div>
     <div class="ins-grid" id="ins-grid"></div>
 
+    <h2 class="sec">Firmas <span class="muted">— la firma del profesional se registra una vez por sesión</span></h2>
+    <div class="card">
+      <div class="grid2">
+        <div class="sig-box" id="sig-prof-box"></div>
+        <div class="sig-box" id="sig-pac-box"></div>
+      </div>
+    </div>
+
     <div class="actionbar">
       <button class="btn btn-purple" onclick="generarPDF()">🖨️ Generar PDF</button>
       <button class="btn btn-green" onclick="guardarHistorial()">💾 Guardar en historial</button>
@@ -331,7 +348,7 @@ const MUNIS_NS={'54001':'Cúcuta','54003':'Ábrego','54051':'Arboledas','54099':
 const EPS_COMUNES=['Nueva EPS','Coosalud EPS','Comfaoriente EPS','Salud Total EPS','EPS Sanitas','SURA EPS','Famisanar EPS','Asmet Salud','Emssanar','Ecoopsos','Cajacopi','Mutual SER','Medimás','No asegurado'];
 
 // ── Estado ──────────────────────────────────────────────────
-const STATE={ paciente:{}, ins:{}, editId:null, auth:null, profile:null, online:navigator.onLine, adminRows:[] };
+const STATE={ paciente:{}, ins:{}, editId:null, auth:null, profile:null, online:navigator.onLine, adminRows:[], firmaProf:null, firmaPaciente:null };
 const LS_KEY='tamizajes_sm_v1';
 const AUTH_KEY='tsm_auth_v1';
 
@@ -450,6 +467,7 @@ function _rowFromRec(rec){
     telefono:p.tel||null, correo:p.correo||null, profesional:p.prof||null,
     fecha_aplicacion:rec.fecha||today(),
     instrumentos_aplicados:_insAplicadosDe(d), alertas:_resumenRiesgo(d),
+    firmas:rec.firmas||{prof:STATE.firmaProf||null,paciente:STATE.firmaPaciente||null},
     created_by:STATE.auth?STATE.auth.user.id:null
   };
 }
@@ -481,7 +499,7 @@ async function pullCloud(){
     const rows=await res.json();const local=loadHist();const byId={};local.forEach(r=>byId[r.id]=r);
     rows.forEach(row=>{
       byId[row.id]={id:row.id,fecha:row.fecha_aplicacion||(row.created_at||'').slice(0,10),ts:new Date(row.created_at||Date.now()).getTime(),
-        paciente:row.paciente||{},ins:row.instrumentos||{},synced:true,created_by:row.created_by};
+        paciente:row.paciente||{},ins:row.instrumentos||{},firmas:row.firmas||{},synced:true,created_by:row.created_by};
     });
     const merged=Object.values(byId).sort((a,b)=>(b.ts||0)-(a.ts||0));
     saveHist(merged);
@@ -529,6 +547,96 @@ function updateAge(){
   const c=cicloDeVida(edad);
   box.innerHTML=`<div><b>${edad}</b> años · <span class="ciclo">${esc(c.label)}</span></div>`;
   renderInstrumentos();
+}
+
+// ============================================================
+//  FIRMAS DIGITALES (canvas táctil, sin librerías)
+// ============================================================
+const FIRMA_PROF_KEY='tsm_firma_prof_v1';
+function _loadFirmaProf(){
+  try{const o=JSON.parse(localStorage.getItem(FIRMA_PROF_KEY)||'null');
+    if(o&&o.data){STATE.firmaProf=o.data;if(o.name&&!val('f_prof')){setVal('f_prof',o.name);pSet();}}
+  }catch(e){}
+}
+function _saveFirmaProf(){
+  try{localStorage.setItem(FIRMA_PROF_KEY,JSON.stringify({data:STATE.firmaProf,name:val('f_prof')||''}));}catch(e){}
+}
+function renderFirmas(){
+  const bp=document.getElementById('sig-prof-box');
+  const bpac=document.getElementById('sig-pac-box');
+  if(!bp||!bpac)return;
+  if(STATE.firmaProf){
+    bp.innerHTML=`<div class="field-label">Firma del profesional <span style="color:var(--green)">✓ registrada</span></div>
+      <div class="sig-thumb"><img src="${STATE.firmaProf}"></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openFirma('prof')">✏️ Cambiar</button>
+        <button class="btn btn-secondary btn-sm" onclick="quitarFirma('prof')" title="Quitar">🗑️</button>
+      </div>`;
+  }else{
+    bp.innerHTML=`<div class="field-label">Firma del profesional que aplica</div>
+      <button class="btn btn-blue btn-block" onclick="openFirma('prof')">✍️ Firmar (una vez por sesión)</button>
+      <div class="note">Se guarda en este dispositivo y se reutiliza en cada tamizaje hasta que la cambie.</div>`;
+  }
+  if(STATE.firmaPaciente){
+    bpac.innerHTML=`<div class="field-label">Firma del usuario / paciente <span style="color:var(--green)">✓</span></div>
+      <div class="sig-thumb"><img src="${STATE.firmaPaciente}"></div>
+      <button class="btn btn-secondary btn-sm btn-block" onclick="openFirma('paciente')">✏️ Rehacer firma</button>`;
+  }else{
+    bpac.innerHTML=`<div class="field-label">Firma del usuario / paciente</div>
+      <button class="btn btn-green btn-block" onclick="openFirma('paciente')">✍️ Firmar en pantalla</button>
+      <div class="note">El usuario firma con el dedo (teléfono/tablet) o con el mouse.</div>`;
+  }
+}
+let _sig=null;
+function openFirma(tipo){
+  const titulo=tipo==='prof'?'Firma del profesional que aplica':'Firma del usuario / paciente';
+  document.getElementById('modal-root').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:540px">
+      <div class="modal-title">✍️ ${esc(titulo)}</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Firme dentro del recuadro con el <b>dedo</b> (pantalla táctil) o con el <b>mouse</b>.</p>
+      <div class="sigpad-wrap"><canvas id="sigpad" class="sigpad"></canvas></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-secondary" onclick="_sigClear()">🧹 Limpiar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="_sigSave('${tipo}')">Guardar firma</button>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(_sigInit,60);
+}
+function _sigInit(){
+  const c=document.getElementById('sigpad');if(!c)return;
+  const rect=c.getBoundingClientRect();const dpr=Math.min(window.devicePixelRatio||1,2);
+  c.width=Math.round(rect.width*dpr);c.height=Math.round(rect.height*dpr);
+  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,rect.width,rect.height);
+  ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#0d1b3e';
+  _sig={ctx,drawing:false,dirty:false,canvas:c,w:rect.width,h:rect.height};
+  const pos=e=>{const r=c.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};};
+  c.addEventListener('pointerdown',e=>{e.preventDefault();_sig.drawing=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+0.1,p.y+0.1);ctx.stroke();_sig.dirty=true;try{c.setPointerCapture(e.pointerId);}catch(_){}});
+  c.addEventListener('pointermove',e=>{if(!_sig.drawing)return;e.preventDefault();const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();});
+  const end=e=>{_sig.drawing=false;};
+  c.addEventListener('pointerup',end);c.addEventListener('pointercancel',end);c.addEventListener('pointerleave',end);
+}
+function _sigClear(){if(!_sig)return;_sig.ctx.fillStyle='#fff';_sig.ctx.fillRect(0,0,_sig.w,_sig.h);_sig.dirty=false;}
+function _sigSave(tipo){
+  if(!_sig||!_sig.dirty)return toast('Primero realice la firma','err');
+  // Exportar a un tamaño acotado (ancho 480) para reducir peso
+  const src=_sig.canvas;const outW=480;const outH=Math.round(outW*_sig.h/_sig.w);
+  const tmp=document.createElement('canvas');tmp.width=outW;tmp.height=outH;
+  const tc=tmp.getContext('2d');tc.fillStyle='#fff';tc.fillRect(0,0,outW,outH);
+  tc.drawImage(src,0,0,outW,outH);
+  const data=tmp.toDataURL('image/jpeg',0.75);
+  if(tipo==='prof'){STATE.firmaProf=data;_saveFirmaProf();}
+  else{STATE.firmaPaciente=data;}
+  _sig=null;closeModal();renderFirmas();
+  toast(tipo==='prof'?'Firma del profesional registrada':'Firma del usuario registrada','ok');
+}
+function quitarFirma(tipo){
+  if(tipo==='prof'){STATE.firmaProf=null;try{localStorage.removeItem(FIRMA_PROF_KEY);}catch(e){}}
+  else STATE.firmaPaciente=null;
+  renderFirmas();
 }
 
 // ============================================================
@@ -1277,8 +1385,8 @@ function buildReporte(){
     <div class="p-sec">RESULTADOS DE LOS INSTRUMENTOS APLICADOS</div>
     ${secs}
     <div class="p-sign">
-      <div>Firma del profesional que aplica<br>${esc(p.prof||'')}</div>
-      <div>Firma del usuario / cuidador</div>
+      <div>${STATE.firmaProf?`<img class="p-firma" src="${STATE.firmaProf}">`:'<div style="height:44px"></div>'}<div class="p-firma-line">Firma del profesional que aplica<br>${esc(p.prof||'')}</div></div>
+      <div>${STATE.firmaPaciente?`<img class="p-firma" src="${STATE.firmaPaciente}">`:'<div style="height:44px"></div>'}<div class="p-firma-line">Firma del usuario / cuidador</div></div>
     </div>
     <div class="p-foot">Documento generado por el aplicativo local "Tamizaje en Salud Mental — SI-APS". Instrumentos: APGAR, Zarit, SRQ, RQC, AUDIT y ASSIST. Uso institucional — información sujeta a reserva (Ley 1581 de 2012 · Habeas Data).</div>
   `;
@@ -1322,6 +1430,7 @@ async function guardarHistorial(){
     fecha:today(), ts:Date.now(),
     paciente:{...STATE.paciente},
     ins:JSON.parse(JSON.stringify(STATE.ins)),
+    firmas:{prof:STATE.firmaProf||null, paciente:STATE.firmaPaciente||null},
     synced:false,
     created_by:STATE.auth?STATE.auth.user.id:null
   };
@@ -1372,13 +1481,19 @@ function renderHist(){
 }
 function _loadRecToState(r){
   STATE.paciente={...r.paciente};STATE.ins=JSON.parse(JSON.stringify(r.ins||{}));STATE.editId=r.id;
+  const f=r.firmas||{};STATE.firmaPaciente=f.paciente||null;if(f.prof)STATE.firmaProf=f.prof;
   const p=STATE.paciente;
   setVal('f_nombre',p.nombre);setVal('f_tipoDoc',p.tipoDoc);setVal('f_doc',p.doc);setVal('f_muni',p.muni);
   setVal('f_eps',p.eps);setVal('f_sexo',p.sexo);setVal('f_fnac',p.fnac);setVal('f_tel',p.tel);setVal('f_correo',p.correo);setVal('f_prof',p.prof);
-  updateAge();renderInstrumentos();
+  updateAge();renderInstrumentos();renderFirmas();
 }
 function abrirHist(id){const r=loadHist().find(x=>x.id===id);if(!r)return;_loadRecToState(r);showTab('eval');window.scrollTo(0,0);toast('Evaluación cargada — puede editar y volver a guardar','ok');}
-function pdfHist(id){const r=loadHist().find(x=>x.id===id);if(!r)return;const bkP=STATE.paciente,bkI=STATE.ins;STATE.paciente=r.paciente;STATE.ins=r.ins;document.getElementById('print-area').innerHTML=buildReporte();STATE.paciente=bkP;STATE.ins=bkI;setTimeout(()=>window.print(),120);}
+function pdfHist(id){const r=loadHist().find(x=>x.id===id);if(!r)return;
+  const bkP=STATE.paciente,bkI=STATE.ins,bkFp=STATE.firmaProf,bkFc=STATE.firmaPaciente;
+  STATE.paciente=r.paciente;STATE.ins=r.ins;STATE.firmaProf=(r.firmas||{}).prof||null;STATE.firmaPaciente=(r.firmas||{}).paciente||null;
+  document.getElementById('print-area').innerHTML=buildReporte();
+  STATE.paciente=bkP;STATE.ins=bkI;STATE.firmaProf=bkFp;STATE.firmaPaciente=bkFc;
+  setTimeout(()=>window.print(),120);}
 function borrarHist(id){if(!confirm('¿Eliminar esta evaluación del historial? No se puede deshacer.'))return;saveHist(loadHist().filter(x=>x.id!==id));if(STATE.editId===id)STATE.editId=null;renderHist();toast('Evaluación eliminada','warn');}
 
 // ============================================================
@@ -1564,10 +1679,11 @@ function renderAdmin(){
 }
 function pdfAdmin(id){
   const row=STATE.adminRows.find(r=>r.id===id);if(!row)return;
-  const bkP=STATE.paciente,bkI=STATE.ins;
+  const bkP=STATE.paciente,bkI=STATE.ins,bkFp=STATE.firmaProf,bkFc=STATE.firmaPaciente;
   STATE.paciente=row.paciente||{};STATE.ins=row.instrumentos||{};
+  STATE.firmaProf=(row.firmas||{}).prof||null;STATE.firmaPaciente=(row.firmas||{}).paciente||null;
   document.getElementById('print-area').innerHTML=buildReporte();
-  STATE.paciente=bkP;STATE.ins=bkI;
+  STATE.paciente=bkP;STATE.ins=bkI;STATE.firmaProf=bkFp;STATE.firmaPaciente=bkFc;
   setTimeout(()=>window.print(),120);
 }
 function exportarAdminCSV(){
@@ -1591,11 +1707,11 @@ function showTab(t){
 }
 function nuevaEvaluacion(ask){
   if(ask&&(STATE.paciente.nombre||insAplicados().length)&&!confirm('¿Limpiar el formulario y empezar una evaluación nueva? Los datos no guardados se perderán.'))return;
-  STATE.paciente={};STATE.ins={};STATE.editId=null;
-  ['f_nombre','f_doc','f_eps','f_fnac','f_tel','f_correo','f_prof'].forEach(id=>setVal(id,''));
+  STATE.paciente={};STATE.ins={};STATE.editId=null;STATE.firmaPaciente=null; // se conserva la firma del profesional
+  ['f_nombre','f_doc','f_eps','f_fnac','f_tel','f_correo'].forEach(id=>setVal(id,''));
   setVal('f_tipoDoc','');setVal('f_muni','');setVal('f_sexo','');
-  updateAge();renderInstrumentos();
-  if(ask)toast('Formulario limpio','ok');
+  updateAge();renderInstrumentos();renderFirmas();
+  if(ask)toast('Formulario limpio · se conserva la firma del profesional','ok');
 }
 function setVal(id,v){const e=document.getElementById(id);if(e)e.value=v==null?'':v;}
 
@@ -1610,6 +1726,7 @@ window.addEventListener('online',()=>{STATE.online=true;updateAuthUI();syncPendi
 window.addEventListener('offline',()=>{STATE.online=false;updateAuthUI();});
 window.addEventListener('DOMContentLoaded',async()=>{
   initSelects();renderInstrumentos();renderHist();updateAge();
+  _loadFirmaProf();renderFirmas();
   _loadAuth();updateAuthUI();
   if(STATE.auth){await loadProfile();}
   if(STATE.online){await syncPendientes();renderHist();}
