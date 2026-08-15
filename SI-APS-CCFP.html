@@ -1324,7 +1324,7 @@ const STATE = {
   auth: null, profile: null,
   screen: 'login',
   isOnline: navigator.onLine,
-  config: {tipoEntidad:'NI', nit:'', fechaInicio:'', fechaFin:'', uzpe:'', codigoEBS:'', tipoUbicacion:'3'},
+  config: {tipoEntidad:'NI', nit:'', fechaInicio:'', fechaFin:'', uzpe:'', subregion:'041', codigoEBS:'', tipoUbicacion:'3'},
   familias: [],
   editFamId: null, editPerId: null,
   t2step: 1, draft2: {}, draft3: {},
@@ -1751,7 +1751,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.1</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.2</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -2073,11 +2073,18 @@ function renderConfig() {
         oninput="STATE.config.nit=this.value">
     </div>
     <div class="field">
-      <div class="field-label">Código Subregión (campo 4)</div>
+      <div class="field-label">Código Subregión oficial PISIS — campo 4 (3 dígitos) <span class="req">*</span></div>
+      <input class="field-input" id="cfg-subregion" type="text" inputmode="numeric" maxlength="3"
+        value="${esc(c.subregion||'041')}" placeholder="041"
+        oninput="STATE.config.subregion=this.value.replace(/\\D/g,'').slice(0,3)">
+      <div class="field-note">3 dígitos de la adscripción territorial en SISPRO. Predeterminado: <strong>041</strong> (041-SR00254 · Regional Occidente). Es el valor exacto que exige el anexo v7 para el campo 4.</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Código Subregión / UZPE (interno, código EBS)</div>
       <input class="field-input" id="cfg-uzpe" type="text" maxlength="9"
         value="${esc(c.uzpe||'')}" placeholder="Ej: 41SR002"
         oninput="STATE.config.uzpe=this.value.toUpperCase().replace(/-/g,'')">
-      <div class="field-note">7 caracteres, sin guión. Regional Occidente: <strong>41SR002</strong> (muestra como 41-SR00254 en el formulario).</div>
+      <div class="field-note">Formato interno (7 car.) usado para componer el código EBS. No se exporta como campo 4.</div>
     </div>
     <div class="field">
       <div class="field-label">C&#243;digo EBS registrado en PISIS <span class="req">*</span></div>
@@ -2128,9 +2135,10 @@ async function saveConfig() {
   if (!nit||!STATE.config.fechaInicio||!STATE.config.fechaFin)
     return toast('Complete todos los campos requeridos','err');
   const uzpe = document.getElementById('cfg-uzpe')?.value?.trim().toUpperCase()||'';
+  const subregion = (document.getElementById('cfg-subregion')?.value||'').replace(/\D/g,'').slice(0,3);
   const codigoEBS = (document.getElementById('cfg-ebscode')?.value||'').trim().toUpperCase().slice(0,10);
   const tipoUbi = document.getElementById('cfg-tipubi')?.value||'3';
-  STATE.config = {...STATE.config, nit, tipoEntidad:tipo, uzpe, codigoEBS, tipoUbicacion:tipoUbi};
+  STATE.config = {...STATE.config, nit, tipoEntidad:tipo, uzpe, subregion, codigoEBS, tipoUbicacion:tipoUbi};
   const rec = {key:'reportConfig', value:STATE.config, updated_at:new Date().toISOString(), updated_by:STATE.auth?.user?.id};
   await idb.put('config', rec);
   if (STATE.isOnline) {
@@ -6023,9 +6031,7 @@ function renderExport(){
   const totalT3=famsReady.reduce((s,f)=>(f.personas||[]).filter(p=>!p.d3?.['_draft']).length+s,0);
   const totalT3Draft=fams.reduce((s,f)=>(f.personas||[]).filter(p=>p.d3?.['_draft']).length+s,0);
   const confOk=c.nit&&c.fechaInicio&&c.fechaFin;
-  const fechaC=(c.fechaFin||'').replace(/-/g,'');
-  const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
-  const fileName=`APS124CCFP${fechaC}${c.tipoEntidad}${nitPad}.TXT`;
+  const fileName=pisisFileName();
   let preview='';
   try{const lines=buildFile();preview=lines.slice(0,6).join('\n')+(lines.length>6?'\n…':'');}
   catch(e){preview='Error: '+e.message;}
@@ -6061,6 +6067,12 @@ function renderExport(){
         : 'Los valores se exportan con su descripción completa (legible para humanos).'}
     </p>
   </div>
+  <div class="card">
+    <div class="card-title">Validación previa (anexo v7)</div>
+    <p style="font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.4">Revisa el archivo contra el anexo técnico (número de campos, longitudes, tipos, requeridos y códigos verificados) <b>antes</b> de cargarlo a PISIS.</p>
+    <button class="btn btn-primary btn-block" onclick="mostrarValidacion()">🔎 Validar archivo</button>
+    <div id="valida-result" style="margin-top:10px"></div>
+  </div>
   <div style="display:flex;flex-direction:column;gap:8px">
     <button class="btn btn-success btn-block" onclick="downloadFile()" ${!confOk?'disabled':''}>⬇ Descargar archivo PISIS (${esc(fileName)})</button>
     <button class="btn btn-primary btn-block" onclick="downloadExcel()">📊 Exportar Excel (T2 + T3)</button>
@@ -6070,6 +6082,36 @@ function renderExport(){
   </div>`;}
 
 function arrVal(v){if(!v||!Array.isArray(v))return v||'';return v.join(',');}
+
+function mostrarValidacion(){
+  const cont=document.getElementById('valida-result'); if(!cont) return;
+  let probs;
+  try{ probs=validarPlano(); }
+  catch(e){ cont.innerHTML=`<div style="color:var(--red)">Error al validar: ${esc(e.message)}</div>`; return; }
+  let avisoAuto='';
+  if(_autofillLog.length){
+    const camposAuto=[...new Set(_autofillLog.map(a=>`${a.reg} c${a.campo}`))].join(', ');
+    avisoAuto=`<div style="background:rgba(255,180,50,.1);border:1px solid var(--yellow);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--yellow)">🔧 ${_autofillLog.length} campo(s) requerido(s) vacío(s) se auto-rellenaron con "Ninguno/No aplica" oficial (${esc(camposAuto)}). Revísalos si aplica.</div>`;
+  }
+  if(!probs.length){
+    cont.innerHTML=avisoAuto+`<div style="background:rgba(56,199,147,.1);border:1px solid var(--green);border-radius:8px;padding:10px 12px;color:var(--green);font-size:13px;font-weight:600">✓ Sin problemas detectados. El archivo cumple las validaciones locales del anexo v7.</div>`;
+    return;
+  }
+  // Agrupar por registro+fila
+  const porFila={};
+  probs.forEach(p=>{ const k=`${p.reg} · registro ${p.fila}`; (porFila[k]=porFila[k]||[]).push(p); });
+  const grupos=Object.entries(porFila);
+  let h=`<div style="background:rgba(233,69,96,.08);border:1px solid var(--red);border-radius:8px;padding:10px 12px">
+    <div style="color:var(--red);font-weight:700;font-size:13px;margin-bottom:8px">⚠ ${probs.length} problema(s) en ${grupos.length} registro(s) — corrige antes de cargar</div>`;
+  grupos.slice(0,40).forEach(([k,list])=>{
+    h+=`<div style="margin-bottom:6px"><div style="font-size:12px;font-weight:600;color:var(--text)">${esc(k)}</div>`;
+    list.slice(0,12).forEach(p=>{ h+=`<div style="font-size:11px;color:var(--muted);padding-left:10px">• ${esc(p.msg)}</div>`; });
+    h+=`</div>`;
+  });
+  if(grupos.length>40) h+=`<div style="font-size:11px;color:var(--muted)">… y ${grupos.length-40} registro(s) más</div>`;
+  h+=`</div>`;
+  cont.innerHTML=avisoAuto+h;
+}
 
 function esRiesgoAmbiental(d){
   const has=(arr,vals)=>(arr||[]).some(v=>vals.includes(v));
@@ -6099,8 +6141,159 @@ function resolveCustomVal(val, refKey) {
   return {val: Array.isArray(val)?resolved:resolved[0], desc:descs.join('; ')};
 }
 
+// ── Cumplimiento anexo técnico (sección 2 características del archivo plano) ──
+// (c) datos en MAYÚSCULAS, sin tildes, sin caracteres especiales
+// (d) el pipe (|) es separador exclusivo: no puede aparecer dentro de un campo
+// (f) sin comillas; (g) numéricos sin formato; (h) fechas AAAA-MM-DD con guion
+function _normCell(v){
+  let s = (v==null?'':String(v));
+  s = s.normalize('NFD').replace(/[̀-ͯ]/g,''); // quita tildes (á→a, ñ→n)
+  s = s.toUpperCase();
+  s = s.replace(/[|"'`]/g,' ');            // pipe y comillas prohibidos
+  s = s.replace(/[\r\n\t]+/g,' ');          // sin fin de línea dentro del campo
+  s = s.replace(/[^A-Z0-9 \-.,#/:()]/g,''); // conserva set seguro para PISIS
+  s = s.replace(/\s+/g,' ').trim();
+  return s;
+}
+function _rowLine(arr){ return arr.map(_normCell).join('|'); }
+// Codifica a bytes ANSI (Windows-1252 ≈ Latin-1) — anexo regla (b)
+function _ansiBytes(str){
+  const out=new Uint8Array(str.length);
+  for(let i=0;i<str.length;i++){ const c=str.charCodeAt(i); out[i]= c<256 ? c : 0x3F; }
+  return out;
+}
+// Nombre de archivo: APS124CCFP + AAAAMMDD + ZZ + 12 dígitos (ceros a la izq) + .TXT = 36
+function pisisFileName(){
+  const c=STATE.config;
+  const fechaC=(c.fechaFin||'').replace(/-/g,'');                 // AAAAMMDD
+  const tipo=String(c.tipoEntidad||'NI').toUpperCase().slice(0,2);// ZZ
+  const idNum=String(c.nit||'').replace(/\D/g,'').slice(0,12);    // solo dígitos
+  const idPad=idNum.padStart(12,'0');                             // longitud fija 12
+  return `APS124CCFP${fechaC}${tipo}${idPad}.TXT`;
+}
+
+// ============================================================
+// SPEC OFICIAL v7 + REMAPEO app→PISIS + VALIDADOR
+// ============================================================
+// [no, longitudMax, tipo(N/A/D/F/T), requerido(1/0)] por registro (anexo v7 Jun-2026)
+const _SPEC_LEN={
+T2:[[0,1,"N",1],[1,10,"N",1],[2,1,"N",1],[3,2,"A",1],[4,3,"A",1],[5,5,"A",1],[6,3,"A",1],[7,4,"A",1],[8,1,"N",1],[9,200,"T",1],[10,1,"N",1],[11,200,"T",1],[12,10,"D",1],[13,10,"D",1],[14,200,"T",1],[15,10,"N",0],[16,1,"N",1],[17,2,"N",1],[18,3,"N",1],[19,2,"N",1],[20,3,"N",1],[21,1,"N",1],[22,2,"N",1],[23,5,"A",1],[24,200,"T",1],[25,10,"A",1],[26,9,"N",1],[27,2,"A",1],[28,20,"A",1],[29,200,"T",1],[30,10,"F",1],[31,2,"N",1],[32,20,"A",1],[33,56,"A",1],[34,11,"N",0],[35,11,"N",1],[36,5,"N",1],[37,1,"N",1],[38,1,"N",1],[39,200,"T",0],[40,2,"N",1],[41,1,"N",1],[42,1,"N",1],[43,1,"N",1],[44,20,"N",1],[45,200,"T",0],[46,13,"A",1],[47,200,"T",0],[48,11,"N",1],[49,200,"T",0],[50,1,"N",1],[51,1,"N",1],[52,1,"N",1],[53,32,"A",1],[54,1,"N",1],[55,1,"N",1],[56,1,"N",1],[57,1,"N",1],[58,13,"A",1],[59,11,"A",1],[60,9,"A",1],[61,200,"T",0],[62,9,"A",1],[63,1,"N",1],[64,1,"N",1],[65,11,"A",1],[66,200,"T",0],[67,1,"N",1],[68,200,"T",0],[69,17,"A",1],[70,200,"T",0],[71,1,"N",1],[72,9,"N",1],[73,200,"T",0],[74,7,"A",1],[75,200,"T",0],[76,1,"N",1],[77,200,"T",0],[78,15,"N",1],[79,200,"T",0],[80,13,"N",1],[81,200,"T",0],[82,9,"N",1],[83,7,"N",1],[84,1,"N",0],[85,23,"A",1],[86,200,"T",0],[87,32,"A",1],[88,200,"T",0],[89,13,"A",1],[90,200,"T",0],[91,20,"A",1],[92,26,"A",1],[93,3,"N",1],[94,3,"N",1],[95,3,"N",1],[96,3,"N",1],[97,7,"A",1],[98,5,"A",1],[99,1,"N",1],[100,1,"N",1],[101,1,"N",1],[102,1,"N",1],[103,1,"N",1],[104,1,"N",1],[105,15,"A",1],[106,200,"T",0],[107,1,"N",1],[108,1,"N",1],[109,1,"N",1],[110,2,"N",1],[111,200,"T",1],[112,1,"N",1],[113,1,"N",0],[114,1,"N",1],[115,3,"N",1],[116,50,"A",1],[117,11,"A",1],[118,1,"N",1],[119,15,"A",1],[120,1,"N",1],[121,200,"T",0],[122,1,"N",1],[123,26,"A",1],[124,31,"A",1]],
+T3:[[0,1,"N",1],[1,10,"N",1],[2,60,"T",1],[3,60,"T",0],[4,60,"T",1],[5,60,"T",0],[6,2,"A",1],[7,20,"A",1],[8,10,"F",1],[9,3,"N",1],[10,1,"N",1],[11,1,"N",1],[12,1,"N",1],[13,1,"N",1],[14,1,"N",1],[15,20,"N",0],[16,20,"N",0],[17,1,"N",1],[18,4,"N",1],[19,2,"N",1],[20,1,"N",1],[21,8,"N",0],[22,32,"A",1],[23,200,"T",0],[24,2,"A",1],[25,60,"T",0],[26,11,"A",1],[27,7,"A",1],[28,15,"A",1],[29,81,"A",1],[30,13,"A",1],[31,1,"N",0],[32,1,"N",1],[33,1,"N",1],[34,15,"A",1],[35,32,"A",1],[36,1,"N",1],[37,5,"D",1],[38,5,"D",1],[39,4,"D",1],[40,3,"N",1],[41,13,"A",1],[42,2,"N",1],[43,1,"N",1],[44,3,"N",1],[45,3,"N",1],[46,1,"N",1],[47,20,"A",1],[48,47,"A",1],[49,200,"T",0],[50,1,"N",1],[51,200,"T",0],[52,5,"A",1],[53,1,"N",1],[54,50,"A",1],[55,1,"N",1],[56,1,"N",1],[57,1,"N",1],[58,32,"A",1],[59,35,"A",1],[60,1,"N",1],[61,1,"N",1],[62,32,"A",1],[63,1,"N",1],[64,1,"N",1],[65,2,"N",0],[66,2,"N",0],[67,2,"N",0],[68,2,"N",0],[69,2,"N",0],[70,10,"F",0],[71,1,"N",0],[72,1,"N",0],[73,1,"N",0],[74,1,"N",0],[75,1,"N",0],[76,1,"N",0],[77,1,"N",0],[78,1,"N",0],[79,1,"N",0],[80,2,"N",0],[81,1,"N",0],[82,1,"N",0],[83,2,"N",0],[84,10,"F",0],[85,1,"N",0],[86,1,"N",0],[87,1,"N",0],[88,1,"N",0],[89,1,"N",0],[90,1,"N",0],[91,2,"N",0],[92,1,"N",0],[93,200,"T",0],[94,200,"T",0],[95,2,"N",0],[96,1,"N",0],[97,200,"T",0],[98,200,"T",0],[99,2,"N",0],[100,200,"T",0],[101,200,"T",0],[102,2,"N",0],[103,1,"N",0],[104,1,"N",0],[105,135,"A",0],[106,1,"N",0],[107,5,"A",0],[108,1,"N",0],[109,1,"N",0],[110,20,"A",0],[111,1,"N",0],[112,1,"N",0],[113,1,"N",0],[114,1,"N",0],[115,1,"N",0],[116,1,"N",0],[117,31,"A",1],[118,53,"A",1]]
+};
+// Códigos oficiales válidos por campo VERIFICADO contra el anexo v7 (para validar contenido)
+const PISIS_CODES={
+  'T2.31':['1','2','3','4','5','6','7','8','9','10','11','12','13'], // tipo vivienda
+  'T2.37':['1','2','3','4','5'],                                     // alumbrado
+  'T2.40':['1','2','3','4','5','6','7','8','9','10'],                // material techo
+  'T2.53':['1','2','3','4','5','6','7','8','9','10','11','12','13','14'], // fuente agua
+  'T3.30':['1','2','3','4','5','6','7','8'],                         // discapacidad
+  'T3.17':['1','2','3','4','5','6'],                                 // rol en familia
+  'T3.19':['1','2','3','4','5','6','7','8','9','10','11','12','13'], // nivel educativo
+  'T3.20':['1','2','3','4','5'],                                     // régimen afiliación
+  'T3.22':['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15'], // grupo poblacional / sujeto protección
+  'T3.24':['01','02','03','04','05','06','07'],                      // etnia
+  'T3.29':['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26'], // intervenciones pendientes PYMS
+  'T3.41':['1','2','3','4','5','6','7','8','9'],                     // signos desnutrición (regiones)
+  'T3.42':['1','2','3','4','5','6','7','8','9','10','11']             // clasificación nutricional
+};
+// Remapeo código-app → código-oficial (VERIFICADO). Valores no listados se marcan para revisión.
+const PISIS_REMAP={
+  regimen:       {'1':'2','2':'1','3':'3','4':'5','5':'5'},          // app 5=Indeterminado → 5 No afiliado (decisión usuario)
+  nivelEducativo:{'1':'13','2':'1','3':'2','4':'3','5':'4','6':'8','7':'9','8':'10','9':'13'}, // app 9=No aplica(<5) → 13 Ninguno
+  rolFamilia:    {'1':'1','2':'2','3':'3','4':'6','5':'5','6':'6','7':'4','8':'6','9':'6','10':'6','11':'6','12':'6'},
+  etnia:         {'01':'01','02':'02','03':'03','04':'04','05':'06','06':'07','07':'07'}, // app 06=Otro → 07 Ninguna (decisión usuario)
+  tipoVivienda:  {'1':'1','2':'4','3':'6','4':'2','5':'3','6':'7','7':'8','8':'9','9':'10','10':'11','11':'12','12':'13'},
+  alumbrado:     {'1':'1','2':'4','3':'5','4':'3','5':'2'},          // app 6=Ninguno: sin equivalente oficial
+  materialTecho: {'1':'1','2':'2','3':'3','4':'5','5':'7','6':'8','7':'9','8':'10'}, // oficial separa fibrocemento c/s asbesto
+  discapacidad:  {'1':'3','2':'2','4':'1','5':'6','6':'5','7':'7','8':'8'}, // app 3=Voz y habla: sin equivalente oficial
+  fuenteAgua:    {'1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','10':'10','11':'12','12':'13','13':'14'}, // oficial separa Río(10)/Manantial(11)
+  // grupo poblacional (T3.22): NO se remapea — se DERIVA de datos reales (ver deriveGrupoPob).
+  pesoTalla:     {'1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7'}, // app 8=No aplica: sin equivalente oficial (se marca)
+  // signos desnutrición (T3.41): la app registra SIGNOS; el oficial pide REGIONES del cuerpo. Mapa signo→región (conserva el hallazgo).
+  signosDesnutricion:{'1':'1','2':'2','3':'3','4':'7','5':'5','6':'4','7':'2','8':'8'}, // 4 edema→7 Edema, 6 distensión→4 tórax/abdomen, 7 úlceras labios→2 cara
+  // ZARIT (T2.115): el oficial exige PUNTAJE numérico 0-100; la app guarda categoría. Equivalencia categoría→puntaje representativo dentro de cada banda.
+  zaritScore:    {'1':'40','2':'51','3':'65'}, // 1 Ausencia(≤46)→40, 2 Ligera(47-55)→51, 3 Intensa(≥56)→65
+  // intervenciones: 1-17 y 25 idénticos; app 18(preconcep)→26, app 26(Ninguna)→18 Ninguno; 19-24 (maternas) pertenecen al campo oficial 34 → se omiten aquí
+  intervenciones:{'1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','10':'10','11':'11','12':'12','13':'13','14':'14','15':'15','16':'16','17':'17','18':'26','25':'25','26':'18'}
+};
+// Traduce un valor (o arreglo) al código oficial. Devuelve '' si el código-app no tiene mapeo (para que el validador lo marque).
+function remapCod(tabla, val){
+  if(val==null||val==='') return '';
+  const m=PISIS_REMAP[tabla]; if(!m) return val;
+  if(Array.isArray(val)) return val.map(x=>(m[x]!=null?m[x]:'')).filter(x=>x!=='');
+  return m[val]!=null?m[val]:'';
+}
+// Deriva el "grupo poblacional / sujeto de protección constitucional" (T3.22) desde los datos reales de la persona/familia.
+// Códigos oficiales APSGrupoPoblacionEspecial: 1 NNA, 2 Gestante, 3 Adulto mayor, 4 Orientación diversa, 6 Migrante, 9 Víctima conflicto, 13 Ninguna, 14 Discapacidad.
+function deriveGrupoPob(pd, d){
+  const out=[];
+  const fn=pd['9']||'';
+  const edad = fn ? Math.floor((Date.now()-new Date(fn).getTime())/31557600000) : null;
+  if(edad!=null && edad<18) out.push('1');                                  // Niñas, niños y adolescentes
+  if(pd['11']==='1') out.push('2');                                         // Gestante
+  if(edad!=null && edad>=60) out.push('3');                                 // Persona adulta mayor
+  if(['2','3','4','6'].includes(pd['t3_orientacion'])) out.push('4');       // Orientación sexual diversa
+  if(['1','2'].includes(pd['t3_mig'])) out.push('6');                       // Migrante
+  if(d && d['64']==='1') out.push('9');                                     // Víctima del conflicto armado
+  const disc=Array.isArray(pd['21'])?pd['21']:(pd['21']?[pd['21']]:[]);
+  if(disc.length && !disc.every(x=>x==='8')) out.push('14');               // Persona con discapacidad
+  if(!out.length) out.push('13');                                          // Ninguna
+  return out;
+}
+// Auto-relleno seguro: código oficial "Ninguno/No aplica/NO" para requeridos que quedaron vacíos (VERIFICADO por campo).
+const PISIS_SAFE={
+  'T2.80':'7',  // fuentes de humo: No aplica
+  'T2.89':'7',  // animales ponzoñosos: No Aplica
+  'T2.116':'21',// situaciones de riesgo familiar: Ninguna
+  'T2.120':'4', // medidas enf. respiratorias: Ninguno
+  'T3.29':'16', // atenciones pendientes PYMS: Ninguno
+  'T3.30':'8',  // discapacidad: Sin discapacidad
+  'T3.41':'9'   // signos de desnutrición: No aplica
+};
+let _autofillLog=[];
+// Rellena en el arreglo posicional los requeridos vacíos que tengan default seguro; registra cuáles.
+function _autofillRow(reg, arr, consec){
+  const spec=_SPEC_LEN[reg]; if(!spec) return arr;
+  spec.forEach(([no,len,ty,req])=>{
+    if(req && (arr[no]===''||arr[no]==null)){
+      const s=PISIS_SAFE[reg+'.'+no];
+      if(s!=null){ arr[no]=s; _autofillLog.push({reg,fila:consec,campo:no}); }
+    }
+  });
+  return arr;
+}
+// Valida el archivo plano contra el anexo (longitud, tipo, requerido, códigos verificados). Devuelve lista de problemas.
+function validarPlano(){
+  const problemas=[];
+  const lines=buildFile();
+  const reFecha=/^\d{4}-\d{2}-\d{2}$/;
+  lines.forEach(raw=>{
+    const cells=raw.split('|');
+    const tipo=cells[0];
+    if(tipo==='1'){ if(cells.length!==6) problemas.push({reg:'T1',fila:1,campo:'—',msg:`Registro de control debe tener 6 campos, tiene ${cells.length}`}); return; }
+    const spec=tipo==='2'?_SPEC_LEN.T2:(tipo==='3'?_SPEC_LEN.T3:null);
+    if(!spec) return;
+    const rname=tipo==='2'?'T2':'T3';
+    const consec=cells[1]||'?';
+    if(cells.length!==spec.length){ problemas.push({reg:rname,fila:consec,campo:'estructura',msg:`Debe tener ${spec.length} campos, tiene ${cells.length}`}); }
+    spec.forEach(([no,len,ty,req])=>{
+      const v=cells[no]!=null?cells[no]:'';
+      if(req&&v===''){ problemas.push({reg:rname,fila:consec,campo:no,msg:`Campo ${no} requerido está vacío`}); return; }
+      if(v===''){ return; }
+      if(len&&v.length>len){ problemas.push({reg:rname,fila:consec,campo:no,msg:`Campo ${no} excede longitud (${v.length}>${len})`}); }
+      if(ty==='N'&&!/^\d+(,\d+)*$/.test(v)){ problemas.push({reg:rname,fila:consec,campo:no,msg:`Campo ${no} numérico con valor inválido: "${v}"`}); }
+      if(ty==='D'&&!/^\d+(\.\d+)?$/.test(v)){ problemas.push({reg:rname,fila:consec,campo:no,msg:`Campo ${no} decimal inválido: "${v}"`}); }
+      if(ty==='F'&&!reFecha.test(v)){ problemas.push({reg:rname,fila:consec,campo:no,msg:`Campo ${no} fecha debe ser AAAA-MM-DD: "${v}"`}); }
+      const cod=PISIS_CODES[rname+'.'+no];
+      if(cod){ const parts=v.split(','); parts.forEach(p=>{ if(!cod.includes(p)) problemas.push({reg:rname,fila:consec,campo:no,msg:`Campo ${no} código no oficial: "${p}"`}); }); }
+    });
+  });
+  return problemas;
+}
+
 function buildFile(){
   // Anexo Técnico v7 — Junio 2026 — T1: 6 campos, T2: 125 campos, T3: 119 campos
+  _autofillLog=[];
   const c=STATE.config;
   const fams=STATE.familias.filter(f=>!f.deleted_at && !f.d2?.['_draft']);
   const totalT2=fams.length;
@@ -6109,7 +6302,7 @@ function buildFile(){
   const lines=[];
   // ── T1: Registro de control (6 campos) ──
   const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
-  lines.push(['1',c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT2+totalT3)].join('|'));
+  lines.push(_rowLine(['1',c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT2+totalT3)]));
   // Mapa userId -> codigo_pisis para resolver por familia
   const _pisMap=Object.fromEntries((STATE.adminUsers||[]).map(u=>[u.id, u.codigo_pisis||'']));
   // Codigo_pisis del usuario logueado como fallback
@@ -6129,7 +6322,7 @@ function buildFile(){
       String(consec), // [1]  consecutivo
       d['2']||'',     // [2]  consentimiento
       d['3']||'',     // [3]  departamento
-      d['4']||'',     // [4]  subregion
+      String(c.subregion||'041').replace(/\D/g,'').slice(0,3),  // [4] subregión: 3 díg oficiales SISPRO (default 041 = Regional Occidente SR00254)
       d['5']||'',     // [5]  municipio
       d['6']||'',     // [6]  territorio
       d['7']||'',     // [7]  microterritorio
@@ -6156,16 +6349,16 @@ function buildFile(){
       d['22']||'',    // [28] N° ID responsable
       d['23']||'',    // [29] perfil visita
       d['25']||'',    // [30] fecha diligenciamiento
-      d['26']||'',    // [31] tipo vivienda
+      remapCod('tipoVivienda',d['26']),    // [31] tipo vivienda (remap app→oficial)
       arrVal(d['36']),// [32] escenarios riesgo accidente
       arrVal(d['40']),// [33] cerca de la vivienda hay (obsVivienda)
       d['v7_luzNat']||'',          // [34] ambientes con luz natural
       d['v7_ventNat']||'',         // [35] ambientes con ventilación natural
       arrVal(d['v7_elemsViv']),    // [36] elementos en vivienda
-      d['v7_alumbrado']||'',       // [37] alumbrado predominante
+      remapCod('alumbrado',d['v7_alumbrado']),  // [37] alumbrado predominante (remap)
       arrVal(d['37']),// [38] acceso a la vivienda (sitiosAcceso)
       d['41']||'',    // [39] otros accesos
-      d['32']||'',    // [40] material techo
+      remapCod('materialTecho',d['32']),    // [40] material techo (remap)
       d['v7_cocinaSepar']||'',     // [41] cocina separada
       d['v7_banoSepar']||'',       // [42] baño separado
       d['v7_dormSepar']||'',       // [43] dormitorios separados
@@ -6178,7 +6371,7 @@ function buildFile(){
       d['42']||'',    // [50] actividad económica
       '',             // [51] área trabajo independiente
       '',             // [52] familiar afectado
-      arrVal(d['46']),// [53] fuente agua consumo
+      arrVal(remapCod('fuenteAgua',d['46'])),// [53] fuente agua consumo (remap)
       d['v7_horasAgua']||'',       // [54] horas suministro agua
       d['v7_tanque']||'',          // [55] tanque almacenamiento
       d['v7_limpTanque']||'',      // [56] frecuencia limpieza tanque
@@ -6240,7 +6433,7 @@ function buildFile(){
       d['54']||'',    // [112] tipo familia
       d['57']||'',    // [113] APGAR familiar
       d['58']||'',    // [114] cuidador principal
-      d['59']||'',    // [115] escala ZARIT
+      remapCod('zaritScore',d['59']),    // [115] escala ZARIT (categoría→puntaje 0-100)
       arrVal(d['v7_sitRiesgo']),   // [116] familia con situaciones riesgo
       arrVal(d['v7_vincFam']),     // [117] prácticas vínculos familiares
       arrVal(d['v7_redesApoyo']),  // [118] redes de apoyo social
@@ -6251,7 +6444,7 @@ function buildFile(){
       numViv,         // [123] N° identificación vivienda
       numFam          // [124] N° identificación familia
     ];
-    lines.push(t2.join('|'));
+    lines.push(_rowLine(_autofillRow('T2',t2,consec)));
     // ── T3: Registro de caracterización de integrantes (119 campos) ──
     (fam.personas||[]).filter(per=>!per.d3?.['_draft']).forEach(per=>{
       consec++;
@@ -6283,20 +6476,20 @@ function buildFile(){
         pd['t3_orientacion']||'',     // [14]  orientación sexual
         pd['_tel']||'',               // [15]  teléfono principal
         pd['t3_tel2']||'',            // [16]  teléfono secundario
-        pd['12']||'',                 // [17]  rol dentro de la familia
+        remapCod('rolFamilia',pd['12']), // [17]  rol dentro de la familia (remap)
         pd['13']||'',                 // [18]  ocupación (código CIUO)
-        pd['14']||'',                 // [19]  nivel educativo
-        pd['15']||'',                 // [20]  régimen de afiliación
+        remapCod('nivelEducativo',pd['14']), // [19]  nivel educativo (remap)
+        remapCod('regimen',pd['15']), // [20]  régimen de afiliación (remap)
         pd['16']||'',                 // [21]  EAPB
-        arrVal(pd['17']),             // [22]  sujeto de protección constitucional
+        arrVal(deriveGrupoPob(pd,d)),  // [22] sujeto de protección constitucional (DERIVADO de edad/gestación/discapacidad/orientación/migración/víctima)
         '',                           // [23]  modalidad violencia (no capturado)
-        pd['18']||'',                 // [24]  pertenencia étnica
+        remapCod('etnia',pd['18']),   // [24]  pertenencia étnica (remap)
         pd['20']||'',                 // [25]  pueblo/comunidad étnica
         '7',                          // [26]  practicas saberes ancestrales (Ninguna)
         '6',                          // [27]  practicas derecho salud (Ninguna)
         '9',                          // [28]  practicas cuidado salud (Ninguna)
-        pd['28']||'',                 // [29]  atenciones pendientes promoción
-        arrVal(pd['21']),             // [30]  condición de discapacidad
+        arrVal(remapCod('intervenciones', Array.isArray(pd['28'])?pd['28']:String(pd['28']||'').split(',').filter(Boolean))), // [29] atenciones pendientes promoción (remap)
+        arrVal(remapCod('discapacidad',pd['21'])),  // [30]  condición de discapacidad (remap)
         arrVal(pd['21']).includes('8')?'3':'2', // [31]  RLCPD (No aplica si sin discapacidad)
         '2',                          // [32]  intencion reproductiva (NO, default)
         pd['11']||'',                 // [33]  gestación actual confirmada
@@ -6307,8 +6500,8 @@ function buildFile(){
         pd['23']||'',                 // [38]  talla (cm)
         _imc,                         // [39]  IMC calculado de peso/talla
         pd['v7_circCintura']||'',     // [40]  circunferencia cintura (cm)
-        pd['33']||'',                 // [41]  signos desnutrición aguda
-        pd['24']||'',                 // [42]  clasificación nutricional P/T o IMC
+        arrVal(remapCod('signosDesnutricion', Array.isArray(pd['33'])?pd['33']:String(pd['33']||'').split(',').filter(Boolean))), // [41]  signos desnutrición (signo→región)
+        remapCod('pesoTalla',pd['24']), // [42]  clasificación nutricional P/T o IMC (remap)
         '1',                          // [43]  se lava manos (SI, default)
         pd['v7_taSist']||'',          // [44]  TA sistólica (mmHg)
         pd['v7_taDiast']||'',         // [45]  TA diastólica (mmHg)
@@ -6386,7 +6579,7 @@ function buildFile(){
         numFam,                       // [117] N° identificación familia (T2[124])
         numIdInt                      // [118] N° identificación único integrante
       ];
-      lines.push(t3.join('|'));
+      lines.push(_rowLine(_autofillRow('T3',t3,consec)));
     });
   });
   return lines;
@@ -6668,12 +6861,9 @@ function renderComplV7(){
 function downloadFile(){
   try{
     const lines=buildFile();
-    const content=lines.join('\n');
-    const c=STATE.config;
-    const fechaC=(c.fechaFin||'').replace(/-/g,'');
-    const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
-    const fileName=`APS124CCFP${fechaC}${c.tipoEntidad}${nitPad}.TXT`;
-    const blob=new Blob([content],{type:'text/plain;charset=utf-8'});
+    const content=lines.join('\r\n');            // ENTER (CRLF) como fin de registro; sin salto al final
+    const fileName=pisisFileName();
+    const blob=new Blob([_ansiBytes(content)],{type:'text/plain'}); // ANSI (Windows-1252), regla (b)
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url;a.download=fileName;
@@ -7806,7 +7996,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.1</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.2</div>
   </div>
 </div>
 
@@ -8413,7 +8603,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.1</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.2</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
