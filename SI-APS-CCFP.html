@@ -1751,7 +1751,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.3</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.4</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6082,6 +6082,8 @@ function renderExport(){
   </div>`;}
 
 function arrVal(v){if(!v||!Array.isArray(v))return v||'';return v.join(',');}
+// Primer valor de una respuesta múltiple, para campos que el anexo define de ÚNICA opción (longitud 1)
+function _primer(v){ if(Array.isArray(v)) return v[0]||''; return String(v||'').split(',')[0]||''; }
 
 function mostrarValidacion(){
   const cont=document.getElementById('valida-result'); if(!cont) return;
@@ -6134,7 +6136,7 @@ function descargarValidacion(){
     (_autofillLog||[]).forEach(a=>rows.push(['Auto-relleno', a.reg, a.fila, a.campo, nom(a.reg,a.campo), 'Requerido vacío: se exportó el código "Ninguno/No aplica" oficial ('+(PISIS_SAFE[a.reg+'.'+a.campo]||'')+') — revisar si aplica']));
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v3.3 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v3.4 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6318,7 +6320,9 @@ const TERRIT_COORD={
   '001':['8.0924432','-73.2765576'],'002':['8.2130756','-73.0446044'],'003':['8.0793790','-73.2185957'],'004':['8.1407016','-73.1061291'],
   '005':['8.7982300','-73.2270900'],'006':['8.7442900','-73.1910400'],'007':['8.7442800','-73.1910400'],'008':['8.5673305','-73.3259554'],'009':['8.4859378','-73.3512589'],
   '010':['8.8902109','-73.2988764'],'011':['8.5658604','-73.4655029'],'012':['8.7152600','-73.3424505'],'013':['8.4479590','-73.4305624'],
-  '014':['8.6041326','-73.2296107'],'015':['8.6109131','-73.1902358'],'016':['8.6097323','-73.1802644'],'017':['8.5522511','-73.2369693']
+  '014':['8.6041326','-73.2296107'],'015':['8.6109131','-73.1902358'],'016':['8.6097323','-73.1802644'],'017':['8.5522511','-73.2369693'],
+  // Jóvenes en Paz (aprox. por municipio): 090 Ábrego, 091 El Carmen, 092 Convención
+  '090':['8.0924432','-73.2765576'],'091':['8.8902109','-73.2988764'],'092':['8.7982300','-73.2270900']
 };
 function _fmtCoord(v){ return String(v||'').slice(0,10); }   // máx 10 caracteres (campo 12/13)
 // Número de EBS (001..017) de una familia, para resolver coordenadas por defecto
@@ -6335,6 +6339,22 @@ function _noAplicaSet(reg, cells){
     if(anim.length===0) [93,94,95,96,97,98,99,100,101,102,103].forEach(n=>s.add(n));
     // Tanque de agua: si no tiene tanque (campo 55 vacío o '4' No tiene) → frecuencia/distancia no aplican
     if(val(55)===''||val(55)==='4'){ s.add(56); s.add(57); }
+    // Actividad económica (50=NO) → área independiente y familiar afectado no aplican
+    if(val(50)!=='1'){ s.add(51); s.add(52); }
+    // Prácticas de reducción de residuos (64=NO) → cómo reduce / otros no aplican
+    if(val(64)!=='1'){ s.add(65); s.add(66); }
+    // Prácticas de aprovechamiento (67=NO) → qué otras no aplican
+    if(val(67)!=='1'){ s.add(68); }
+    // Procesos de reducción/separación rurales (71=NO) → prácticas rurales no aplican
+    if(val(71)!=='1'){ s.add(72); s.add(73); s.add(74); s.add(75); }
+    // Cuidador principal (114=NO) → escala ZARIT no aplica
+    if(val(114)!=='1'){ s.add(115); }
+    // Animales ponzoñosos (89 vacío o '7' No aplica) → medidas de protección no aplican
+    if(val(89)===''||val(89)==='7'){ s.add(90); s.add(91); }
+    // Vectores transmisores (85 sin registro) → medidas de control de vectores no aplican
+    if(val(85)===''){ s.add(86); s.add(87); s.add(88); }
+    // Estufa/humo: si no usa combustible con humo (campo 80 vacío o '7' No aplica) → tipo de estufa no aplica
+    if(val(80)===''||val(80)==='7'){ s.add(83); }
   } else if(reg==='T3'){
     const fn=val(8);
     const edad = fn ? Math.floor((Date.now()-new Date(fn).getTime())/31557600000) : null;
@@ -6451,7 +6471,7 @@ function buildFile(){
       d['v7_ventNat']||'',         // [35] ambientes con ventilación natural
       arrVal(d['v7_elemsViv']),    // [36] elementos en vivienda
       remapCod('alumbrado',d['v7_alumbrado']),  // [37] alumbrado predominante (remap)
-      arrVal(d['37']),// [38] acceso a la vivienda (sitiosAcceso)
+      _primer(d['37']),// [38] acceso a la vivienda (única opción, len 1)
       d['41']||'',    // [39] otros accesos
       remapCod('materialTecho',d['32']),    // [40] material techo (remap)
       d['v7_cocinaSepar']||'',     // [41] cocina separada
@@ -6516,7 +6536,7 @@ function buildFile(){
       d['v7_instalSeg']||'',       // [100] instalaciones seguras animales
       d['v7_excretasAnim']||'',    // [101] excretas animales
       d['v7_barrerasAnim']||'',    // [102] barreras contacto animales
-      arrVal(d['v7_medVectAnim']), // [103] medidas vectores animales
+      _primer(d['v7_medVectAnim']), // [103] medidas vectores animales (única opción, len 1)
       '',             // [104] lugar adquiere químicos
       '',             // [105] disposición residuos químicos
       '',             // [106] otras prácticas químicos
@@ -6533,7 +6553,7 @@ function buildFile(){
       arrVal(d['v7_vincFam']),     // [117] prácticas vínculos familiares
       arrVal(d['v7_redesApoyo']),  // [118] redes de apoyo social
       arrVal(d['v7_cuidadoSalud']),// [119] prácticas cuidado salud hogar
-      arrVal(d['v7_medResp']),     // [120] medidas enfermedades respiratorias
+      _primer(d['v7_medResp']),     // [120] medidas enfermedades respiratorias (única opción, len 1)
       '',                          // [121] otras medidas respiratorias
       d['v7_higieneComp']||'',     // [122] higiene personal compartida
       numViv,         // [123] N° identificación vivienda
@@ -8091,7 +8111,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.3</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.4</div>
   </div>
 </div>
 
@@ -8698,7 +8718,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.3</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.4</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
