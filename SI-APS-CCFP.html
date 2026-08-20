@@ -1759,7 +1759,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.7</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.8</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6167,7 +6167,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v3.7 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v3.8 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6426,10 +6426,17 @@ const PISIS_SAFE={
   'T3.30':'8',   // discapacidad: Sin discapacidad
   'T3.41':'9',   // signos de desnutrición: No aplica
   'T3.46':'6',   // clasificación TA: No aplica
+  'T2.38':'5',   // acceso a la vivienda: Ninguna
+  'T2.92':'13',  // animales que conviven: Ninguno
+  'T3.9':'170',  // país de origen: Colombia (código DIVIPOLA)
+  'T3.10':'3',   // estatus migratorio: No aplica
+  'T3.17':'6',   // rol dentro de la familia: Otros
+  'T3.20':'5',   // régimen de afiliación: No afiliado
   // ── Texto requerido → marcador (sin dato real) ──
-  'T2.11':'NO REGISTRA','T2.14':'NO REGISTRA','T2.29':'NO REGISTRA','T2.111':'NO REGISTRA',
-  // ── Conteos numéricos → 0 ──
-  'T2.93':'0','T2.94':'0','T2.95':'0','T2.96':'0'
+  'T2.11':'NO REGISTRA','T2.14':'NO REGISTRA','T2.29':'NO REGISTRA','T2.111':'NO REGISTRA','T2.28':'NO REGISTRA',
+  // ── Conteos numéricos → 0 / 1 ──
+  'T2.93':'0','T2.94':'0','T2.95':'0','T2.96':'0','T2.110':'0',
+  'T2.17':'1','T2.18':'1','T2.19':'1'
 };
 // Defaults CONVENCIONALES (valor asumido, NO neutro) para campos requeridos sin opción "Ninguno/No aplica".
 // Se usan por decisión del usuario para poder cargar; se reportan como "asumido" en el informe. NO incluye medidas clínicas.
@@ -6454,9 +6461,22 @@ const PISIS_CONV={
   'T2.105':'1', // disposición químicos: Se separan
   'T2.117':'1', // vínculos familiares: primera práctica
   'T2.119':'1', // prácticas cuidado salud: Tratamiento casero al agua
-  'T3.42':'4',  // clasificación nutricional: Peso adecuado
-  'T3.48':'19'  // enfermedades último mes: Otra (no hay "Ninguna" oficial)
+  'T2.16':'1',  // estrato socioeconómico: Bajo-bajo (contexto rural)
+  'T2.57':'1',  // distancia tanque–fuente contaminación: más de 10 metros (mejor caso)
+  'T2.40':'1',  // material predominante techo: primer código
+  'T2.53':'3',  // fuente principal de agua: acueducto veredal/comunitario
+  'T2.58':'3',  // disposición de excretas: sanitario a pozo séptico
+  'T2.59':'2',  // disposición aguas residuales: pozo séptico
+  'T2.62':'2',  // disposición residuos sólidos: enterramiento
+  'T2.78':'1',  // fuente energía cocinar: electricidad
+  'T2.83':'1',  // tipo de estufa: conexiones en buen estado, sin riesgo
+  'T2.91':'2',  // medidas ante animales ponzoñosos: sacudir ropa y zapatos
+  'T2.115':'40',// escala ZARIT: ausencia de sobrecarga
+  'T3.35':'4',  // motivo no atención: servicio de salud lejos (barrera rural)
+  'T3.42':'4'   // clasificación nutricional: Peso adecuado
 };
+// NOTA: T3.48 (enfermedades último mes) ya NO se asume — el campo carece de código "Ninguna",
+// por lo que se deja vacío y se marca como No aplica cuando no se registró enfermedad (ver _noAplicaSet).
 // Coordenadas predeterminadas por EBS (centro del territorio) para geopunto faltante. [latitud, longitud]
 const TERRIT_COORD={
   '001':['8.0924432','-73.2765576'],'002':['8.2130756','-73.0446044'],'003':['8.0793790','-73.2185957'],'004':['8.1407016','-73.1061291'],
@@ -6502,7 +6522,7 @@ function _noAplicaSet(reg, cells){
     const edad = fn ? Math.floor((Date.now()-new Date(fn).getTime())/31557600000) : null;
     if(edad!=null && edad<18) [40,44,45,46].forEach(n=>s.add(n)); // circunferencia y tensión arterial: solo ≥18
     if(edad!=null && edad<=5) s.add(39);   // IMC: solo mayores de 5 años (en ≤5 aplica peso-para-talla)
-    if(val(48)==='') s.add(50);   // "qué hizo ante afección": solo si reportó enfermedad (campo 48)
+    if(val(48)===''){ s.add(48); s.add(50); }  // bloque enfermedad: 48 (no tiene código "Ninguna") y 50 no aplican si no se registró enfermedad
     if(val(29)==='16'){ s.add(35); }  // sin atenciones pendientes (29=Ninguno) → motivo de no atención no aplica
   }
   return s;
@@ -6598,7 +6618,7 @@ function buildFile(){
       (d['86']||'').replace(/^0+/,'')||d['86']||'',  // [17] N hogares vivienda (sin ceros)
       d['87']||'',    // [18] N° personas en vivienda
       d['34']||'',    // [19] N° habitaciones
-      (d['87']&&d['34'])?String(Math.max(1,Math.round(parseFloat(d['87'])/parseFloat(d['34'])))):''  ,// [20] personas/habitacion (calculado)
+      (parseFloat(d['87'])>0&&parseFloat(d['34'])>0)?String(Math.min(999,Math.max(1,Math.round(parseFloat(d['87'])/parseFloat(d['34']))))):''  ,// [20] personas/habitacion (calculado, sin div/0, máx 3 díg)
       d['35']||'',    // [21] hacinamiento
       d['v7_dormir']||'',          // [22] elementos para dormir
       '4',                         // [23] tipo situacion (No aplica)
@@ -6614,7 +6634,7 @@ function buildFile(){
       arrVal(d['40']),// [33] cerca de la vivienda hay (obsVivienda)
       d['v7_luzNat']||'',          // [34] ambientes con luz natural
       d['v7_ventNat']||'',         // [35] ambientes con ventilación natural
-      arrVal(d['v7_elemsViv']),    // [36] elementos en vivienda
+      _primer(d['v7_elemsViv']),   // [36] elementos en vivienda (única opción, N len 5)
       remapCod('alumbrado',d['v7_alumbrado']),  // [37] alumbrado predominante (remap)
       _primer(d['37']),// [38] acceso a la vivienda (única opción, len 1)
       d['41']||'',    // [39] otros accesos
@@ -6716,8 +6736,13 @@ function buildFile(){
       const _edadA=_fnac?Math.floor(_edadMs/31557600000):99;
       const _may14=_edadA>=14,_may18=_edadA>=18,_men5=_edadA<5;
       const _men6m=_edadA===0&&_fnac&&_edadMs<15778800000;
-      const _peso=parseFloat(pd['22']||0),_talla=parseFloat(pd['23']||0);
-      const _imc=(_edadA>5&&_peso>0&&_talla>0)?(_peso/((_talla/100)**2)).toFixed(1):'';
+      let _peso=parseFloat(pd['22']||0),_talla=parseFloat(pd['23']||0);
+      if(_talla>0&&_talla<3) _talla*=100;   // talla capturada en metros → convertir a cm
+      const _tallaOut = _talla>0 ? String(_talla.toFixed(1)) : (pd['23']||'');   // 1 decimal, ≤5 chars (campo D len 5)
+      const _pesoOut  = _peso>0  ? String(_peso.toFixed(1))  : (pd['22']||'');   // 1 decimal, ≤5 chars (campo D len 5)
+      let _imc='';   // campo 39: D len 4 → sólo valores plausibles (5–99.9)
+      if(_edadA>5&&_peso>0&&_talla>0){ const _v=_peso/((_talla/100)**2); if(_v>=5&&_v<=99.9) _imc=_v.toFixed(1); }
+      const _cintOut=(()=>{ const _c=parseFloat(pd['v7_circCintura']||''); return (isFinite(_c)&&_c>0)?String(Math.round(_c)):''; })();  // circunferencia cintura: entero, N len 3
       const t3=[
         '3',                          // [0]   tipo registro
         String(consec),               // [1]   consecutivo
@@ -6734,8 +6759,8 @@ function buildFile(){
         pd['t3_genero']||'',          // [12]  género
         pd['t3_identidad']||'',       // [13]  género con que se identifica
         pd['t3_orientacion']||'',     // [14]  orientación sexual
-        pd['_tel']||'',               // [15]  teléfono principal
-        pd['t3_tel2']||'',            // [16]  teléfono secundario
+        String(pd['_tel']||'').replace(/\D/g,'').slice(0,20),      // [15]  teléfono principal (sólo dígitos)
+        String(pd['t3_tel2']||'').replace(/\D/g,'').slice(0,20),   // [16]  teléfono secundario (sólo dígitos)
         remapCod('rolFamilia',pd['12']), // [17]  rol dentro de la familia (remap)
         pd['13']||'',                 // [18]  ocupación (código CIUO)
         remapCod('nivelEducativo',pd['14']), // [19]  nivel educativo (remap)
@@ -6756,10 +6781,10 @@ function buildFile(){
         '9',                          // [34]  atenciones ruta materno (No aplica, default)
         pd['29']||'',                 // [35]  motivo no recibió atenciones
         pd['31']||'',                 // [36]  lactancia exclusiva <6 meses
-        pd['22']||'',                 // [37]  peso (kg)
-        pd['23']||'',                 // [38]  talla (cm)
-        _imc,                         // [39]  IMC calculado de peso/talla
-        pd['v7_circCintura']||'',     // [40]  circunferencia cintura (cm)
+        _pesoOut,                     // [37]  peso (kg) — 1 decimal
+        _tallaOut,                    // [38]  talla (cm) — 1 decimal, normalizada metros→cm
+        _imc,                         // [39]  IMC calculado de peso/talla (plausible ≤4 chars)
+        _cintOut,                     // [40]  circunferencia cintura (cm) — entero
         arrVal(remapCod('signosDesnutricion', Array.isArray(pd['33'])?pd['33']:String(pd['33']||'').split(',').filter(Boolean))), // [41]  signos desnutrición (signo→región)
         remapCod('pesoTalla',pd['24']), // [42]  clasificación nutricional P/T o IMC (remap)
         '1',                          // [43]  se lava manos (SI, default)
@@ -8256,7 +8281,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.7</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.8</div>
   </div>
 </div>
 
@@ -8863,7 +8888,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.7</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.8</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
