@@ -1759,7 +1759,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.1</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.2</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6169,7 +6169,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.1 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.2 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6535,12 +6535,20 @@ function _noAplicaSet(reg, cells){
   }
   return s;
 }
+// Una celda está "vacía" si es null/undefined, cadena vacía/espacios, o un array vacío.
+// (Un array vacío proviene de campos multi-select sin selección: _normCell lo vuelve '' al exportar,
+//  pero el chequeo ===''  fallaba y dejaba el requerido sin auto-rellenar → error "requerido vacío".)
+function _celdaVacia(v){
+  if(v==null) return true;
+  if(Array.isArray(v)) return v.filter(x=>String(x).trim()!=='').length===0;
+  return String(v).trim()==='';
+}
 // Rellena en el arreglo posicional los requeridos vacíos que tengan default seguro; omite los que no aplican; registra cuáles.
 function _autofillRow(reg, arr, consec){
   const spec=_SPEC_LEN[reg]; if(!spec) return arr;
   const na=_noAplicaSet(reg, arr);
   spec.forEach(([no,len,ty,req])=>{
-    if(req && !na.has(no) && (arr[no]===''||arr[no]==null)){
+    if(req && !na.has(no) && _celdaVacia(arr[no])){
       const key=reg+'.'+no;
       if(PISIS_SAFE[key]!=null){ arr[no]=PISIS_SAFE[key]; _autofillLog.push({reg,fila:consec,campo:no,tipo:'safe'}); }
       else if(PISIS_CONV[key]!=null){ arr[no]=PISIS_CONV[key]; _autofillLog.push({reg,fila:consec,campo:no,tipo:'conv'}); }
@@ -8291,7 +8299,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.1</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.2</div>
   </div>
 </div>
 
@@ -8898,7 +8906,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.1</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.2</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
