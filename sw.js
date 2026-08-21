@@ -1,5 +1,5 @@
-/* Service Worker — SI-APS CCFP v4.0 — Anexo Técnico v7 Junio 2026 */
-const CACHE = 'siaps-ccfp-v52';
+/* Service Worker — SI-APS CCFP v4.1 — Anexo Técnico v7 Junio 2026 */
+const CACHE = 'siaps-ccfp-v53';
 const ASSETS = [
   './SI-APS-CCFP.html',
   './manifest.json',

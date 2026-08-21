@@ -1759,7 +1759,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.0</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.1</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6169,7 +6169,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.0 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.1 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6378,8 +6378,8 @@ const PISIS_REMAP={
   zaritScore:    {'1':'40','2':'51','3':'65'}, // 1 Ausencia(≤46)→40, 2 Ligera(47-55)→51, 3 Intensa(≥56)→65
   // Clasificación TA (T3.46): la app la tiene invertida vs oficial (app 1=Normal; oficial 5=Normal, 1=Crisis).
   clasifTA:      {'1':'5','2':'4','3':'3','4':'2','5':'1'}, // app Normal→5, Elevada→4, HTA1→3, HTA2→2, Crisis→1
-  // intervenciones: 1-17 y 25 idénticos; app 18(preconcep)→26, app 26(Ninguna)→18 Ninguno; 19-24 (maternas) pertenecen al campo oficial 34 → se omiten aquí
-  intervenciones:{'1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','10':'10','11':'11','12':'12','13':'13','14':'14','15':'15','16':'16','17':'17','18':'26','25':'25','26':'18'}
+  // intervenciones: 1-17 y 25 idénticos; app 18(preconcep)→23 (oficial preconcepcional); app 26(Ninguna)→16 (oficial Ninguno); 19-24 (maternas) pertenecen al campo oficial 34 → se omiten aquí
+  intervenciones:{'1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','10':'10','11':'11','12':'12','13':'13','14':'14','15':'15','16':'16','17':'17','18':'23','25':'25','26':'16'}
 };
 // Traduce un valor (o arreglo) al código oficial. Devuelve '' si el código-app no tiene mapeo (para que el validador lo marque).
 function remapCod(tabla, val){
@@ -8291,7 +8291,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.0</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.1</div>
   </div>
 </div>
 
@@ -8898,7 +8898,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.0</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.1</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
