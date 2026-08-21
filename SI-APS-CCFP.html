@@ -1759,7 +1759,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v3.9</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.0</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -1946,20 +1946,22 @@ function limpiarFiltros() {
 }
 
 // Detecta si una persona tiene campos v7 requeridos vacíos
+// "Incompleto" = SOLO datos irrecuperables: lo que ni el auto-derivado, ni los defaults de
+// exportación (PISIS_SAFE/PISIS_CONV), ni el simulador de medidas pueden resolver.
+// El resto de campos v7 (país, migración, género, enfermedades, hogar, medidas clínicas) se
+// completa automáticamente al exportar y NO cuenta como incompleto.
 function hasIncompleteV7(pd) {
   if (!pd || pd['_draft']) return false;
-  // Campos auto-completables v7
-  if (!pd['t3_pais'] || !pd['t3_mig'] || !pd['t3_genero'] || !pd['t3_identidad'] || !pd['t3_orientacion']) return true;
-  // Campos complemento v7 (clínicos y de salud)
-  if (!pd['v7_enfMes'] || !pd['v7_enfMes'].length) return true;
-  // v7_accionAfec solo es obligatorio si hubo alguna enfermedad (no "Ninguna")
-  const tieneEnf=(pd['v7_enfMes']||[]).some(v=>v!=='9'&&v);
-  if (tieneEnf && !pd['v7_accionAfec']) return true;
+  // Sin fecha de nacimiento: no se puede derivar edad/grupo poblacional ni simular medidas → edad asume adulto y exige TA/cintura/IMC sin poder generarlos.
+  if (!pd['9']) return true;
+  // Sin sexo al nacer: el simulador antropométrico no puede generar peso/talla/TA y no se deriva el género.
+  if (!pd['10']) return true;
   return false;
 }
 function hasFamIncompleteV7(d) {
   if (!d) return false;
-  return !d['v7_dormir'] || !d['v7_alumbrado'] || !d['v7_transporte'] || !d['v7_horasAgua'] || !d['v7_sitRiesgo'];
+  // Sin municipio: dato geográfico base, sin default posible; rompe todo el registro.
+  return !d['5'];
 }
 
 // Auto-rellena campos v7 derivables en todos los registros (solo vacíos)
@@ -6167,7 +6169,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v3.9 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.0 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -8289,7 +8291,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v3.9</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.0</div>
   </div>
 </div>
 
@@ -8896,7 +8898,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v3.9</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.0</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
