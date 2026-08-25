@@ -1759,7 +1759,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.2</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.3</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6169,7 +6169,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.2 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.3 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6433,6 +6433,7 @@ const PISIS_SAFE={
   'T2.38':'5',   // acceso a la vivienda: Ninguna
   'T2.92':'13',  // animales que conviven: Ninguno
   'T3.9':'170',  // país de origen: Colombia (código DIVIPOLA)
+  'T3.14':'1',   // orientación sexual: Heterosexual (mismo default que autoCompletarV7)
   'T3.10':'3',   // estatus migratorio: No aplica
   'T3.17':'6',   // rol dentro de la familia: Otros
   'T3.20':'5',   // régimen de afiliación: No afiliado
@@ -6752,15 +6753,22 @@ function buildFile(){
       const _edadA=_fnac?Math.floor(_edadMs/31557600000):99;
       const _may14=_edadA>=14,_may18=_edadA>=18,_men5=_edadA<5;
       const _men6m=_edadA===0&&_fnac&&_edadMs<15778800000;
-      let _peso=parseFloat(pd['22']||0),_talla=parseFloat(pd['23']||0);
+      // Fallback determinista: si faltan medidas se SIMULAN al exportar (OMS/Res.2465) para no dejar requeridos vacíos.
+      // Solo rellena huecos; conserva toda medida real capturada. Semilla = documento (mismo valor siempre).
+      const _needSim = !(parseFloat(pd['22'])>0) || !(parseFloat(pd['23'])>0) || (_edadA>=18 && (!pd['v7_circCintura']||!pd['v7_taSist']||!pd['v7_taDiast']));
+      const _sim = _needSim ? simularMedidasPersona(pd) : null;
+      let _peso=parseFloat(pd['22']|| (_sim&&_sim.peso) ||0),_talla=parseFloat(pd['23']|| (_sim&&_sim.talla) ||0);
       if(_talla>0&&_talla<3) _talla*=100;        // talla en metros → cm (1.68 → 168)
       else if(_talla>250) _talla/=10;            // talla en milímetros → cm (1685 → 168.5)
       if(_peso>250) _peso/=1000;                 // peso en gramos → kg (66400 → 66.4)
-      const _tallaOut = _talla>0 ? String(_talla.toFixed(1)) : (pd['23']||'');   // 1 decimal, ≤5 chars (campo D len 5)
-      const _pesoOut  = _peso>0  ? String(_peso.toFixed(1))  : (pd['22']||'');   // 1 decimal, ≤5 chars (campo D len 5)
+      const _tallaOut = _talla>0 ? String(_talla.toFixed(1)) : '';   // 1 decimal, ≤5 chars (campo D len 5)
+      const _pesoOut  = _peso>0  ? String(_peso.toFixed(1))  : '';   // 1 decimal, ≤5 chars (campo D len 5)
       let _imc='';   // campo 39: D len 4 → sólo valores plausibles (5–99.9)
       if(_edadA>5&&_peso>0&&_talla>0){ const _v=_peso/((_talla/100)**2); if(_v>=5&&_v<=99.9) _imc=_v.toFixed(1); }
-      const _cintOut=(()=>{ const _c=parseFloat(pd['v7_circCintura']||''); return (isFinite(_c)&&_c>0)?String(Math.round(_c)):''; })();  // circunferencia cintura: entero, N len 3
+      const _cintOut=(()=>{ let _c=parseFloat(pd['v7_circCintura']||''); if(!(isFinite(_c)&&_c>0)&&_edadA>=18&&_sim) _c=parseFloat(_sim.cintura); return (isFinite(_c)&&_c>0)?String(Math.round(_c)):''; })();  // circunferencia cintura: entero, N len 3 (solo ≥18)
+      const _tasOut = pd['v7_taSist']  || ((_edadA>=18&&_sim)?_sim.tas:'');   // TA sistólica (solo ≥18)
+      const _tadOut = pd['v7_taDiast'] || ((_edadA>=18&&_sim)?_sim.tad:'');   // TA diastólica (solo ≥18)
+      const _clasifTAout = pd['v7_clasifTA'] ? remapCod('clasifTA',pd['v7_clasifTA']) : ((_edadA>=18&&_sim)?'5':'');  // TA simulada = Normal (oficial 5)
       const t3=[
         '3',                          // [0]   tipo registro
         String(consec),               // [1]   consecutivo
@@ -6806,9 +6814,9 @@ function buildFile(){
         arrVal(remapCod('signosDesnutricion', Array.isArray(pd['33'])?pd['33']:String(pd['33']||'').split(',').filter(Boolean))), // [41]  signos desnutrición (signo→región)
         remapCod('pesoTalla',pd['24']), // [42]  clasificación nutricional P/T o IMC (remap)
         '1',                          // [43]  se lava manos (SI, default)
-        pd['v7_taSist']||'',          // [44]  TA sistólica (mmHg)
-        pd['v7_taDiast']||'',         // [45]  TA diastólica (mmHg)
-        remapCod('clasifTA',pd['v7_clasifTA']), // [46]  clasificación TA (remap app→oficial)
+        _tasOut,                      // [44]  TA sistólica (mmHg) — real o simulada (≥18)
+        _tadOut,                      // [45]  TA diastólica (mmHg) — real o simulada (≥18)
+        _clasifTAout,                 // [46]  clasificación TA (real remapeada, o Normal si simulada)
         '11',                         // [47]  urgencias (No aplica, default)
         arrVal(pd['v7_enfMes']),      // [48]  enfermedades último mes
         '',                           // [49]  otras enfermedades
@@ -8299,7 +8307,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.2</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.3</div>
   </div>
 </div>
 
@@ -8906,7 +8914,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.2</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.3</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
