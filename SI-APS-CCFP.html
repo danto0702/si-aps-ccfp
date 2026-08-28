@@ -885,6 +885,7 @@ function flagSessionExpired() {
 async function doLogout() {
   try { await sbFetch('/auth/v1/logout',{method:'POST'}); } catch(e){}
   STATE.auth = null; STATE.profile = null; STATE.familias = [];
+  _lastSyncTs = 0; localStorage.removeItem('lastSyncTs');
   await idb.clear('auth');
   render();
 }
@@ -1002,6 +1003,7 @@ const idb = {
 // SYNC MANAGER
 // ============================================================
 let _syncing = false;
+const _ghostFamIds = new Set(); // IDs de familias activas en IDB pero ausentes en el último pull del servidor
 
 async function addPending(op, table, data) {
   await idb.put('sync_pending', {op, table, data, ts: Date.now()});
@@ -1010,8 +1012,10 @@ async function addPending(op, table, data) {
 
 async function syncToCloud(manual=false) {
   if (_syncing || !STATE.isOnline || !STATE.auth) {
-    if (manual && !STATE.isOnline) {
-      toast('Sin conexión a internet. Los datos se guardarán localmente y se sincronizarán al recuperar señal.','warn');
+    if (manual) {
+      if (!STATE.auth) toast('Tu sesión ha expirado. Cierra sesión y vuelve a iniciar sesión para sincronizar.','warn');
+      else if (!STATE.isOnline) toast('Sin conexión a internet. Los datos se guardarán localmente y se sincronizarán al recuperar señal.','warn');
+      else if (_syncing) toast('Sincronización en curso, por favor espera unos segundos…','info');
     }
     return;
   }
@@ -1044,6 +1048,7 @@ async function syncToCloud(manual=false) {
       toast('✅ Sincronización completa — '+parts.join(' · '),'ok');
     }
     _lastSyncTs = Date.now();
+    localStorage.setItem('lastSyncTs', String(_lastSyncTs));
     _updateSyncTimestamp();
   } catch(e){
     setSyncDot('online');
@@ -1055,10 +1060,11 @@ async function syncToCloud(manual=false) {
   }
 }
 
-let _lastSyncTs = 0;
+let _lastSyncTs = parseInt(localStorage.getItem('lastSyncTs')||'0');
 function _updateSyncTimestamp() {
   const el = document.getElementById('last-sync-label');
-  if (!el || !_lastSyncTs) return;
+  if (!el) return;
+  if (!_lastSyncTs) { el.textContent = 'Nunca (presiona el botón)'; return; }
   const diff = Math.round((Date.now()-_lastSyncTs)/1000);
   el.textContent = diff < 60 ? 'Hace menos de 1 min' :
     diff < 3600 ? `Hace ${Math.floor(diff/60)} min` :
@@ -1116,6 +1122,7 @@ async function pullFromCloud() {
   const _famRpc = isAdminNow ? 'get_all_familias' : 'get_my_familias';
   try {
     const fams = await sbFetch(`/rest/v1/rpc/${_famRpc}`, {method:'POST', body:'{}'});
+    const serverFamIds = new Set((fams||[]).map(f=>f.id));
     for (const f of (fams||[])) {
       const existing = await idb.get('familias', f.id);
       // El servidor es autoritativo: los RPCs solo devuelven deleted_at IS NULL,
@@ -1124,6 +1131,23 @@ async function pullFromCloud() {
       const record = {...f};
       if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
       await idb.put('familias', record);
+    }
+    // Registros fantasma: activos en IDB pero ausentes en el servidor (eliminados en otro dispositivo).
+    // NO se modifica el IDB (protege contra pérdidas si el RPC devuelve vacío por error de red).
+    // Se guarda en _ghostFamIds (en memoria) y rebuildAppState los filtra de la vista.
+    if (Array.isArray(fams) && fams.length > 0) {
+      const pendingFamIds = new Set(
+        (await idb.getAll('sync_pending'))
+          .filter(p=>p.table==='familias').map(p=>p.data?.id)
+      );
+      const allLocalFams = await idb.getAll('familias');
+      _ghostFamIds.clear();
+      for (const lf of allLocalFams) {
+        if (!lf.deleted_at && !serverFamIds.has(lf.id) && !pendingFamIds.has(lf.id)) {
+          _ghostFamIds.add(lf.id);
+          console.log(`[sync] familia fantasma ocultada (no borrada): ${lf.id}`);
+        }
+      }
     }
     console.log(`[sync] familias descargadas: ${(fams||[]).length}`);
   } catch(e) { console.warn('[sync] error familias:', e.message); }
@@ -1210,16 +1234,21 @@ async function rebuildAppState() {
   } else {
     const myId  = STATE.auth?.user?.id;
     const userCodes = STATE.profile?.ebs_codes||[];
-    // Prefijos de territorio: '5441SR00254245T05MT01EBS011' → '5441SR00254245T05'
-    // El usuario ve TODO lo que esté en su territorio, sin importar microterritorio o EBS #
-    const terPrefixes = [...new Set(userCodes.map(ebsTerritoryPrefix).filter(p=>p.length>0))];
+    // EBS especiales (JEP, PIC): usan T99 que se cruza entre equipos → filtro por código exacto.
+    // EBS regulares: filtro por prefijo de territorio (ve todo el territorio asignado).
+    const _specialNums = new Set(SPECIAL_EBS.map(e=>e.num));
+    const _isSpecial = code => _specialNums.has((code||'').slice(24,27));
+    const mySpecialCodes = new Set(userCodes.filter(_isSpecial));
+    const myRegularCodes = userCodes.filter(c => !mySpecialCodes.has(c));
+    const terPrefixes = [...new Set(myRegularCodes.map(ebsTerritoryPrefix).filter(p=>p.length>0))];
     fams = allLocal.filter(f => {
       if (myId && f.created_by === myId) return true;                             // propias
       if (!f.ebs_code) return false;
-      return terPrefixes.some(prefix => f.ebs_code.startsWith(prefix));           // mismo territorio
+      if (_isSpecial(f.ebs_code)) return mySpecialCodes.has(f.ebs_code);          // EBS especial: exacto
+      return terPrefixes.some(prefix => f.ebs_code.startsWith(prefix));           // EBS regular: territorio
     });
   }
-  fams = fams.filter(f=>!f.deleted_at);
+  fams = fams.filter(f=>!f.deleted_at && !_ghostFamIds.has(f.id));
   // Deduplicar por id (protección contra doble escritura en IDB o Supabase)
   const _seenFam = new Set();
   fams = fams.filter(f=>{ if(_seenFam.has(f.id))return false; _seenFam.add(f.id); return true; });
@@ -1759,7 +1788,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.3</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.4</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -1800,7 +1829,7 @@ function renderHome() {
       🔄 Cargar / Sincronizar datos
     </button>
     <div style="text-align:center;margin-top:5px;font-size:11px;color:var(--muted)">
-      Última sincronización: <span id="last-sync-label" style="color:#1e40af">${_lastSyncTs?'Hace menos de 1 min':'Nunca (presiona el botón)'}</span>
+      Última sincronización: <span id="last-sync-label" style="color:#1e40af">${_lastSyncTs ? new Date(_lastSyncTs).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : 'Nunca (presiona el botón)'}</span>
     </div>
   </div>`;
 
@@ -4324,6 +4353,11 @@ function imprimirPCI(){
   const muniNombre=(typeof MUNIS_NS!=='undefined'&&MUNIS_NS[muniCod])||muniCod||'—';
   const direccion=d2['9']||'—';
   const ciclo=plan.paciente.ciclo_vital_asignado||(plan.paciente.ruta_especial?'Ruta Materno Perinatal':'—');
+  const tipoDocLabel=(REF.tipoIdPersona.find(o=>o.v===d['7'])||{l:d['7']||'—'}).l;
+  const numDoc=d['8']||'—';
+  const tel1=d['_tel']||'';
+  const tel2=d['t3_tel2']||'';
+  const telStr=[tel1,tel2].filter(Boolean).join(' · ')||'—';
   const S={medicina_general:{t:'Medicina General',ico:'🩺'},enfermeria:{t:'Enfermería',ico:'💉'},
     odontologia:{t:'Odontología',ico:'🦷'},psicologia:{t:'Psicología',ico:'🧠'},
     nutricion:{t:'Nutrición',ico:'🥗'},laboratorios_y_apoyo_diagnostico:{t:'Laboratorios y Apoyo Dx',ico:'🔬'},
@@ -4338,12 +4372,16 @@ function imprimirPCI(){
         <td style="padding:3px 0 3px 8px;width:50%"><b style="color:#0d2447">Fecha de Nacimiento:</b> ${esc(fecNacFmt)}</td>
       </tr>
       <tr>
-        <td style="padding:3px 8px 3px 0"><b style="color:#0d2447">Municipio:</b> ${esc(muniNombre)}</td>
-        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Dirección:</b> ${esc(direccion)}</td>
+        <td style="padding:3px 8px 3px 0"><b style="color:#0d2447">Documento:</b> ${esc(tipoDocLabel)} — ${esc(numDoc)}</td>
+        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Municipio:</b> ${esc(muniNombre)}</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px 3px 0"><b style="color:#0d2447">Dirección:</b> ${esc(direccion)}</td>
+        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono(s):</b> ${esc(telStr)}</td>
       </tr>
       <tr>
         <td style="padding:3px 8px 3px 0"><b style="color:#0d2447">Ciclo Vital:</b> ${esc(ciclo)}${plan.paciente.ruta_especial?' · <b style="color:#e94560">'+esc(plan.paciente.ruta_especial)+'</b>':''}</td>
-        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Teléfono:</b> ${esc(d['_tel']||d2['_tel']||'—')}${(d['_email']||d2['_email'])?` &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> ${esc(d['_email']||d2['_email'])}`:' &nbsp;·&nbsp; <b style="color:#0d2447">Correo:</b> —'}</td>
+        <td style="padding:3px 0 3px 8px"><b style="color:#0d2447">Correo:</b> ${esc(d['_email']||d2['_email']||'—')}</td>
       </tr>
     </table>
   </div>`;
@@ -6169,7 +6207,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.3 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.4 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -8307,7 +8345,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.3</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.4</div>
   </div>
 </div>
 
@@ -8914,7 +8952,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.3</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.4</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
