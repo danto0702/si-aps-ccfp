@@ -487,7 +487,7 @@ async function syncPendientes(){
   if(pend.length===0)return;
   setSync('busy','Sincronizando '+pend.length+' registro(s)…');
   let ok=0;
-  for(const r of pend){ if(await pushCloud(r)){r.synced=true;ok++;} }
+  for(const r of pend){ if(await pushCloud(r)){r.synced=true;delete r.firmas;ok++;} }
   saveHist(arr);updateAuthUI();
   if(ok>0){renderHist();toast(ok+' registro(s) sincronizado(s)','ok');}
 }
@@ -1410,7 +1410,27 @@ function _pItemsSN(preguntas,ans,opts){
 //  HISTORIAL (localStorage)
 // ============================================================
 function loadHist(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'[]');}catch(e){return[];}}
-function saveHist(arr){localStorage.setItem(LS_KEY,JSON.stringify(arr));}
+function saveHist(arr){
+  const put=a=>{try{localStorage.setItem(LS_KEY,JSON.stringify(a));return true;}catch(e){return false;}};
+  if(put(arr))return true;
+  // Cuota de localStorage excedida: conservar TODOS los pendientes + los sincronizados
+  // más recientes que quepan (los sincronizados ya están seguros en la nube).
+  const sorted=[...arr].sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const pend=sorted.filter(r=>!r.synced);
+  const synced=sorted.filter(r=>r.synced);
+  let lo=0,hi=synced.length,best=0;
+  while(lo<=hi){const mid=(lo+hi)>>1;
+    const test=pend.concat(synced.slice(0,mid));
+    if(put(test)){best=mid;lo=mid+1;}else{hi=mid-1;}}
+  put(pend.concat(synced.slice(0,best)));
+  return false;
+}
+// Libera espacio: quita las firmas de los registros ya sincronizados (permanecen en la nube).
+function _compactHist(){
+  const arr=loadHist();let ch=false;
+  arr.forEach(r=>{if(r.synced&&r.firmas){delete r.firmas;ch=true;}});
+  if(ch)saveHist(arr);
+}
 function _resumenRiesgo(ins){
   const alertas=[];const d=ins;
   if(d.apgar&&d.apgar.cat==='3')alertas.push('APGAR: disfunción severa');
@@ -1441,7 +1461,7 @@ async function guardarHistorial(){
   if(!STATE.online){toast('Guardado localmente. Se enviará al reconectar.','warn');return;}
   setSync('busy','Enviando a la nube…');
   const ok=await pushCloud(rec);
-  if(ok){rec.synced=true;saveHist(arr);renderHist();toast('Tamizaje guardado y enviado ☁','ok');}
+  if(ok){rec.synced=true;delete rec.firmas;saveHist(arr);renderHist();toast('Tamizaje guardado y enviado ☁','ok');}
   else toast('Guardado local. Falló el envío — reintente con “Sincronizar”.','warn');
   updateAuthUI();
 }
@@ -1622,10 +1642,20 @@ async function cargarAdmin(){
   if(!isAdmin())return toast('Solo administradores','err');
   if(!STATE.online)return toast('Sin conexión a internet','err');
   setSync('busy','Cargando registros…');
+  // Lista sin 'firmas' (imágenes pesadas) y paginada para escalar más allá de 1000.
+  const cols='id,paciente,instrumentos,nombre,tipo_doc,documento,municipio,eps,edad,ciclo,sexo,telefono,correo,profesional,fecha_aplicacion,instrumentos_aplicados,alertas,created_by,created_at';
   try{
-    const res=await sbFetch(SB_TABLE+'?select=*&deleted_at=is.null&order=created_at.desc');
-    if(!res.ok){toast('Error al cargar ('+res.status+')','err');updateAuthUI();return;}
-    STATE.adminRows=await res.json();
+    let all=[];const page=1000;let from=0;
+    while(true){
+      const res=await sbFetch(SB_TABLE+'?select='+cols+'&deleted_at=is.null&order=created_at.desc',
+        {headers:{'Range-Unit':'items','Range':from+'-'+(from+page-1)}});
+      if(!res.ok){toast('Error al cargar ('+res.status+')','err');updateAuthUI();return;}
+      const chunk=await res.json();
+      all=all.concat(chunk);
+      if(chunk.length<page)break;
+      from+=page;
+    }
+    STATE.adminRows=all;
     _fillAdminMuniFilter();renderAdmin();updateAuthUI();
     toast(STATE.adminRows.length+' registros cargados','ok');
   }catch(e){toast('Error de conexión','err');updateAuthUI();}
@@ -1677,11 +1707,15 @@ function renderAdmin(){
       <td><button class="btn btn-purple btn-sm" onclick="pdfAdmin('${r.id}')">PDF</button></td>
     </tr>`).join('')}</tbody>`;
 }
-function pdfAdmin(id){
+async function pdfAdmin(id){
   const row=STATE.adminRows.find(r=>r.id===id);if(!row)return;
+  // Las firmas no vienen en la lista; se piden solo al generar el PDF.
+  let firmas={};
+  if(STATE.online){try{const res=await sbFetch(SB_TABLE+'?select=firmas&id=eq.'+encodeURIComponent(id));
+    if(res.ok){const j=await res.json();firmas=(j[0]||{}).firmas||{};}}catch(e){}}
   const bkP=STATE.paciente,bkI=STATE.ins,bkFp=STATE.firmaProf,bkFc=STATE.firmaPaciente;
   STATE.paciente=row.paciente||{};STATE.ins=row.instrumentos||{};
-  STATE.firmaProf=(row.firmas||{}).prof||null;STATE.firmaPaciente=(row.firmas||{}).paciente||null;
+  STATE.firmaProf=firmas.prof||null;STATE.firmaPaciente=firmas.paciente||null;
   document.getElementById('print-area').innerHTML=buildReporte();
   STATE.paciente=bkP;STATE.ins=bkI;STATE.firmaProf=bkFp;STATE.firmaPaciente=bkFc;
   setTimeout(()=>window.print(),120);
@@ -1725,7 +1759,7 @@ function initSelects(){
 window.addEventListener('online',()=>{STATE.online=true;updateAuthUI();syncPendientes();});
 window.addEventListener('offline',()=>{STATE.online=false;updateAuthUI();});
 window.addEventListener('DOMContentLoaded',async()=>{
-  initSelects();renderInstrumentos();renderHist();updateAge();
+  initSelects();_compactHist();renderInstrumentos();renderHist();updateAge();
   _loadFirmaProf();renderFirmas();
   _loadAuth();updateAuthUI();
   if(STATE.auth){await loadProfile();}
