@@ -1788,7 +1788,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.4</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.5</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6207,7 +6207,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.4 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.5 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6349,7 +6349,8 @@ function _normCell(v){
   s = s.toUpperCase();
   s = s.replace(/[|"'`]/g,' ');            // pipe y comillas prohibidos
   s = s.replace(/[\r\n\t]+/g,' ');          // sin fin de línea dentro del campo
-  s = s.replace(/[^A-Z0-9 \-.,#/:()]/g,''); // conserva set seguro para PISIS
+  s = s.replace(/[#]/g,' ');                // '#' no permitido por PISIS (ej. direcciones)
+  s = s.replace(/[^A-Z0-9 \-.,/:()]/g,'');  // conserva set seguro para PISIS
   s = s.replace(/\s+/g,' ').trim();
   return s;
 }
@@ -6405,7 +6406,7 @@ const PISIS_REMAP={
   etnia:         {'01':'01','02':'02','03':'03','04':'04','05':'06','06':'07','07':'07'}, // app 06=Otro → 07 Ninguna (decisión usuario)
   tipoVivienda:  {'1':'1','2':'4','3':'6','4':'2','5':'3','6':'7','7':'8','8':'9','9':'10','10':'11','11':'12','12':'13'},
   alumbrado:     {'1':'1','2':'4','3':'5','4':'3','5':'2'},          // app 6=Ninguno: sin equivalente oficial
-  materialTecho: {'1':'1','2':'2','3':'3','4':'5','5':'7','6':'8','7':'9','8':'10'}, // oficial separa fibrocemento c/s asbesto
+  materialTecho: {'1':'1','2':'2','3':'3','4':'5','5':'7','6':'8','7':'9','8':'9'}, // app 8 Otro → 9 (la tabla viva PISIS rechaza el 10)
   discapacidad:  {'1':'3','2':'2','4':'1','5':'6','6':'5','7':'7','8':'8'}, // app 3=Voz y habla: sin equivalente oficial
   fuenteAgua:    {'1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','10':'10','11':'12','12':'13','13':'14'}, // oficial separa Río(10)/Manantial(11)
   // grupo poblacional (T3.22): NO se remapea — se DERIVA de datos reales (ver deriveGrupoPob).
@@ -6476,7 +6477,9 @@ const PISIS_SAFE={
   'T3.17':'6',   // rol dentro de la familia: Otros
   'T3.20':'5',   // régimen de afiliación: No afiliado
   // ── Texto requerido → marcador (sin dato real) ──
-  'T2.11':'NO REGISTRA','T2.14':'NO REGISTRA','T2.29':'NO REGISTRA','T2.111':'NO REGISTRA','T2.28':'NO REGISTRA',
+  'T2.11':'NO REGISTRA','T2.14':'NO REGISTRA','T2.29':'NO REGISTRA','T2.111':'NO REGISTRA','T2.28':'NOREGISTRA',
+  'T2.84':'2',   // criaderos que favorecen vectores: NO
+  'T3.48':'19',  // enfermedades último mes: Otra (PISIS lo exige; no hay código "Ninguna")
   // ── Conteos numéricos → 0 / 1 ──
   'T2.93':'0','T2.94':'0','T2.95':'0','T2.96':'0','T2.110':'0',
   'T2.17':'1','T2.18':'1','T2.19':'1'
@@ -6505,6 +6508,11 @@ const PISIS_CONV={
   'T2.117':'1', // vínculos familiares: primera práctica
   'T2.119':'1', // prácticas cuidado salud: Tratamiento casero al agua
   'T2.16':'1',  // estrato socioeconómico: Bajo-bajo (contexto rural)
+  'T2.34':'4',  // ambientes con luz natural: Sala/Comedor
+  'T2.65':'1',  // cómo reduce generación de residuos: primer método
+  'T2.72':'1',  // prácticas de separación de residuos rurales: primera opción
+  'T2.74':'1',  // prácticas de aprovechamiento de residuos rurales: primera opción
+  'T2.113':'1', // APGAR familiar: primer resultado
   'T2.57':'1',  // distancia tanque–fuente contaminación: más de 10 metros (mejor caso)
   'T2.40':'1',  // material predominante techo: primer código
   'T2.53':'3',  // fuente principal de agua: acueducto veredal/comunitario
@@ -6544,23 +6552,9 @@ function _noAplicaSet(reg, cells){
   const s=new Set();
   const val=(i)=>String(cells[i]==null?'':cells[i]);
   if(reg==='T2'){
-    // Animales: si no hay animales (campo 92 vacío o solo '13' Ninguno) → no aplica el detalle animal
-    const anim=val(92).split(',').filter(x=>x&&x!=='13');
-    if(anim.length===0) [93,94,95,96,97,98,99,100,101,102,103].forEach(n=>s.add(n));
-    // Tanque de agua: si no tiene tanque (campo 55 vacío o '4' No tiene) → frecuencia/distancia no aplican
-    if(val(55)===''||val(55)==='4'){ s.add(56); s.add(57); }
-    // Actividad económica (50=NO) → área independiente y familiar afectado no aplican
-    if(val(50)!=='1'){ s.add(51); s.add(52); }
-    // Prácticas de reducción de residuos (64=NO) → cómo reduce / otros no aplican
-    if(val(64)!=='1'){ s.add(65); s.add(66); }
-    // Prácticas de aprovechamiento (67=NO) → qué otras no aplican
-    if(val(67)!=='1'){ s.add(68); }
-    // Procesos de reducción/separación rurales (71=NO) → prácticas rurales no aplican
-    if(val(71)!=='1'){ s.add(72); s.add(73); s.add(74); s.add(75); }
-    // Cuidador principal (114=NO) → escala ZARIT no aplica
-    if(val(114)!=='1'){ s.add(115); }
-    // Animales ponzoñosos (89 vacío o '7' No aplica) → medidas de protección no aplican
-    if(val(89)===''||val(89)==='7'){ s.add(90); s.add(91); }
+    // NOTA: PISIS exige valor en los campos condicionales (animales, tanque, actividad, residuos,
+    // ZARIT, ponzoñosos) aunque "no apliquen"; por eso NO se eximen: se rellenan con default
+    // "No aplica/No/0" vía PISIS_SAFE/PISIS_CONV. Sólo quedan sin exención de edad.
   } else if(reg==='T3'){
     const fn=val(8);
     const edad = fn ? Math.floor((Date.now()-new Date(fn).getTime())/31557600000) : null;
@@ -6569,7 +6563,10 @@ function _noAplicaSet(reg, cells){
     // IMC (39): exento si no hay antropometría que permita un IMC plausible (peso/talla ausentes o incoherentes)
     { let _pz=parseFloat(val(37)), _ta=parseFloat(val(38)); if(_ta>0&&_ta<3)_ta*=100; else if(_ta>250)_ta/=10; if(_pz>250)_pz/=1000;
       const _iv=(_pz>0&&_ta>0)?_pz/((_ta/100)**2):NaN; if(edad!=null && edad>5 && !(_iv>=5&&_iv<=99.9)) s.add(39); }
-    if(val(48)===''){ s.add(48); s.add(50); }  // bloque enfermedad: 48 (no tiene código "Ninguna") y 50 no aplican si no se registró enfermedad
+    // tabaco: cigarrillos/años/scores (65-69) sólo aplican a fumadores (64 = 1 o 2); si 64 = No aplica (3) se eximen
+    if(val(64)!=='1'&&val(64)!=='2') [65,66,67,68,69].forEach(n=>s.add(n));
+    // modalidad violencia (23): sólo si el grupo poblacional (22) incluye '10' (víctima de violencia)
+    if(!val(22).split(',').includes('10')) s.add(23);
     if(val(29)==='16'){ s.add(35); }  // sin atenciones pendientes (29=Ninguno) → motivo de no atención no aplica
   }
   return s;
@@ -6634,6 +6631,7 @@ function buildFile(){
   const totalT3=fams.reduce((s,f)=>(f.personas||[]).filter(p=>!p.d3?.['_draft']).length+s,0);
   let consec=0;
   const lines=[];
+  const t2list=[], t3list=[];   // PISIS exige que los tipos de registro vayan contiguos → se emiten todos los T2 y luego todos los T3
   // ── T1: Registro de control (6 campos) ──
   const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
   lines.push(_rowLine(['1',c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT2+totalT3)]));
@@ -6643,7 +6641,6 @@ function buildFile(){
   const _myPisis=(STATE.profile?.codigo_pisis||c.codigoEBS||'').slice(0,10);
 
   fams.forEach((fam,fi)=>{
-    consec++;
     const d=fam.d2||{};
     const idx=fi;
     const _co=TERRIT_COORD[_ebsNumDe(fam,d)]||null;   // coordenadas por defecto del territorio (si falta geopunto)
@@ -6654,7 +6651,7 @@ function buildFile(){
     // ── T2: Registro de caracterización familiar (125 campos) ──
     const t2=[
       '2',            // [0]  tipo registro
-      String(consec), // [1]  consecutivo
+      '',             // [1]  consecutivo (se asigna al emitir en orden contiguo)
       d['2']||'',     // [2]  consentimiento
       d['3']||'',     // [3]  departamento
       String(c.subregion||'041').replace(/\D/g,'').slice(0,3),  // [4] subregión: 3 díg oficiales SISPRO (default 041 = Regional Occidente SR00254)
@@ -6665,8 +6662,8 @@ function buildFile(){
       d['8']||'',     // [9]  nombre tipo ubicacion (barrio/vereda)
       '2',            // [10] area_ubicacion (Rural=2 default EBS)
       d['12']||'',    // [11] punto de referencia
-      d['11']||(_co?_fmtCoord(_co[1]):''),    // [12] geopunto longitud (defecto: centro del territorio EBS)
-      d['10']||(_co?_fmtCoord(_co[0]):''),    // [13] geopunto latitud (defecto: centro del territorio EBS)
+      (()=>{const v=String(d['11']||'');return /^-?\d{1,3}\.\d+$/.test(v)?_fmtCoord(v):(_co?_fmtCoord(_co[1]):'');})(),    // [12] geopunto longitud (real si es decimal válido; si no, centro del territorio)
+      (()=>{const v=String(d['10']||'');return /^-?\d{1,3}\.\d+$/.test(v)?_fmtCoord(v):(_co?_fmtCoord(_co[0]):'');})(),    // [13] geopunto latitud (real si es decimal válido; si no, centro del territorio)
       d['9']||'',     // [14] dirección
       '',             // [15] teléfono vivienda (no capturado)
       d['85']||'',    // [16] estrato
@@ -6771,7 +6768,7 @@ function buildFile(){
       remapCod('zaritScore',d['59']),    // [115] escala ZARIT (categoría→puntaje 0-100)
       arrVal(d['v7_sitRiesgo']),   // [116] familia con situaciones riesgo
       arrVal(d['v7_vincFam']),     // [117] prácticas vínculos familiares
-      _primer(d['v7_redesApoyo']), // [118] redes de apoyo social (única opción, N len 1)
+      (()=>{const v=_primer(d['v7_redesApoyo']);return ['1','2','3'].includes(v)?v:(v?'3':'');})(), // [118] redes apoyo (oficial 1-3; otros→3 No identifica)
       arrVal(d['v7_cuidadoSalud']),// [119] prácticas cuidado salud hogar
       _primer(d['v7_medResp']),     // [120] medidas enfermedades respiratorias (única opción, len 1)
       '',                          // [121] otras medidas respiratorias
@@ -6779,10 +6776,9 @@ function buildFile(){
       numViv,         // [123] N° identificación vivienda
       numFam          // [124] N° identificación familia
     ];
-    lines.push(_rowLine(_autofillRow('T2',t2,consec)));
+    t2list.push(t2);
     // ── T3: Registro de caracterización de integrantes (119 campos) ──
     (fam.personas||[]).filter(per=>!per.d3?.['_draft']).forEach(per=>{
-      consec++;
       const pd=per.d3||{};
       const numIdInt=numFam+(pd['7']||'')+(pd['8']||'');
       // helpers edad para auto-rellenar campos por ciclo de vida
@@ -6809,7 +6805,7 @@ function buildFile(){
       const _clasifTAout = pd['v7_clasifTA'] ? remapCod('clasifTA',pd['v7_clasifTA']) : ((_edadA>=18&&_sim)?'5':'');  // TA simulada = Normal (oficial 5)
       const t3=[
         '3',                          // [0]   tipo registro
-        String(consec),               // [1]   consecutivo
+        '',                           // [1]   consecutivo (se asigna al emitir en orden contiguo)
         (pd['3']||'').trim(),         // [2]   primer nombre
         (pd['4']||'').trim(),         // [3]   segundo nombre
         (pd['5']||'').trim(),         // [4]   primer apellido
@@ -6928,9 +6924,12 @@ function buildFile(){
         numFam,                       // [117] N° identificación familia (T2[124])
         numIdInt                      // [118] N° identificación único integrante
       ];
-      lines.push(_rowLine(_autofillRow('T3',t3,consec)));
+      t3list.push(t3);
     });
   });
+  // Emitir contiguo: todos los T2 y luego todos los T3, con consecutivo secuencial global
+  t2list.forEach(t2=>{ consec++; t2[1]=String(consec); lines.push(_rowLine(_autofillRow('T2',t2,consec))); });
+  t3list.forEach(t3=>{ consec++; t3[1]=String(consec); lines.push(_rowLine(_autofillRow('T3',t3,consec))); });
   return lines;
 }
 
@@ -8345,7 +8344,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.4</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.5</div>
   </div>
 </div>
 
@@ -8952,7 +8951,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.4</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.5</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
