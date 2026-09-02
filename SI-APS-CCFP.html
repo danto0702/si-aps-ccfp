@@ -1788,7 +1788,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.6</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.7</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6151,8 +6151,14 @@ function arrVal(v){if(!v||!Array.isArray(v))return v||'';return v.join(',');}
 // Primer valor de una respuesta múltiple, para campos que el anexo define de ÚNICA opción (longitud 1)
 function _primer(v){ if(Array.isArray(v)) return v[0]||''; return String(v||'').split(',')[0]||''; }
 
-function mostrarValidacion(){
-  const cont=document.getElementById('valida-result'); if(!cont) return;
+async function mostrarValidacion(){
+  let cont=document.getElementById('valida-result'); if(!cont) return;
+  // Sincroniza antes de validar para reflejar los datos más recientes de Supabase
+  if(STATE.isOnline && STATE.auth && !_syncing){
+    cont.innerHTML='<div style="color:var(--muted)">🔄 Sincronizando datos antes de validar…</div>';
+    try{ await syncToCloud(false); }catch(e){}
+    const c2=document.getElementById('valida-result'); if(!c2) return; cont=c2;
+  }
   let probs;
   try{ probs=validarPlano(); }
   catch(e){ cont.innerHTML=`<div style="color:var(--red)">Error al validar: ${esc(e.message)}</div>`; return; }
@@ -6207,7 +6213,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.6 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.7 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -7207,8 +7213,14 @@ function renderComplV7(){
     </div>`;
 }
 
-function downloadFile(){
+async function downloadFile(){
   try{
+    // Sincroniza con Supabase ANTES de generar, para usar siempre los datos más recientes
+    // (sube lo pendiente del equipo y baja las correcciones del servidor). Si está sin conexión, usa lo local.
+    if(STATE.isOnline && STATE.auth && !_syncing){
+      toast('Sincronizando datos antes de generar el archivo…','info');
+      await syncToCloud(false);
+    }
     const lines=buildFile();
     const content=lines.join('\r\n');            // ENTER (CRLF) como fin de registro; sin salto al final
     const fileName=pisisFileName();
@@ -8345,7 +8357,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.6</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.7</div>
   </div>
 </div>
 
@@ -8952,7 +8964,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.6</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.7</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
