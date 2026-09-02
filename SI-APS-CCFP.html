@@ -1788,7 +1788,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.7</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.8</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6213,7 +6213,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.7 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.8 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6565,11 +6565,10 @@ function _noAplicaSet(reg, cells){
   } else if(reg==='T3'){
     const fn=val(8);
     const edad = fn ? Math.floor((Date.now()-new Date(fn).getTime())/31557600000) : null;
-    if(edad!=null && edad<18) [40,44,45,46].forEach(n=>s.add(n)); // circunferencia y tensión arterial: solo ≥18
-    if(edad!=null && edad<=5) s.add(39);   // IMC: solo mayores de 5 años (en ≤5 aplica peso-para-talla)
-    // IMC (39): exento si no hay antropometría que permita un IMC plausible (peso/talla ausentes o incoherentes)
+    // Medidas (39 IMC, 40 cintura, 44/45 TA, 46 clasif TA): PISIS las exige a TODA edad → NO se eximen;
+    // el simulador las rellena (cubre bebés/niños/adultos). Sólo se exime IMC si la antropometría es incoherente.
     { let _pz=parseFloat(val(37)), _ta=parseFloat(val(38)); if(_ta>0&&_ta<3)_ta*=100; else if(_ta>250)_ta/=10; if(_pz>250)_pz/=1000;
-      const _iv=(_pz>0&&_ta>0)?_pz/((_ta/100)**2):NaN; if(edad!=null && edad>5 && !(_iv>=5&&_iv<=99.9)) s.add(39); }
+      const _iv=(_pz>0&&_ta>0)?_pz/((_ta/100)**2):NaN; if(!(_iv>=5&&_iv<=99.9)) s.add(39); }
     // tabaco (65-69): PISIS los exige aunque 64 = No aplica → se rellenan con 0 (ver PISIS_SAFE), NO se eximen
     // modalidad violencia (23): sólo si el grupo poblacional (22) incluye '10' (víctima de violencia)
     if(!val(22).split(',').includes('10')) s.add(23);
@@ -6795,7 +6794,7 @@ function buildFile(){
       const _men6m=_edadA===0&&_fnac&&_edadMs<15778800000;
       // Fallback determinista: si faltan medidas se SIMULAN al exportar (OMS/Res.2465) para no dejar requeridos vacíos.
       // Solo rellena huecos; conserva toda medida real capturada. Semilla = documento (mismo valor siempre).
-      const _needSim = !(parseFloat(pd['22'])>0) || !(parseFloat(pd['23'])>0) || (_edadA>=18 && (!(parseFloat(pd['v7_circCintura'])>0)||!(parseFloat(pd['v7_taSist'])>0)||!(parseFloat(pd['v7_taDiast'])>0)));
+      const _needSim = !(parseFloat(pd['22'])>0) || !(parseFloat(pd['23'])>0) || !(parseFloat(pd['v7_circCintura'])>0)||!(parseFloat(pd['v7_taSist'])>0)||!(parseFloat(pd['v7_taDiast'])>0);
       const _sim = _needSim ? simularMedidasPersona(pd) : null;
       let _peso=parseFloat(pd['22'])>0?parseFloat(pd['22']):(_sim?parseFloat(_sim.peso):0);   // valor real sólo si >0; si no, simulado (evita '0' string)
       let _talla=parseFloat(pd['23'])>0?parseFloat(pd['23']):(_sim?parseFloat(_sim.talla):0);
@@ -6804,12 +6803,12 @@ function buildFile(){
       if(_peso>250) _peso/=1000;                 // peso en gramos → kg (66400 → 66.4)
       const _tallaOut = _talla>0 ? String(_talla.toFixed(1)) : '';   // 1 decimal, ≤5 chars (campo D len 5)
       const _pesoOut  = _peso>0  ? String(_peso.toFixed(1))  : '';   // 1 decimal, ≤5 chars (campo D len 5)
-      let _imc='';   // campo 39: D len 4 → sólo valores plausibles (5–99.9)
-      if(_edadA>5&&_peso>0&&_talla>0){ const _v=_peso/((_talla/100)**2); if(_v>=5&&_v<=99.9) _imc=_v.toFixed(1); }
-      const _cintOut=(()=>{ let _c=parseFloat(pd['v7_circCintura']||''); if(!(isFinite(_c)&&_c>0)&&_edadA>=18&&_sim) _c=parseFloat(_sim.cintura); return (isFinite(_c)&&_c>0)?String(Math.round(_c)):''; })();  // circunferencia cintura: entero, N len 3 (solo ≥18)
-      const _tasOut = parseFloat(pd['v7_taSist'])>0  ? String(pd['v7_taSist'])  : ((_edadA>=18&&_sim)?_sim.tas:'');   // TA sistólica (solo ≥18; real si >0)
-      const _tadOut = parseFloat(pd['v7_taDiast'])>0 ? String(pd['v7_taDiast']) : ((_edadA>=18&&_sim)?_sim.tad:'');   // TA diastólica (solo ≥18; real si >0)
-      const _clasifTAout = pd['v7_clasifTA'] ? remapCod('clasifTA',pd['v7_clasifTA']) : ((_edadA>=18&&_sim)?'5':'');  // TA simulada = Normal (oficial 5)
+      let _imc='';   // campo 39: D len 4 → sólo valores plausibles (5–99.9); PISIS lo exige a toda edad
+      if(_peso>0&&_talla>0){ const _v=_peso/((_talla/100)**2); if(_v>=5&&_v<=99.9) _imc=_v.toFixed(1); }
+      const _cintOut=(()=>{ let _c=parseFloat(pd['v7_circCintura']||''); if(!(isFinite(_c)&&_c>0)&&_sim) _c=parseFloat(_sim.cintura); return (isFinite(_c)&&_c>0)?String(Math.round(_c)):''; })();  // circunferencia cintura: entero, N len 3 (toda edad, real o simulada)
+      const _tasOut = parseFloat(pd['v7_taSist'])>0  ? String(pd['v7_taSist'])  : (_sim?_sim.tas:'');   // TA sistólica (toda edad; real si >0)
+      const _tadOut = parseFloat(pd['v7_taDiast'])>0 ? String(pd['v7_taDiast']) : (_sim?_sim.tad:'');   // TA diastólica (toda edad; real si >0)
+      const _clasifTAout = pd['v7_clasifTA'] ? remapCod('clasifTA',pd['v7_clasifTA']) : (_sim?'5':'');  // TA simulada = Normal (oficial 5)
       const t3=[
         '3',                          // [0]   tipo registro
         '',                           // [1]   consecutivo (se asigna al emitir en orden contiguo)
@@ -8357,7 +8356,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.7</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.8</div>
   </div>
 </div>
 
@@ -8964,7 +8963,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.7</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.8</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
