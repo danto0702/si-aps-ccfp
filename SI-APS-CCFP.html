@@ -1366,6 +1366,7 @@ const STATE = {
   ebsList: [],
   busquedaFamilia: '',
   filtroEBS: '', filtroMuni: '', filtroDesde: '', filtroHasta: '', filtroIncompleto: false,
+  exportDesde: localStorage.getItem('exportDesde')||'', exportHasta: localStorage.getItem('exportHasta')||'',
   // Plan de Cuidado Familiar
   planesFamiliar: [],
   editPCFId: null,
@@ -1788,7 +1789,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.0</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.1</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -5116,6 +5117,12 @@ async function saveFamilia(){
   const d=STATE.draft2;
   if(!d['2']||!d['3']||!d['5']||!d['8']){_savingFam=false;return toast('Complete los campos obligatorios del Paso 1','err');}
   if(!d['25']){_savingFam=false;return toast('Complete la fecha de diligenciamiento (Paso 2)','err');}
+  { const fd=String(d['25']).trim(), ay=new Date().getFullYear();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(fd)){_savingFam=false;return toast('Fecha de diligenciamiento con formato inválido (AAAA-MM-DD)','err');}
+    const yy=+fd.slice(0,4);
+    if(yy<2000||yy>ay){_savingFam=false;return toast(`Año de diligenciamiento inválido (${yy}): escribe el año completo (ej. ${ay}, no 0022)`,'err');}
+    if(new Date(fd)>new Date()){_savingFam=false;return toast('La fecha de diligenciamiento no puede ser futura','err');}
+  }
   if(!d['26']){_savingFam=false;return toast('Seleccione el tipo de vivienda (Paso 3)','err');}
   if(!d['54']){_savingFam=false;return toast('Seleccione el tipo de familia (Paso 5)','err');}
   // Ensure auto-derived fields are set correctly before saving
@@ -6023,10 +6030,57 @@ function guardarRQC(){
   render();
 }
 
+// Valida una persona antes del guardado final (evita datos que PISIS rechaza).
+function _validarPersona(d){
+  const errores=[], avisos=[], anioActual=new Date().getFullYear();
+  // Campos obligatorios PISIS
+  const reqMap={'3':'Primer nombre','5':'Primer apellido','7':'Tipo de identificación','8':'Número de documento','9':'Fecha de nacimiento','10':'Sexo','12':'Rol en la familia','15':'Régimen de afiliación'};
+  const faltan=Object.keys(reqMap).filter(k=>!String(d[k]==null?'':d[k]).trim());
+  if(faltan.length) errores.push('Faltan campos obligatorios: '+faltan.map(k=>reqMap[k]).join(', '));
+  // Fecha de nacimiento
+  const fn=String(d['9']||'').trim();
+  if(fn){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(fn)) errores.push('Fecha de nacimiento con formato inválido (debe ser AAAA-MM-DD).');
+    else{ const anio=+fn.slice(0,4);
+      if(anio<1900||anio>anioActual) errores.push(`Año de nacimiento inválido (${anio}): debe estar entre 1900 y ${anioActual}. Escribe el año completo (ej. 2011, no 0011).`);
+      else if(new Date(fn)>new Date()) errores.push('La fecha de nacimiento no puede ser futura.');
+    }
+  }
+  // Documento
+  const tipo=String(d['7']||'').trim(), doc=String(d['8']||'').trim();
+  if(doc){
+    if(/\s/.test(doc)) errores.push('El número de documento no puede tener espacios.');
+    if(['CC','TI','RC','CE','CN','MS','AS'].includes(tipo)){
+      if(!/^\d+$/.test(doc)) errores.push('El número de documento debe ser solo números (sin letras ni texto como "NO TIENE").');
+      else if(doc.length<5) errores.push(`El documento "${doc}" es muy corto (mínimo 5 dígitos).`);
+    }
+  }
+  // Duplicado: mismo tipo+doc en otra persona activa
+  if(tipo&&doc&&!/\s/.test(doc)){
+    outer: for(const f of (STATE.familias||[])){
+      if(f.deleted_at) continue;
+      for(const p of (f.personas||[])){
+        if(p.id===STATE.editPerId) continue;
+        const pd=p.d3||{};
+        if(String(pd['7']||'')===tipo && String(pd['8']||'').trim()===doc){
+          const nom=[pd['3'],pd['5']].filter(Boolean).join(' ').trim()||'(sin nombre)';
+          errores.push(`El documento ${tipo} ${doc} ya está registrado en: ${nom}. No se permiten documentos duplicados.`);
+          break outer;
+        }
+      }
+    }
+  }
+  // Peso / talla (aviso, no bloquea)
+  const peso=parseFloat(d['22']), talla=parseFloat(d['23']);
+  if(d['22']&&(!(peso>0)||peso>300)) avisos.push(`Peso ${d['22']} kg fuera de rango`);
+  if(d['23']&&(!(talla>=30)||talla>250)) avisos.push(`Talla ${d['23']} cm fuera de rango`);
+  if(peso>0&&talla>0&&talla<peso&&talla<100) avisos.push('Peso y talla parecen intercambiados');
+  return {errores, avisos};
+}
 async function savePersona(){
   const d=STATE.draft3;
-  if(!d['3']||!d['5']||!d['7']||!d['8']||!d['9']||!d['10'])
-    return toast('Complete nombre, identificación, fecha de nacimiento y sexo','err');
+  const _v=_validarPersona(d);
+  if(_v.errores.length) return toast('⛔ '+_v.errores.join(' · '),'err');
   const fam=STATE.familias.find(f=>f.id===STATE.editFamId);
   if(!fam)return toast('Error: familia no encontrada','err');
   const ebsCode=fam.ebs_code||calcEBS(fam.d2||{});
@@ -6045,7 +6099,7 @@ async function savePersona(){
     await writeRecord('personas',{id,familia_id:fam.id,ebs_code:ebsCode,d3:{...d},created_by:STATE.auth?.user?.id,created_at:now,updated_at:now});
   }
   fam.d2['55']=String(fam.personas.length);
-  toast('Persona guardada','ok');
+  toast(_v.avisos.length ? '✔ Persona guardada. ⚠ Verifica: '+_v.avisos.join(' · ') : 'Persona guardada', _v.avisos.length?'warn':'ok');
   navigate('familia_t3',{editFamId:STATE.editFamId});
 }
 
@@ -6114,6 +6168,22 @@ function renderExport(){
     <div class="config-row"><span>Archivo TXT</span><span class="config-val" style="font-size:10px">${esc(fileName)}</span></div>
   </div>
   ${!confOk?`<div class="card" style="border-color:var(--yellow)"><div style="color:var(--yellow)">⚠ Configure primero el NIT y el período de reporte para el archivo PISIS.</div></div>`:''}
+  <div class="card">
+    <div class="card-title">🗓️ Filtro por fecha de diligenciamiento</div>
+    <p style="font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.4">Genera el archivo solo con las fichas <b>diligenciadas dentro del rango</b>. Sirve para no re-subir a PISIS registros de períodos ya cargados. Déjalo vacío para incluir todas.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="flex:1;min-width:120px;margin:0"><div class="field-label">Desde</div>
+        <input class="field-input" type="date" value="${esc(STATE.exportDesde||'')}" onchange="setExportFecha('exportDesde',this.value)"></div>
+      <div class="field" style="flex:1;min-width:120px;margin:0"><div class="field-label">Hasta</div>
+        <input class="field-input" type="date" value="${esc(STATE.exportHasta||'')}" onchange="setExportFecha('exportHasta',this.value)"></div>
+      ${(STATE.exportDesde||STATE.exportHasta)?`<button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="limpiarFiltroExport()">✕ Limpiar</button>`:''}
+    </div>
+    ${_exportFiltroLog.activo?`<div style="font-size:11px;margin-top:8px;background:rgba(74,111,165,.08);border:1px solid var(--blue);border-radius:8px;padding:8px 10px;color:var(--blue)">
+        ✅ <b>${_exportFiltroLog.incluidas}</b> familia(s) en el rango.
+        ${_exportFiltroLog.fuera>0?`<br>⏭️ ${_exportFiltroLog.fuera} fuera del rango (excluidas).`:''}
+        ${_exportFiltroLog.sinFecha>0?`<br>⚠️ <b style="color:var(--yellow)">${_exportFiltroLog.sinFecha} sin fecha de diligenciamiento</b> — no entran; complétales la fecha para incluirlas.`:''}
+      </div>`:''}
+  </div>
   <div class="card"><div class="card-title">Vista previa (archivo plano)</div>
     <div class="preview">${esc(preview||'— sin datos —')}</div></div>
   <div class="card">
@@ -6213,7 +6283,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.0 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.1 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6554,6 +6624,7 @@ function _fmtCoord(v){ return String(v||'').slice(0,10); }   // máx 10 caracter
 function _ebsNumDe(fam,d){ const a=String(d['16']||'').trim(); if(a) return a.padStart(3,'0'); return String(fam.ebs_code||'').slice(-3); }
 let _autofillLog=[];
 let _dupLog={fam:0, per:0};   // conteo de registros duplicados omitidos en la última generación
+let _exportFiltroLog={activo:false, incluidas:0, fuera:0, sinFecha:0};   // resultado del filtro por fecha de diligenciamiento
 // Devuelve el conjunto de campos que NO aplican para este registro (condiciones "aplica solo si" del anexo).
 // PISIS acepta estos campos vacíos cuando la condición no se cumple.
 function _noAplicaSet(reg, cells){
@@ -6629,7 +6700,20 @@ function buildFile(){
   // Anexo Técnico v7 — Junio 2026 — T1: 6 campos, T2: 125 campos, T3: 119 campos
   _autofillLog=[];
   const c=STATE.config;
-  const fams=STATE.familias.filter(f=>!f.deleted_at && !f.d2?.['_draft']);
+  let fams=STATE.familias.filter(f=>!f.deleted_at && !f.d2?.['_draft']);
+  // Filtro por fecha de diligenciamiento (Desde/Hasta) para evitar re-subir fichas de otros períodos.
+  _exportFiltroLog={activo:false, incluidas:0, fuera:0, sinFecha:0};
+  const _ed=STATE.exportDesde||'', _eh=STATE.exportHasta||'';
+  if(_ed||_eh){
+    _exportFiltroLog.activo=true;
+    fams=fams.filter(f=>{
+      const fd=String((f.d2||{})['25']||'').trim();      // fecha de diligenciamiento de la ficha
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(fd)){ _exportFiltroLog.sinFecha++; return false; }
+      if((_ed&&fd<_ed)||(_eh&&fd>_eh)){ _exportFiltroLog.fuera++; return false; }
+      return true;
+    });
+    _exportFiltroLog.incluidas=fams.length;
+  }
   const totalT2=fams.length;
   const totalT3=fams.reduce((s,f)=>(f.personas||[]).filter(p=>!p.d3?.['_draft']).length+s,0);
   let consec=0;
@@ -7762,6 +7846,16 @@ function transformD(data, labelsMap, decodeMap) {
   return out;
 }
 
+function setExportFecha(key, val){
+  STATE[key]=val;
+  try{ localStorage.setItem(key, val); }catch(e){}
+  render();
+}
+function limpiarFiltroExport(){
+  STATE.exportDesde=''; STATE.exportHasta='';
+  try{ localStorage.removeItem('exportDesde'); localStorage.removeItem('exportHasta'); }catch(e){}
+  render();
+}
 function setExportMode(mode) {
   _exportMode = mode;
   // Actualizar toggle sin re-renderizar toda la pantalla
@@ -8362,7 +8456,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.0</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.1</div>
   </div>
 </div>
 
@@ -8969,7 +9063,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.0</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.1</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
