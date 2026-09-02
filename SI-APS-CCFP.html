@@ -1788,7 +1788,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v4.9</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.0</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6213,7 +6213,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v4.9 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.0 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6553,6 +6553,7 @@ function _fmtCoord(v){ return String(v||'').slice(0,10); }   // máx 10 caracter
 // Número de EBS (001..017) de una familia, para resolver coordenadas por defecto
 function _ebsNumDe(fam,d){ const a=String(d['16']||'').trim(); if(a) return a.padStart(3,'0'); return String(fam.ebs_code||'').slice(-3); }
 let _autofillLog=[];
+let _dupLog={fam:0, per:0};   // conteo de registros duplicados omitidos en la última generación
 // Devuelve el conjunto de campos que NO aplican para este registro (condiciones "aplica solo si" del anexo).
 // PISIS acepta estos campos vacíos cuando la condición no se cumple.
 function _noAplicaSet(reg, cells){
@@ -6634,9 +6635,10 @@ function buildFile(){
   let consec=0;
   const lines=[];
   const t2list=[], t3list=[];   // PISIS exige que los tipos de registro vayan contiguos → se emiten todos los T2 y luego todos los T3
-  // ── T1: Registro de control (6 campos) ──
+  const _seenFam=new Set(), _seenInt=new Set();   // deduplicación: PISIS rechaza identificadores repetidos (familia / integrante)
+  _dupLog={fam:0, per:0};
   const nitPad=String(c.nit||'').replace(/^0+/,'')||'';
-  lines.push(_rowLine(['1',c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(totalT2+totalT3)]));
+  // T1 se emite al final (después de deduplicar) con el conteo real.
   // Mapa userId -> codigo_pisis para resolver por familia
   const _pisMap=Object.fromEntries((STATE.adminUsers||[]).map(u=>[u.id, u.codigo_pisis||'']));
   // Codigo_pisis del usuario logueado como fallback
@@ -6648,6 +6650,8 @@ function buildFile(){
     const _co=TERRIT_COORD[_ebsNumDe(fam,d)]||null;   // coordenadas por defecto del territorio (si falta geopunto)
     const numViv=calcPisisViv(d,idx);   // formato PISIS max 26 chars
     const numFam=calcPisisFam(d,idx);   // formato PISIS max 31 chars
+    if(_seenFam.has(numFam)){ _dupLog.fam++; return; }   // familia con identificador repetido → omitir (PISIS lo rechaza)
+    _seenFam.add(numFam);
     const ebsCode=calcEBS(d);
     const ebsPisis=(_pisMap[fam.created_by]||_myPisis||ebsCode).slice(0,10);
     // ── T2: Registro de caracterización familiar (125 campos) ──
@@ -6783,6 +6787,8 @@ function buildFile(){
     (fam.personas||[]).filter(per=>!per.d3?.['_draft']).forEach(per=>{
       const pd=per.d3||{};
       const numIdInt=numFam+(pd['7']||'')+(pd['8']||'');
+      if(_seenInt.has(numIdInt)){ _dupLog.per++; return; }   // integrante con identificador repetido → omitir (PISIS lo rechaza)
+      _seenInt.add(numIdInt);
       // helpers edad para auto-rellenar campos por ciclo de vida
       const _fnac=pd['9']||'';
       const _edadMs=_fnac?(new Date()-new Date(_fnac)):0;
@@ -6931,6 +6937,8 @@ function buildFile(){
       t3list.push(t3);
     });
   });
+  // ── T1: Registro de control (6 campos) — con el conteo REAL tras deduplicar ──
+  lines.push(_rowLine(['1',c.tipoEntidad,nitPad,c.fechaInicio,c.fechaFin,String(t2list.length+t3list.length)]));
   // Emitir contiguo: todos los T2 y luego todos los T3, con consecutivo secuencial global
   t2list.forEach(t2=>{ consec++; t2[1]=String(consec); lines.push(_rowLine(_autofillRow('T2',t2,consec))); });
   t3list.forEach(t3=>{ consec++; t3[1]=String(consec); lines.push(_rowLine(_autofillRow('T3',t3,consec))); });
@@ -8354,7 +8362,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v4.9</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.0</div>
   </div>
 </div>
 
@@ -8961,7 +8969,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v4.9</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.0</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
