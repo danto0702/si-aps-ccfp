@@ -1027,13 +1027,16 @@ async function syncToCloud(manual=false) {
   }
   try {
     const pending = await idb.getAll('sync_pending');
-    let uploaded = 0;
+    let uploaded = 0, uploadFailed = 0;
     for (const item of pending) {
       try {
         await execSyncOp(item);
         await idb.delete('sync_pending', item.id);
         uploaded++;
-      } catch(e){ console.warn('sync item failed:', e.message); }
+      } catch(e){
+        uploadFailed++;
+        console.warn('sync item failed:', item.id, e.message);
+      }
     }
     const famsBefore = STATE.familias.filter(f=>!f.deleted_at).length;
     await pullFromCloud();
@@ -1042,10 +1045,11 @@ async function syncToCloud(manual=false) {
     setSyncDot('online');
     if (manual) {
       const parts = [];
-      if (uploaded>0)   parts.push(`${uploaded} registro(s) subido(s)`);
-      if (downloaded>0) parts.push(`${downloaded} familia(s) nueva(s) descargada(s)`);
-      if (!parts.length) parts.push('Todo al día · Sin cambios pendientes');
-      toast('✅ Sincronización completa — '+parts.join(' · '),'ok');
+      if (uploaded>0)      parts.push(`${uploaded} registro(s) subido(s)`);
+      if (downloaded>0)    parts.push(`${downloaded} familia(s) nueva(s) descargada(s)`);
+      if (uploadFailed>0)  parts.push(`⚠ ${uploadFailed} pendiente(s) con error — verifica conexión`);
+      if (!parts.length)   parts.push('Todo al día · Sin cambios pendientes');
+      toast((uploadFailed>0?'⚠ ':'✅ ')+'Sincronización — '+parts.join(' · '), uploadFailed>0?'warn':'ok');
     }
     _lastSyncTs = Date.now();
     localStorage.setItem('lastSyncTs', String(_lastSyncTs));
@@ -1452,7 +1456,10 @@ function navigate(screen, extra={}) {
   render();
   window.scrollTo(0,0);
   document.getElementById('main').scrollTop=0;
-  if (screen === 'admin') loadAdminUsers(true);
+  if (screen === 'admin') {
+    loadAdminUsers(true);
+    if (STATE.adminTab==='diag') setTimeout(renderDiagTab, 100);
+  }
   if (screen === 'compl_v7') setTimeout(()=>{
     const first=document.querySelector('[id^="compl-sec-"][data-done="false"]');
     if(first){first.scrollIntoView({behavior:'smooth',block:'start'});}
@@ -1789,7 +1796,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.1</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.2</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -2198,8 +2205,100 @@ function renderAdmin() {
     <button class="admin-tab ${tab==='users'?'active':''}" onclick="STATE.adminTab='users';render()">👥 Usuarios</button>
     <button class="admin-tab ${tab==='ebs'?'active':''}" onclick="STATE.adminTab='ebs';render()">📡 EBS</button>
     <button class="admin-tab ${tab==='options'?'active':''}" onclick="STATE.adminTab='options';render()">🔧 Campos</button>
+    <button class="admin-tab ${tab==='diag'?'active':''}" onclick="STATE.adminTab='diag';renderDiagTab()">🔍 Diagnóstico</button>
   </div>
-  ${tab==='users' ? renderAdminUsers() : tab==='ebs' ? renderAdminEBS() : renderAdminOptions()}`;
+  ${tab==='users' ? renderAdminUsers() : tab==='ebs' ? renderAdminEBS() : tab==='diag' ? '<div id="diag-panel"><div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">Cargando diagnóstico…</div></div></div>' : renderAdminOptions()}`;
+}
+
+// ── Admin: Diagnóstico de sincronización ─────────────────────
+async function renderDiagTab() {
+  const panel = document.getElementById('diag-panel');
+  if (!panel) return;
+
+  // 1. Cola de pendientes por dispositivo actual
+  const pending = await idb.getAll('sync_pending');
+  // 2. Conteo de familias en IDB por EBS (solo activas)
+  const allFams = await idb.getAll('familias');
+  const activeFams = allFams.filter(f=>!f.deleted_at);
+  const byEBS = {};
+  for (const f of activeFams) {
+    const code = f.ebs_code||'SIN_EBS';
+    const lbl  = fmtEBSCode(code);
+    byEBS[lbl] = (byEBS[lbl]||0)+1;
+  }
+  // 3. Familias en Supabase (via RPC get_all_familias — solo admin)
+  let serverFams = [];
+  try { serverFams = await sbFetch('/rest/v1/rpc/get_all_familias',{method:'POST',body:'{}'})||[]; } catch(e){}
+  const serverByEBS = {};
+  for (const f of serverFams) {
+    const lbl = fmtEBSCode(f.ebs_code||'SIN_EBS');
+    serverByEBS[lbl] = (serverByEBS[lbl]||0)+1;
+  }
+
+  const allLabels = [...new Set([...Object.keys(byEBS),...Object.keys(serverByEBS)])].sort();
+  const rows = allLabels.map(lbl=>{
+    const local  = byEBS[lbl]||0;
+    const server = serverByEBS[lbl]||0;
+    const diff   = local - server;
+    const color  = diff>0?'color:#f59e0b':diff<0?'color:#ef4444':'color:var(--muted)';
+    return `<tr>
+      <td style="font-size:11px;font-family:monospace">${esc(lbl)}</td>
+      <td style="text-align:center">${server}</td>
+      <td style="text-align:center">${local}</td>
+      <td style="text-align:center;font-weight:700;${color}">${diff>0?'+'+diff:diff||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const pendingRows = pending.slice(0,50).map(p=>{
+    const fam = p.data?.d2?.['5']||p.data?.id?.slice(-8)||'—';
+    return `<tr>
+      <td style="font-size:10px;font-family:monospace">${esc(p.op)}</td>
+      <td style="font-size:10px;font-family:monospace">${esc(p.table)}</td>
+      <td style="font-size:10px">${esc(fam)}</td>
+      <td style="font-size:10px;color:var(--muted)">${new Date(p.ts||0).toLocaleString('es-CO')}</td>
+    </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div style="margin-bottom:12px">
+      <b>🖥 Este dispositivo</b> — IDB: <strong>${activeFams.length}</strong> familias activas · Supabase: <strong>${serverFams.length}</strong>
+      <button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="syncToCloud(true)">🔄 Sincronizar ahora</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
+      <thead><tr style="background:var(--border)">
+        <th style="text-align:left;padding:4px 6px">EBS</th>
+        <th style="padding:4px 6px">Supabase</th>
+        <th style="padding:4px 6px">IDB local</th>
+        <th style="padding:4px 6px">Diferencia</th>
+      </tr></thead>
+      <tbody>${rows||'<tr><td colspan="4" style="text-align:center;color:var(--muted)">Sin datos</td></tr>'}</tbody>
+    </table>
+    <b>⏳ Cola de pendientes en este dispositivo: ${pending.length}</b>
+    ${pending.length?`
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
+      <thead><tr style="background:var(--border)">
+        <th style="text-align:left;padding:3px 5px">Op</th>
+        <th style="text-align:left;padding:3px 5px">Tabla</th>
+        <th style="text-align:left;padding:3px 5px">Identificador</th>
+        <th style="text-align:left;padding:3px 5px">Fecha</th>
+      </tr></thead>
+      <tbody>${pendingRows}</tbody>
+    </table>
+    ${pending.length>50?`<div style="font-size:10px;color:var(--muted);margin-top:4px">… y ${pending.length-50} más</div>`:''}
+    `:'<div style="color:var(--muted);font-size:12px;margin-top:6px">✓ Cola vacía — todos los cambios están en el servidor</div>'}
+    <div style="margin-top:14px;padding:10px;background:var(--border);border-radius:8px;font-size:11px;color:var(--muted)">
+      <b>Nota:</b> Si otro dispositivo tiene más familias y su cola de pendientes NO está vacía, ese dispositivo necesita sincronizar.
+      Los registros solo viajan al servidor cuando ese dispositivo presiona 🔄 o tiene señal activa.
+    </div>`;
+}
+
+function fmtEBSCode(code) {
+  if (!code) return 'SIN_EBS';
+  const num = (code||'').slice(24,27);
+  const sp = SPECIAL_EBS.find(e=>e.num===num);
+  if (sp) return `EBS${num} · ${sp.label}`;
+  const ti = terrInfoFor(num);
+  return `EBS${num} · ${ti?.label||num}`;
 }
 
 // ── Admin: Usuarios ──────────────────────────────────────────
@@ -6283,7 +6382,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.1 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.2 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -8456,7 +8555,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.1</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.2</div>
   </div>
 </div>
 
@@ -9063,7 +9162,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.1</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.2</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
