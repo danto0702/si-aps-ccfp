@@ -1127,8 +1127,16 @@ async function pullFromCloud() {
   try {
     const fams = await sbFetch(`/rest/v1/rpc/${_famRpc}`, {method:'POST', body:'{}'});
     const serverFamIds = new Set((fams||[]).map(f=>f.id));
+    // Familias con eliminación pendiente de subir al servidor
+    const pendingDelFamIds = new Set(
+      (await idb.getAll('sync_pending'))
+        .filter(p => p.table==='familias' && (p.op==='soft-delete'||p.op==='delete'))
+        .map(p => p.data?.id)
+    );
     for (const f of (fams||[])) {
       const existing = await idb.get('familias', f.id);
+      // Si está localmente eliminada y el delete aún no llegó al servidor, preservar el soft-delete
+      if (existing?.deleted_at && pendingDelFamIds.has(f.id)) continue;
       // El servidor es autoritativo: los RPCs solo devuelven deleted_at IS NULL,
       // así que siempre escribimos — evita que registros activos queden "ocultos"
       // por un deleted_at residual en el IDB local.
@@ -1160,8 +1168,17 @@ async function pullFromCloud() {
   const _perRpc = isAdminNow ? 'get_all_personas' : 'get_my_personas';
   try {
     const pers = await sbFetch(`/rest/v1/rpc/${_perRpc}`, {method:'POST', body:'{}'});
+    // IDs con eliminación pendiente de subir: el servidor aún los devuelve activos,
+    // pero el IDB local ya los tiene con deleted_at → no restaurar desde el servidor.
+    const pendingDelPerIds = new Set(
+      (await idb.getAll('sync_pending'))
+        .filter(p => p.table==='personas' && (p.op==='soft-delete'||p.op==='delete'))
+        .map(p => p.data?.id)
+    );
     for (const p of (pers||[])) {
       const existing = await idb.get('personas', p.id);
+      // Si está localmente eliminado y el delete aún no llegó al servidor, preservar el soft-delete
+      if (existing?.deleted_at && pendingDelPerIds.has(p.id)) continue;
       const record = {...p};
       if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
       // Preservar campos v7_* locales si el servidor no los tiene aún
@@ -1458,7 +1475,7 @@ function navigate(screen, extra={}) {
   document.getElementById('main').scrollTop=0;
   if (screen === 'admin') {
     loadAdminUsers(true);
-    if (STATE.adminTab==='diag') setTimeout(renderDiagTab, 100);
+    if (STATE.adminTab==='diag') setTimeout(renderDiagTab, 200);
   }
   if (screen === 'compl_v7') setTimeout(()=>{
     const first=document.querySelector('[id^="compl-sec-"][data-done="false"]');
@@ -1796,7 +1813,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.2</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.3</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -2205,7 +2222,7 @@ function renderAdmin() {
     <button class="admin-tab ${tab==='users'?'active':''}" onclick="STATE.adminTab='users';render()">👥 Usuarios</button>
     <button class="admin-tab ${tab==='ebs'?'active':''}" onclick="STATE.adminTab='ebs';render()">📡 EBS</button>
     <button class="admin-tab ${tab==='options'?'active':''}" onclick="STATE.adminTab='options';render()">🔧 Campos</button>
-    <button class="admin-tab ${tab==='diag'?'active':''}" onclick="STATE.adminTab='diag';renderDiagTab()">🔍 Diagnóstico</button>
+    <button class="admin-tab ${tab==='diag'?'active':''}" onclick="STATE.adminTab='diag';render();renderDiagTab()">🔍 Diagnóstico</button>
   </div>
   ${tab==='users' ? renderAdminUsers() : tab==='ebs' ? renderAdminEBS() : tab==='diag' ? '<div id="diag-panel"><div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">Cargando diagnóstico…</div></div></div>' : renderAdminOptions()}`;
 }
@@ -6382,7 +6399,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.2 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.3 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -8555,7 +8572,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.2</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.3</div>
   </div>
 </div>
 
@@ -9162,7 +9179,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.2</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.3</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
