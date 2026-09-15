@@ -1539,6 +1539,7 @@ function render() {
 // ============================================================
 let _loginMode = 'login'; // 'login' | 'signup' | 'forgot' | 'reset'
 let _resetToken = ''; // access_token from password-recovery email link
+let _forgotSent = false; // true after recovery email was sent (shows paste-link section)
 
 function renderLogin() {
   // ── Restablecer contraseña (desde enlace de correo) ──────
@@ -1574,8 +1575,18 @@ function renderLogin() {
       <div id="li-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none"></div>
       <div id="li-ok" style="color:var(--green);font-size:13px;margin-bottom:10px;display:none;background:#dcfce7;border:1px solid var(--green);border-radius:8px;padding:10px 12px"></div>
       <button class="btn btn-primary btn-block" id="li-btn" onclick="forgotPassword()">📧 Enviar enlace de recuperación</button>
+      ${_forgotSent ? `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;line-height:1.5">
+          ⚠️ Si el enlace del correo abre una página en blanco (localhost:3000), haz esto:<br>
+          1. Haz clic en el enlace del correo<br>
+          2. Copia la <strong>URL completa</strong> de la barra del navegador<br>
+          3. Pégala aquí y presiona el botón:
+        </div>
+        <input class="field-input" id="li-recovery-url" type="text" placeholder="http://localhost:3000/#access_token=…" style="font-size:11px;word-break:break-all">
+        <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="pasteRecoveryLink()">🔑 Usar este enlace para restablecer</button>
+      </div>` : ''}
       <div style="text-align:center;margin-top:14px">
-        <button class="btn btn-secondary btn-sm" onclick="_loginMode='login';render()">← Volver al inicio de sesión</button>
+        <button class="btn btn-secondary btn-sm" onclick="_loginMode='login';_forgotSent=false;render()">← Volver al inicio de sesión</button>
       </div>
     </div></div>`;
   }
@@ -1693,9 +1704,32 @@ async function forgotPassword() {
     okEl.textContent = '✅ Enlace enviado. Revisa tu correo (incluyendo spam). El enlace expira en 1 hora.';
     okEl.style.display='';
     btn.textContent='✓ Enviado';
+    _forgotSent = true;
+    render(); // re-render to show the paste-link section
   } catch(e) {
     showErr(err,'Error: '+e.message);
     btn.textContent='📧 Enviar enlace de recuperación'; btn.disabled=false;
+  }
+}
+
+// ── Pegar enlace de recuperación manualmente (workaround para localhost:3000) ──
+function pasteRecoveryLink() {
+  const url = document.getElementById('li-recovery-url')?.value?.trim();
+  if (!url) { toast('Pega la URL completa del correo', 'warn'); return; }
+  try {
+    const hashIdx = url.indexOf('#');
+    if (hashIdx === -1) throw new Error('Enlace inválido — no contiene token');
+    const params = new URLSearchParams(url.slice(hashIdx + 1));
+    const token = params.get('access_token');
+    const type  = params.get('type');
+    if (!token)             throw new Error('No se encontró el token en el enlace');
+    if (type !== 'recovery') throw new Error('El enlace no corresponde a recuperación de contraseña');
+    _resetToken  = token;
+    _loginMode   = 'reset';
+    _forgotSent  = false;
+    render();
+  } catch(e) {
+    toast('Error al leer el enlace: ' + e.message, 'err');
   }
 }
 
@@ -1813,7 +1847,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.3</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.4</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6399,7 +6433,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.3 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.4 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -8572,7 +8606,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.3</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.4</div>
   </div>
 </div>
 
@@ -9179,7 +9213,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.3</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.4</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
