@@ -460,7 +460,7 @@ input[type="number"].field-input::-webkit-inner-spin-button{-webkit-appearance:n
   <button class="btn-icon" onclick="doLogout()" title="Salir">↩</button>
 </div>
 <div id="main"></div>
-<div id="pending-badge" class="pending-badge"></div>
+<div id="pending-badge" class="pending-badge" onclick="abrirEstadoSync()" style="cursor:pointer" title="Ver estado de sincronización"></div>
 <div id="toast" class="toast"></div>
 <div id="modal-root"></div>
 
@@ -473,6 +473,7 @@ const REF_EAPB=[{"v":"CCF002","l":"COMFAMA CAJA DE COMPENSACIÓN FAMILIAR DE ANT
 const SB_URL  = 'https://wttljozqyaxlzilomnef.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0dGxqb3pxeWF4bHppbG9tbmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDg5NTEsImV4cCI6MjA5NDg4NDk1MX0.kAQkgGq7RmZxTM9KlwI6KI7BjhEBy-8w6OdHVkOPBDM';
 const SB_FUNC = SB_URL + '/functions/v1';
+const APP_VERSION = '6.0';
 
 // ── REF TABLES ───────────────────────────────────────────────
 const REF = {
@@ -772,27 +773,55 @@ async function saveFieldConfig() {
 // ============================================================
 // SUPABASE REST CLIENT
 // ============================================================
+// fetch con tiempo límite: en zona rural la señal "lie-fi" deja peticiones colgadas indefinidamente
+async function _fetchTimeout(url, opts, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(()=>ctl.abort(), ms||30000);
+  try {
+    return await fetch(url, {...opts, signal: ctl.signal});
+  } catch(e) {
+    const err = new Error(e.name==='AbortError' ? 'Tiempo de espera agotado (señal débil)' : 'Sin conexión con el servidor');
+    err.network = true;
+    throw err;
+  } finally { clearTimeout(t); }
+}
+
+function _jwtExp(tok) {
+  try { return JSON.parse(atob(tok.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000; }
+  catch(e){ return 0; }
+}
+
 async function sbFetch(path, opts={}) {
-  const tok = STATE.auth?.access_token;
-  const headers = {
+  const isAuthCall = path.startsWith('/auth/');
+  if (!isAuthCall && STATE.auth && _authDead) {
+    const e = new Error('Sesión expirada: vuelve a iniciar sesión'); e.status = 401; e.authDead = true; throw e;
+  }
+  // Renovar ANTES de que expire el token (evita la cascada de 401 → refresh por cada registro)
+  if (!isAuthCall && STATE.auth?.access_token && !opts.skipRefresh) {
+    const exp = _jwtExp(STATE.auth.access_token);
+    if (exp && exp - Date.now() < 90*1000) await doRefresh();
+  }
+  const mkHeaders = () => ({
     'apikey': SB_ANON,
-    'Authorization': `Bearer ${tok||SB_ANON}`,
+    'Authorization': `Bearer ${STATE.auth?.access_token||SB_ANON}`,
     'Content-Type': 'application/json',
     ...(opts.headers||{})
-  };
-  let res = await fetch(SB_URL+path, {...opts, headers});
-  if (res.status===401 && tok && !opts.skipRefresh) {
+  });
+  const {timeout, skipRefresh, noBody, ...fopts} = opts;
+  let res = await _fetchTimeout(SB_URL+path, {...fopts, headers: mkHeaders()}, timeout);
+  if (res.status===401 && STATE.auth?.access_token && !skipRefresh && !isAuthCall) {
     const ok = await doRefresh();
-    if (ok) {
-      headers['Authorization'] = `Bearer ${STATE.auth.access_token}`;
-      res = await fetch(SB_URL+path, {...opts, headers});
-    } else {
-      flagSessionExpired();
-    }
+    if (ok) res = await _fetchTimeout(SB_URL+path, {...fopts, headers: mkHeaders()}, timeout);
+    else flagSessionExpired();
   }
-  if (res.status===204||res.status===201&&opts.noBody) return null;
+  if (res.status===204||res.status===201&&noBody) return null;
   const text = await res.text();
-  if (!res.ok) throw new Error(text);
+  if (!res.ok) {
+    const e = new Error(text || ('HTTP '+res.status));
+    e.status = res.status;
+    if (res.status===401 && _authDead) e.authDead = true;
+    throw e;
+  }
   return text ? JSON.parse(text) : null;
 }
 
@@ -829,9 +858,11 @@ async function doLogin(email, password) {
     refresh_token: data.refresh_token,
     user: data.user
   };
+  _authDead = false; _refreshBlockUntil = 0;
   await loadProfile();
-  await idb.put('auth', {id:'session', ...STATE.auth, profile: STATE.profile});
+  await idb.put('auth', {id:'session', ...STATE.auth, profile: STATE.profile, authDead:false});
   _sessionExpiredWarned = false;
+  _renderConnBanner();
   return STATE.profile;
 }
 
@@ -850,43 +881,91 @@ async function doSignup(email, password, nombre) {
   return STATE.profile;
 }
 
-async function doRefresh() {
+// ── Renovación de sesión ──────────────────────────────────────
+// Supabase ROTA el refresh_token en cada renovación. Antes, cada petición fallida con 401
+// lanzaba su propia renovación en paralelo: la 2ª reutilizaba un token ya rotado, Supabase
+// revocaba la sesión completa (400 refresh_token_not_found) y luego cada registro pendiente
+// reintentaba (429 rate limit). Resultado: dispositivos con encuestas atrapadas sin subir.
+// Ahora: una sola renovación a la vez (también entre pestañas vía Web Locks) y, si la sesión
+// fue revocada, se detienen los reintentos y se pide volver a iniciar sesión SIN perder datos.
+let _authDead = false;          // refresh token revocado → requiere nuevo inicio de sesión
+let _refreshP = null, _refreshBlockUntil = 0;
+function doRefresh() {
+  if (_refreshP) return _refreshP;
+  const run = () => _doRefresh();
+  _refreshP = (navigator.locks ? navigator.locks.request('siaps-refresh', run) : run())
+    .finally(()=>{ _refreshP = null; });
+  return _refreshP;
+}
+async function _doRefresh() {
+  if (!STATE.auth?.refresh_token || _authDead) return false;
+  // Otra pestaña/ventana pudo haber renovado ya: adoptar su token en vez de reutilizar el viejo
+  const sess = await idb.get('auth','session');
+  if (sess?.refresh_token && sess.refresh_token !== STATE.auth.refresh_token) {
+    STATE.auth.access_token  = sess.access_token;
+    STATE.auth.refresh_token = sess.refresh_token;
+    if (_jwtExp(sess.access_token) - Date.now() > 60*1000) return true;
+  }
+  if (Date.now() < _refreshBlockUntil) return false;
+  let res;
   try {
-    const rt = STATE.auth?.refresh_token;
-    if (!rt) return false;
-    const data = await sbFetch('/auth/v1/token?grant_type=refresh_token', {
-      method:'POST', body: JSON.stringify({refresh_token:rt}), skipRefresh:true
-    });
+    res = await _fetchTimeout(SB_URL+'/auth/v1/token?grant_type=refresh_token', {
+      method:'POST', headers:{'apikey':SB_ANON,'Content-Type':'application/json'},
+      body: JSON.stringify({refresh_token: STATE.auth.refresh_token})
+    }, 20000);
+  } catch(e) { _refreshBlockUntil = Date.now()+30*1000; return false; }   // red caída: reintentar luego
+  if (res.ok) {
+    const data = await res.json();
     STATE.auth.access_token  = data.access_token;
     STATE.auth.refresh_token = data.refresh_token;
-    const sess = await idb.get('auth','session');
-    if (sess) await idb.put('auth',{...sess, access_token:data.access_token, refresh_token:data.refresh_token});
+    const s = await idb.get('auth','session');
+    if (s) await idb.put('auth',{...s, access_token:data.access_token, refresh_token:data.refresh_token, authDead:false});
     _sessionExpiredWarned = false;
     return true;
-  } catch(e){ return false; }
+  }
+  if (res.status===429) { _refreshBlockUntil = Date.now()+5*60*1000; return false; }
+  if (res.status>=400 && res.status<500) {
+    // Sesión revocada (otro cierre de sesión global, token reutilizado, usuario desactivado…)
+    _authDead = true;
+    const s = await idb.get('auth','session');
+    if (s) await idb.put('auth',{...s, authDead:true});
+    flagSessionExpired();
+    return false;
+  }
+  _refreshBlockUntil = Date.now()+60*1000;
+  return false;
 }
 
-// Se activa cuando el access_token expiró Y el refresh_token también falló al renovarse.
-// Antes esto fallaba en silencio (solo console.warn) dejando la app mostrando datos
-// locales desactualizados/parciales sin que el usuario lo notara. Ahora avisa de forma
-// visible y persistente para que el usuario sepa que debe cerrar sesión y volver a entrar.
+// Aviso visible y persistente cuando la sesión no se puede renovar. Los datos capturados
+// siguen guardados en el dispositivo y en la cola de envío; se suben al volver a ingresar.
 let _sessionExpiredWarned = false;
 function flagSessionExpired() {
+  _renderConnBanner();
   if (_sessionExpiredWarned) return;
   _sessionExpiredWarned = true;
-  toast('Tu sesión expiró y no se pudo renovar. Cierra sesión y vuelve a iniciar sesión para sincronizar tus datos más recientes.', 'warn');
-  const banner = document.getElementById('conn-banner');
-  if (banner) {
-    banner.className = 'conn-banner offline';
-    banner.textContent = '⚠ Sesión expirada — cierra sesión y vuelve a entrar para sincronizar';
-  }
+  toast('Tu sesión expiró. Tus datos siguen guardados en este equipo: toca el aviso rojo para volver a iniciar sesión y enviarlos.', 'warn', 9000);
 }
 
-async function doLogout() {
-  try { await sbFetch('/auth/v1/logout',{method:'POST'}); } catch(e){}
+// Vuelve a pedir usuario/contraseña conservando la cola de pendientes y los datos locales
+async function reautenticar() {
+  const email = STATE.auth?.user?.email || '';
+  await doLogout(true);
+  setTimeout(()=>{ const el=document.getElementById('li-email'); if(el && email) el.value=email; }, 0);
+}
+
+async function doLogout(force=false) {
+  const myUid = STATE.auth?.user?.id;
+  const pend = (await idb.getAll('sync_pending')).filter(p=>!p.uid||p.uid===myUid).length;
+  if (!force && pend>0 && !confirm(`Tienes ${pend} cambio(s) SIN ENVIAR al servidor.\n\nSe conservarán en este dispositivo y se enviarán cuando vuelvas a ingresar con el MISMO usuario y tengas internet.\n\nNo borres los datos del navegador ni desinstales la app.\n\n¿Cerrar sesión de todas formas?`)) return;
+  // scope=local: cierra SOLO este dispositivo. El valor por defecto (global) revocaba la
+  // sesión del mismo usuario en TODOS sus otros celulares y dejaba sus datos sin poder subir.
+  if (!_authDead) { try { await sbFetch('/auth/v1/logout?scope=local',{method:'POST', skipRefresh:true, timeout:8000}); } catch(e){} }
   STATE.auth = null; STATE.profile = null; STATE.familias = [];
+  STATE.screen = 'login'; _loginMode = 'login';
+  _authDead = false; _sessionExpiredWarned = false;
   _lastSyncTs = 0; localStorage.removeItem('lastSyncTs');
   await idb.clear('auth');
+  _renderConnBanner();
   render();
 }
 
@@ -1000,68 +1079,219 @@ const idb = {
 };
 
 // ============================================================
-// SYNC MANAGER
+// SYNC MANAGER (v6.0) — offline-first con cola de salida (outbox)
 // ============================================================
+// Principios:
+//  1. Todo cambio se guarda PRIMERO en IndexedDB y en la cola `sync_pending`; nunca se
+//     depende de que una petición en vuelo termine (si iOS/Android cierra la app a mitad
+//     de envío, el registro sigue en cola y se reenvía).
+//  2. Un registro = una entrada en cola (clave "tabla:id"); ediciones sucesivas se fusionan.
+//  3. Nada se borra de la cola hasta que el servidor confirma. Errores permanentes quedan
+//     visibles con su motivo y se reintentan con espera creciente.
+//  4. La descarga es INCREMENTAL y PAGINADA (RPC sync_pull, cursor synced_at asignado por
+//     el servidor): sin tope de 1000 filas y sin bajar toda la base cada 2 minutos.
+//  5. La descarga nunca pisa un registro con cambios locales aún sin subir.
 let _syncing = false;
-const _ghostFamIds = new Set(); // IDs de familias activas en IDB pero ausentes en el último pull del servidor
+
+const SYNC_COLS = {
+  familias:        ['id','ebs_code','d2','created_by','created_at','updated_at','deleted_at'],
+  personas:        ['id','familia_id','ebs_code','d3','created_by','created_at','updated_at','deleted_at'],
+  planes_familiar: ['id','familia_id','ebs_code','created_by','created_at','updated_at','deleted_at','data'],
+};
+const SYNC_ORDER = ['familias','personas','planes_familiar','config'];  // orden de llaves foráneas
+const SYNC_PAGE = 500, SYNC_BATCH = 50;
+
+function _pendKey(table, data) { return table+':'+(table==='config' ? data.key : data.id); }
+function _cleanRow(table, data) {
+  const cols = SYNC_COLS[table];
+  if (!cols) return data;
+  const o = {};
+  for (const c of cols) if (data[c] !== undefined) o[c] = data[c];
+  return o;
+}
 
 async function addPending(op, table, data) {
-  await idb.put('sync_pending', {op, table, data, ts: Date.now()});
+  const key  = _pendKey(table, data);
+  const prev = await idb.get('sync_pending', key);
+  const now  = Date.now();
+  await idb.put('sync_pending', {
+    id: key, op, table,
+    data: op==='upsert' ? _cleanRow(table, data) : data,
+    ts:  prev?.ts || now,          // conserva la antigüedad original (orden de envío)
+    mts: now,                      // versión de la entrada: detecta ediciones durante el envío
+    uid: STATE.auth?.user?.id || prev?.uid || null,
+    attempts: 0, lastError: null, nextTry: 0
+  });
   updateSyncUI();
 }
 
+// Convierte la cola antigua (ids autoincrementales, una entrada por guardado) al formato nuevo
+async function _migrarColaLegacy() {
+  const all = await idb.getAll('sync_pending');
+  const legacy = all.filter(p => typeof p.id === 'number').sort((a,b)=>a.id-b.id);
+  if (!legacy.length) return;
+  for (const p of legacy) {
+    try {
+      const key = _pendKey(p.table, p.data||{});
+      const prev = await idb.get('sync_pending', key);
+      let entry;
+      if (p.op === 'soft-delete' && SYNC_COLS[p.table]) {
+        const rec = await idb.get(p.table, p.data?.id);
+        entry = rec ? {op:'upsert', data:_cleanRow(p.table, {...rec, deleted_at: rec.deleted_at || new Date(p.ts||Date.now()).toISOString()})}
+                    : {op:'soft-delete', data:p.data};
+      } else {
+        entry = {op:p.op, data: p.op==='upsert' ? _cleanRow(p.table, p.data) : p.data};
+      }
+      // uid null: la cola antigua no registraba quién hizo el cambio. Asignarla al creador del
+      // registro dejaba atrapadas las ediciones hechas por otro usuario del mismo territorio.
+      // Sin uid, la envía quien inicie sesión en este equipo (RLS valida el territorio).
+      await idb.put('sync_pending', {id:key, table:p.table, ...entry,
+        ts: Math.min(prev?.ts || Infinity, p.ts || Date.now()), mts: Date.now(),
+        uid: null, attempts:0, lastError:null, nextTry:0});
+      await idb.delete('sync_pending', p.id);
+    } catch(e) { console.warn('[sync] no se pudo migrar entrada de cola', p.id, e.message); }
+  }
+  console.log(`[sync] cola antigua migrada: ${legacy.length} entrada(s)`);
+}
+
+async function _quitarPendiente(it) {
+  const cur = await idb.get('sync_pending', it.id);
+  if (cur && cur.mts === it.mts) await idb.delete('sync_pending', it.id);   // si se editó mientras subía, se queda
+}
+async function _marcarError(it, e) {
+  const cur = await idb.get('sync_pending', it.id);
+  if (!cur || cur.mts !== it.mts) return;
+  cur.attempts = (cur.attempts||0) + 1;
+  cur.lastError = String(e?.message||e).slice(0, 300);
+  cur.nextTry = Date.now() + Math.min(30*60*1000, 30*1000 * Math.pow(2, cur.attempts-1));
+  await idb.put('sync_pending', cur);
+}
+// Errores que cortan el envío completo (no son culpa del registro): red, sesión, saturación, servidor
+function _esCorte(e) { return e?.network || e?.authDead || e?.status===401 || e?.status===429 || (e?.status>=500); }
+
+async function execSyncOp(item) {
+  const {op, table, data} = item;
+  if (op==='upsert') {
+    await sbFetch(`/rest/v1/${table}`, {
+      method:'POST', headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(data)
+    });
+  } else if (op==='delete') {
+    await sbFetch(`/rest/v1/${table}?id=eq.${encodeURIComponent(data.id)}`, {method:'DELETE'});
+  } else if (op==='soft-delete') {
+    await sbFetch(`/rest/v1/${table}?id=eq.${encodeURIComponent(data.id)}`, {
+      method:'PATCH', headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({deleted_at: new Date().toISOString()})
+    });
+  }
+}
+
+async function _subirLote(table, chunk) {
+  try {
+    await sbFetch(`/rest/v1/${table}`, {
+      method:'POST', headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(chunk.map(c=>c.data)), timeout: 45000
+    });
+    for (const c of chunk) await _quitarPendiente(c);
+    return {ok: chunk.length, fail: 0};
+  } catch(e) {
+    if (_esCorte(e)) throw e;
+    if (chunk.length===1) { await _marcarError(chunk[0], e); return {ok:0, fail:1}; }
+    // Un registro malo no debe bloquear a los demás: aislarlo enviando uno por uno
+    let ok=0, fail=0;
+    for (const c of chunk) { const r = await _subirLote(table, [c]); ok+=r.ok; fail+=r.fail; }
+    return {ok, fail};
+  }
+}
+
+// Envía la cola del usuario actual. Lanza excepción si hay corte de red/sesión.
+async function _flushPending() {
+  const myUid = STATE.auth?.user?.id;
+  const now = Date.now();
+  const mine = (await idb.getAll('sync_pending'))
+    .filter(p => (!p.uid || p.uid===myUid) && !(p.nextTry > now));
+  let ok=0, fail=0;
+  for (const table of SYNC_ORDER) {
+    const items = mine.filter(p=>p.table===table).sort((a,b)=>(a.ts||0)-(b.ts||0));
+    // Lotes de filas con las mismas columnas (PostgREST usa las claves del lote)
+    const groups = {};
+    for (const it of items.filter(p=>p.op==='upsert')) {
+      const sig = Object.keys(it.data||{}).sort().join(',');
+      (groups[sig] = groups[sig] || []).push(it);
+    }
+    for (const sig in groups) {
+      const g = groups[sig];
+      for (let i=0; i<g.length; i+=SYNC_BATCH) {
+        const r = await _subirLote(table, g.slice(i, i+SYNC_BATCH));
+        ok+=r.ok; fail+=r.fail;
+      }
+    }
+    for (const it of items.filter(p=>p.op!=='upsert')) {
+      try { await execSyncOp(it); await _quitarPendiente(it); ok++; }
+      catch(e) { if (_esCorte(e)) throw e; await _marcarError(it, e); fail++; }
+    }
+  }
+  return {ok, fail};
+}
+
+// Programa un envío pronto (tras guardar) sin bloquear la interfaz
+let _syncTimer = null;
+function _programarSync(ms=1500) {
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(()=>{ if (STATE.isOnline && STATE.auth && !_authDead) syncToCloud(false); }, ms);
+}
+
 async function syncToCloud(manual=false) {
-  if (_syncing || !STATE.isOnline || !STATE.auth) {
+  if (_syncing || !STATE.isOnline || !STATE.auth || _authDead) {
     if (manual) {
-      if (!STATE.auth) toast('Tu sesión ha expirado. Cierra sesión y vuelve a iniciar sesión para sincronizar.','warn');
-      else if (!STATE.isOnline) toast('Sin conexión a internet. Los datos se guardarán localmente y se sincronizarán al recuperar señal.','warn');
+      if (!STATE.auth || _authDead) toast('Tu sesión expiró. Toca el aviso rojo para volver a iniciar sesión; tus datos pendientes se conservan.','warn');
+      else if (!STATE.isOnline) toast('Sin conexión a internet. Los datos quedan guardados en el equipo y se enviarán al recuperar señal.','warn');
       else if (_syncing) toast('Sincronización en curso, por favor espera unos segundos…','info');
     }
     return;
   }
   _syncing = true; setSyncDot('syncing');
-  const connBanner = document.getElementById('conn-banner');
-  if (connBanner && manual) {
-    connBanner.className='conn-banner syncing';
-    connBanner.textContent='🔄 Sincronizando con el servidor...';
-  }
+  if (manual) _renderConnBanner('🔄 Sincronizando con el servidor...');
+  let up = {ok:0, fail:0}, corte = null, rescatados = 0, bajados = 0;
   try {
-    const pending = await idb.getAll('sync_pending');
-    let uploaded = 0, uploadFailed = 0;
-    for (const item of pending) {
-      try {
-        await execSyncOp(item);
-        await idb.delete('sync_pending', item.id);
-        uploaded++;
-      } catch(e){
-        uploadFailed++;
-        console.warn('sync item failed:', item.id, e.message);
-      }
+    if (manual) {   // el usuario pidió sincronizar: reintentar también los que estaban en espera
+      for (const p of await idb.getAll('sync_pending')) if (p.nextTry) { p.nextTry = 0; await idb.put('sync_pending', p); }
     }
-    const famsBefore = STATE.familias.filter(f=>!f.deleted_at).length;
-    await pullFromCloud();
-    const famsAfter  = STATE.familias.filter(f=>!f.deleted_at).length;
-    const downloaded = Math.max(0, famsAfter - famsBefore);
-    setSyncDot('online');
-    if (manual) {
-      const parts = [];
-      if (uploaded>0)      parts.push(`${uploaded} registro(s) subido(s)`);
-      if (downloaded>0)    parts.push(`${downloaded} familia(s) nueva(s) descargada(s)`);
-      if (uploadFailed>0)  parts.push(`⚠ ${uploadFailed} pendiente(s) con error — verifica conexión`);
-      if (!parts.length)   parts.push('Todo al día · Sin cambios pendientes');
-      toast((uploadFailed>0?'⚠ ':'✅ ')+'Sincronización — '+parts.join(' · '), uploadFailed>0?'warn':'ok');
+    try { up = await _flushPending(); } catch(e) { corte = e; }
+    if (!corte) {
+      bajados = await pullFromCloud();
+      if (manual || !_rescateHecho) { rescatados = await _rescatarHuerfanos(); _rescateHecho = true; }
+      _lastSyncTs = Date.now();
+      localStorage.setItem('lastSyncTs', String(_lastSyncTs));
+      _updateSyncTimestamp();
     }
-    _lastSyncTs = Date.now();
-    localStorage.setItem('lastSyncTs', String(_lastSyncTs));
-    _updateSyncTimestamp();
-  } catch(e){
-    setSyncDot('online');
-    if (manual) toast('Error al sincronizar: '+e.message,'err');
+  } catch(e) {
+    corte = corte || e;
   } finally {
-    if (connBanner) { connBanner.className='conn-banner'; connBanner.textContent=''; }
     _syncing = false;
+    setSyncDot(STATE.isOnline ? 'online' : 'offline');
+    _renderConnBanner();
     updateSyncUI();
   }
+  const pendientes = (await _misPendientes()).length;
+  if (corte) {
+    console.warn('[sync] interrumpida:', corte.message);
+    if (manual && !corte.authDead) toast(`⚠ Sincronización interrumpida (${corte.network?'señal débil o sin internet':corte.message.slice(0,80)}). ${pendientes} registro(s) quedan guardados y se enviarán automáticamente.`,'warn',8000);
+  } else if (manual) {
+    const parts = [];
+    if (up.ok>0)       parts.push(`${up.ok} registro(s) enviado(s)`);
+    if (rescatados>0)  parts.push(`${rescatados} registro(s) recuperado(s) del equipo`);
+    if (bajados>0)     parts.push(`${bajados} actualización(es) recibida(s)`);
+    if (up.fail>0)     parts.push(`⚠ ${up.fail} con error (ver estado de sincronización)`);
+    if (!parts.length) parts.push('Todo al día · Sin cambios pendientes');
+    toast((up.fail>0?'⚠ ':'✅ ')+'Sincronización — '+parts.join(' · '), up.fail>0?'warn':'ok', 7000);
+  }
+  if (!corte && pendientes > 0 && up.ok > 0) _programarSync(3000);  // quedaron cambios hechos durante el envío
+}
+
+async function _misPendientes() {
+  const myUid = STATE.auth?.user?.id;
+  return (await idb.getAll('sync_pending')).filter(p=>!p.uid || p.uid===myUid);
 }
 
 let _lastSyncTs = parseInt(localStorage.getItem('lastSyncTs')||'0');
@@ -1072,183 +1302,229 @@ function _updateSyncTimestamp() {
   const diff = Math.round((Date.now()-_lastSyncTs)/1000);
   el.textContent = diff < 60 ? 'Hace menos de 1 min' :
     diff < 3600 ? `Hace ${Math.floor(diff/60)} min` :
-    new Date(_lastSyncTs).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+    new Date(_lastSyncTs).toLocaleString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
 }
 
-// Auto-sync cada 2 minutos mientras la app esté abierta y con sesión activa
+// Auto-sync cada 2 minutos (ahora es incremental: solo viaja lo que cambió)
 let _autoSyncInterval = null;
 function startAutoSync() {
   if (_autoSyncInterval) clearInterval(_autoSyncInterval);
   _autoSyncInterval = setInterval(async () => {
-    if (STATE.auth && STATE.isOnline && STATE.screen !== 'login') {
-      await syncToCloud(false); // silencioso
+    if (STATE.auth && STATE.isOnline && !_authDead && STATE.screen !== 'login') {
+      await syncToCloud(false);
       _updateSyncTimestamp();
     }
-  }, 2 * 60 * 1000); // cada 2 minutos
+  }, 2 * 60 * 1000);
 }
 
-async function execSyncOp(item) {
-  const {op, table, data} = item;
-  if (op==='upsert') {
-    await sbFetch(`/rest/v1/${table}`, {
-      method:'POST',
-      headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
-      body: JSON.stringify(data)
-    });
-  } else if (op==='delete') {
-    await sbFetch(`/rest/v1/${table}?id=eq.${data.id}`, {method:'DELETE'});
-  } else if (op==='soft-delete') {
-    await sbFetch(`/rest/v1/${table}?id=eq.${data.id}`, {
-      method:'PATCH', headers:{'Prefer':'return=minimal'},
-      body: JSON.stringify({deleted_at: new Date().toISOString()})
-    });
-  }
+// ── Descarga ──────────────────────────────────────────────────
+// Transición desde v5.4: allí un cambio podía quedar guardado en el equipo pero ni en el
+// servidor ni en la cola (app cerrada a mitad de envío). En la primera descarga completa de
+// cada usuario se compara cada registro local con el del servidor antes de reemplazarlo.
+const _CAMPO_DATOS = {familias:'d2', personas:'d3', planes_familiar:'data'};
+function _jsonEstable(v) {
+  if (Array.isArray(v)) return '['+v.map(_jsonEstable).join(',')+']';
+  if (v && typeof v==='object') return '{'+Object.keys(v).filter(k=>v[k]!==undefined).sort()
+    .map(k=>JSON.stringify(k)+':'+_jsonEstable(v[k])).join(',')+'}';
+  return JSON.stringify(v===undefined ? null : v);
+}
+function _firmaContenido(table, r) {
+  return _jsonEstable({d: r[_CAMPO_DATOS[table]] ?? null, del: r.deleted_at || null});
+}
+// 'igual' | 'local' (el equipo tiene una versión más reciente sin subir) | 'servidor'
+function _decidirTransicion(table, ex, r) {
+  if (_firmaContenido(table, ex) === _firmaContenido(table, r)) return 'igual';
+  const tl = Date.parse(ex.updated_at||'') || 0, ts = Date.parse(r.updated_at||'') || 0;
+  const relojAdelantado = tl > Date.now() + 10*60*1000;   // fecha local en el futuro: no confiar
+  return (tl > ts && !relojAdelantado) ? 'local' : 'servidor';
 }
 
-async function pullFromCloud() {
-  if (!STATE.auth) return;
-  // Refresh current user's profile first
-  try {
-    const allProfs = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
-    const freshProf = (allProfs||[]).filter(r=>r.id===STATE.auth.user.id);
-    if (freshProf?.[0]) {
-      STATE.profile = freshProf[0];
-      // Update IDB session with fresh profile
-      const sess = await idb.get('auth','session');
-      if (sess) await idb.put('auth', {...sess, profile: STATE.profile});
-      document.getElementById('btn-admin').style.display =
-        STATE.profile?.rol==='admin' ? '' : 'none';
-      document.getElementById('btn-analytics').style.display = '';
-    }
-  } catch(e){}
-  // Familias — siempre usa RPC SECURITY DEFINER (garantiza auth.uid() correcto)
-  const isAdminNow = STATE.profile?.rol === 'admin';
-  const _famRpc = isAdminNow ? 'get_all_familias' : 'get_my_familias';
-  try {
-    const fams = await sbFetch(`/rest/v1/rpc/${_famRpc}`, {method:'POST', body:'{}'});
-    const serverFamIds = new Set((fams||[]).map(f=>f.id));
-    // Familias con eliminación pendiente de subir al servidor
-    const pendingDelFamIds = new Set(
-      (await idb.getAll('sync_pending'))
-        .filter(p => p.table==='familias' && (p.op==='soft-delete'||p.op==='delete'))
-        .map(p => p.data?.id)
-    );
-    for (const f of (fams||[])) {
-      const existing = await idb.get('familias', f.id);
-      // Si está localmente eliminada y el delete aún no llegó al servidor, preservar el soft-delete
-      if (existing?.deleted_at && pendingDelFamIds.has(f.id)) continue;
-      // El servidor es autoritativo: los RPCs solo devuelven deleted_at IS NULL,
-      // así que siempre escribimos — evita que registros activos queden "ocultos"
-      // por un deleted_at residual en el IDB local.
-      const record = {...f};
-      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
-      await idb.put('familias', record);
-    }
-    // Registros fantasma: activos en IDB pero ausentes en el servidor (eliminados en otro dispositivo).
-    // NO se modifica el IDB (protege contra pérdidas si el RPC devuelve vacío por error de red).
-    // Se guarda en _ghostFamIds (en memoria) y rebuildAppState los filtra de la vista.
-    if (Array.isArray(fams) && fams.length > 0) {
-      const pendingFamIds = new Set(
-        (await idb.getAll('sync_pending'))
-          .filter(p=>p.table==='familias').map(p=>p.data?.id)
-      );
-      const allLocalFams = await idb.getAll('familias');
-      _ghostFamIds.clear();
-      for (const lf of allLocalFams) {
-        if (!lf.deleted_at && !serverFamIds.has(lf.id) && !pendingFamIds.has(lf.id)) {
-          _ghostFamIds.add(lf.id);
-          console.log(`[sync] familia fantasma ocultada (no borrada): ${lf.id}`);
-        }
-      }
-    }
-    console.log(`[sync] familias descargadas: ${(fams||[]).length}`);
-  } catch(e) { console.warn('[sync] error familias:', e.message); }
-
-  // Personas — siempre usa RPC SECURITY DEFINER
-  const _perRpc = isAdminNow ? 'get_all_personas' : 'get_my_personas';
-  try {
-    const pers = await sbFetch(`/rest/v1/rpc/${_perRpc}`, {method:'POST', body:'{}'});
-    // IDs con eliminación pendiente de subir: el servidor aún los devuelve activos,
-    // pero el IDB local ya los tiene con deleted_at → no restaurar desde el servidor.
-    const pendingDelPerIds = new Set(
-      (await idb.getAll('sync_pending'))
-        .filter(p => p.table==='personas' && (p.op==='soft-delete'||p.op==='delete'))
-        .map(p => p.data?.id)
-    );
-    for (const p of (pers||[])) {
-      const existing = await idb.get('personas', p.id);
-      // Si está localmente eliminado y el delete aún no llegó al servidor, preservar el soft-delete
-      if (existing?.deleted_at && pendingDelPerIds.has(p.id)) continue;
-      const record = {...p};
-      if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
-      // Preservar campos v7_* locales si el servidor no los tiene aún
-      if (existing?.d3) {
-        const serverD3 = record.d3 || {};
-        const merged = {...serverD3};
-        for (const k of Object.keys(existing.d3)) {
-          if (k.startsWith('v7_') && (merged[k] === undefined || merged[k] === null ||
-              (Array.isArray(merged[k]) && !merged[k].length))) {
-            merged[k] = existing.d3[k];
+// Escribe una página de registros del servidor en UNA transacción (rápido en celulares).
+// En transición devuelve los registros locales que deben conservarse y reenviarse; la versión
+// descartada (local o del servidor) se guarda en config como 'respaldo_v6:tabla:id'.
+async function _aplicarFilas(table, rows, pendKeys, transicion=false) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(transicion ? [table,'config'] : table, 'readwrite');
+    const st = tx.objectStore(table);
+    const cfg = transicion ? tx.objectStore('config') : null;
+    const ganaLocal = [];
+    for (const r of rows) {
+      if (pendKeys.has(table+':'+r.id)) continue;      // hay cambio local sin subir: manda el local
+      const g = st.get(r.id);
+      g.onsuccess = () => {
+        const ex = g.result, rec = {...r};
+        if (ex && transicion) {
+          const dec = _decidirTransicion(table, ex, r);
+          if (dec !== 'igual') {
+            cfg.put({key:`respaldo_v6:${table}:${r.id}`, value:{
+              table, id:r.id, conservado: dec==='local' ? 'equipo' : 'servidor',
+              copia: dec==='local' ? r : ex, fecha: new Date().toISOString()}});
+            if (dec === 'local') { ganaLocal.push(ex); return; }
           }
         }
-        record.d3 = merged;
-      }
-      await idb.put('personas', record);
+        if (ex) {
+          if (!rec.ebs_code && ex.ebs_code) rec.ebs_code = ex.ebs_code;
+          if (!rec.familia_id && ex.familia_id) rec.familia_id = ex.familia_id;
+          // Preservar campos v7_* locales si el servidor no los tiene aún
+          if (table==='personas' && ex.d3) {
+            const merged = {...(rec.d3||{})};
+            for (const k of Object.keys(ex.d3)) {
+              if (k.startsWith('v7_') && (merged[k]===undefined || merged[k]===null ||
+                  (Array.isArray(merged[k]) && !merged[k].length))) merged[k] = ex.d3[k];
+            }
+            rec.d3 = merged;
+          }
+        }
+        st.put(rec);
+      };
     }
-    console.log(`[sync] personas descargadas: ${(pers||[]).length}`);
-  } catch(e) { console.warn('[sync] error personas:', e.message); }
+    tx.oncomplete = () => res(ganaLocal);
+    tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error);
+  });
+}
 
-  // Planes de Cuidado Familiar — siempre usa RPC SECURITY DEFINER
-  const _plRpc = isAdminNow ? 'get_all_planes_familiar' : 'get_my_planes_familiar';
-  try {
-    const planes = await sbFetch(`/rest/v1/rpc/${_plRpc}`, {method:'POST', body:'{}'});
-    for (const pl of (planes||[])) {
-      const existing = await idb.get('planes_familiar', pl.id);
-      // Mismo criterio que familias: servidor autoritativo
-      const record = {...pl};
-      if (!record.familia_id && existing?.familia_id) record.familia_id = existing.familia_id;
-      if (!record.ebs_code && existing?.ebs_code) record.ebs_code = existing.ebs_code;
-      await idb.put('planes_familiar', record);
+// Descarga incremental y paginada de una tabla. Devuelve cuántas filas llegaron.
+async function _pullTabla(table, full=false) {
+  const uidU = STATE.auth.user.id;
+  const ck   = `cursor_${uidU}_${table}`;
+  // Si cambia el rol o los EBS asignados, se baja todo de nuevo (nuevo alcance de datos)
+  const sig  = (STATE.profile?.rol||'') + '|' + (STATE.profile?.ebs_codes||[]).join(',');
+  // Primera descarga v6 de este usuario en este equipo: completa y comparando con lo local
+  const tk   = `transicion_v6_${uidU}_${table}`;
+  const transicion = !(await idb.get('config', tk));
+  const cur  = (full || transicion) ? null : (await idb.get('config', ck))?.value;
+  const valid = cur?.since && cur.sig === sig;
+  // Ventana de solape de 5 min: captura transacciones que confirmaron tarde
+  let since = valid ? new Date(new Date(cur.since).getTime() - 5*60*1000).toISOString() : '1970-01-01T00:00:00Z';
+  let after = '', maxSince = valid ? cur.since : null, total = 0, conservados = 0;
+  const pendKeys = new Set((await idb.getAll('sync_pending')).map(p=>p.id));
+  for (let guard=0; guard<1000; guard++) {
+    const rows = await sbFetch('/rest/v1/rpc/sync_pull', {
+      method:'POST', timeout: 60000,
+      body: JSON.stringify({p_table: table, p_since: since, p_after_id: after, p_limit: SYNC_PAGE})
+    }) || [];
+    if (!rows.length) break;
+    const ganaLocal = await _aplicarFilas(table, rows, pendKeys, transicion);
+    for (const rec of ganaLocal) {           // edición local más reciente que nunca subió: reenviar
+      await addPending('upsert', table, rec);
+      pendKeys.add(table+':'+rec.id);
+      conservados++;
     }
-    console.log(`[sync] planes descargados: ${(planes||[]).length}`);
-  } catch(e) { console.warn('[sync] error planes:', e.message); }
+    total += rows.length;
+    const last = rows[rows.length-1];
+    since = last.synced_at; after = last.id;
+    if (!maxSince || new Date(last.synced_at) > new Date(maxSince)) maxSince = last.synced_at;
+    if (rows.length < SYNC_PAGE) break;
+  }
+  if (maxSince) await idb.put('config', {key: ck, value: {since: maxSince, sig}});
+  if (transicion) {
+    await idb.put('config', {key: tk, value: {fecha: new Date().toISOString(), conservados}});
+    if (conservados) console.log(`[sync] transición v6 ${table}: ${conservados} edición(es) locales conservadas y reencoladas`);
+  }
+  return total;
+}
+
+// Respaldo para servidores sin la migración sync_pull (descarga completa, sin ocultar "fantasmas")
+async function _pullLegacy(table) {
+  const isAdminNow = STATE.profile?.rol === 'admin';
+  const rpc = {familias: isAdminNow?'get_all_familias':'get_my_familias',
+               personas: isAdminNow?'get_all_personas':'get_my_personas',
+               planes_familiar: isAdminNow?'get_all_planes_familiar':'get_my_planes_familiar'}[table];
+  const rows = await sbFetch(`/rest/v1/rpc/${rpc}`, {method:'POST', body:'{}', timeout:90000}) || [];
+  const pendKeys = new Set((await idb.getAll('sync_pending')).map(p=>p.id));
+  await _aplicarFilas(table, rows, pendKeys);
+  return 0;
+}
+
+let _deltaDisponible = true;
+async function pullFromCloud(opts={}) {
+  if (!STATE.auth) return 0;
+  // Perfil fresco (rol / EBS asignados pueden haber cambiado)
+  try {
+    const allProfs = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
+    const freshProf = (allProfs||[]).find(r=>r.id===STATE.auth.user.id);
+    if (freshProf) {
+      STATE.profile = freshProf;
+      const sess = await idb.get('auth','session');
+      if (sess) await idb.put('auth', {...sess, profile: STATE.profile});
+      document.getElementById('btn-admin').style.display = STATE.profile?.rol==='admin' ? '' : 'none';
+      document.getElementById('btn-analytics').style.display = '';
+    }
+    if (STATE.profile?.rol==='admin') {
+      STATE.adminUsers = allProfs||[];
+      for (const p of (allProfs||[])) await idb.put('profiles', p);
+    }
+  } catch(e){ if (_esCorte(e)) throw e; }
+
+  let total = 0, err = null;
+  for (const t of ['familias','personas','planes_familiar']) {
+    try {
+      if (_deltaDisponible) total += await _pullTabla(t, !!opts.full);
+      else await _pullLegacy(t);
+    } catch(e) {
+      if (_deltaDisponible && (e.status===404 || /sync_pull/.test(e.message||''))) {
+        console.warn('[sync] RPC sync_pull no disponible; usando descarga completa');
+        _deltaDisponible = false;
+        try { await _pullLegacy(t); } catch(e2){ err = err || e2; }
+      } else { err = err || e; console.warn(`[sync] error descargando ${t}:`, e.message); }
+    }
+  }
   // Opciones custom
   try {
-    const opts = await sbFetch('/rest/v1/opciones_custom?activo=eq.true&select=*');
+    const opts2 = await sbFetch('/rest/v1/opciones_custom?activo=eq.true&select=*');
     await idb.clear('opciones_custom');
-    for (const o of (opts||[])) await idb.put('opciones_custom', o);
+    for (const o of (opts2||[])) await idb.put('opciones_custom', o);
   } catch(e) { console.warn('[sync] error opciones_custom:', e.message); }
-  // Config (reportConfig + field_cfg + any other keys)
+  // Config (reportConfig + field_cfg + otras claves)
   try {
     const cfgs = await sbFetch('/rest/v1/config?select=*');
     for (const c of (cfgs||[])) {
       await idb.put('config', c);
-      if (c.key==='field_cfg' && c.value) {
-        STATE.fieldConfig = {t2:{}, t3:{}, ...c.value};
-      }
+      if (c.key==='field_cfg' && c.value) STATE.fieldConfig = {t2:{}, t3:{}, ...c.value};
     }
   } catch(e) { console.warn('[sync] error config:', e.message); }
-  // Profiles (admin only) — via RPC to bypass RLS+select bug
-  if (STATE.profile?.rol==='admin') {
-    try {
-      const profs = await sbFetch('/rest/v1/rpc/get_profiles', {method:'POST', body:'{}'});
-      STATE.adminUsers = profs||[];
-      for (const p of (profs||[])) await idb.put('profiles', p);
-    } catch(e) { console.warn('[sync] error profiles:', e.message); }
-  }
   // rebuildAppState y render siempre se ejecutan, independiente de errores parciales
   await rebuildAppState();
   render();
   updateSyncUI();
-  console.log(`[sync] rebuildAppState completo — ${STATE.familias.length} familia(s) visibles`);
+  console.log(`[sync] ${total} fila(s) recibidas · ${STATE.familias.length} familia(s) visibles`);
+  if (err) throw err;
+  return total;
+}
+
+// Rescate: registros creados por este usuario que existen en el equipo pero NO en el servidor
+// y no están en cola (p.ej. la app se cerró a mitad de un envío en versiones anteriores).
+let _rescateHecho = false;
+async function _rescatarHuerfanos() {
+  const myUid = STATE.auth?.user?.id;
+  if (!myUid || !_deltaDisponible) return 0;
+  const pend = new Set((await idb.getAll('sync_pending')).map(p=>p.id));
+  let n = 0;
+  for (const table of ['familias','personas','planes_familiar']) {
+    let ids;
+    try { ids = await sbFetch('/rest/v1/rpc/sync_my_ids', {method:'POST', body: JSON.stringify({p_table: table}), timeout: 45000}); }
+    catch(e) { if (_esCorte(e)) throw e; return n; }
+    const srv = new Set((ids||[]).map(x => typeof x==='string' ? x : Object.values(x||{})[0]));
+    for (const r of await idb.getAll(table)) {
+      if (r.created_by===myUid && !r.deleted_at && !srv.has(r.id) && !pend.has(table+':'+r.id)) {
+        await addPending('upsert', table, r); n++;
+      }
+    }
+  }
+  if (n) {
+    console.log(`[sync] ${n} registro(s) huérfano(s) reencolados`);
+    try { await _flushPending(); } catch(e) {}
+  }
+  return n;
 }
 
 async function rebuildAppState() {
-  // Load familias from IDB
-  let fams;
   // Always load all local families first — avoids losing records when ebs_code index
   // is stale (e.g. server overwrote the IDB record without ebs_code) or when profile
   // ebs_codes list is empty / out of sync with calcEBS output.
+  let fams;
   const allLocal = await idb.getAll('familias');
   if (STATE.profile?.rol==='admin') {
     fams = allLocal;
@@ -1269,15 +1545,21 @@ async function rebuildAppState() {
       return terPrefixes.some(prefix => f.ebs_code.startsWith(prefix));           // EBS regular: territorio
     });
   }
-  fams = fams.filter(f=>!f.deleted_at && !_ghostFamIds.has(f.id));
-  // Deduplicar por id (protección contra doble escritura en IDB o Supabase)
+  // Las eliminaciones llegan del servidor como deleted_at (descarga incremental),
+  // por eso ya no se ocultan registros "fantasma" por ausencia en la última descarga.
+  fams = fams.filter(f=>!f.deleted_at);
   const _seenFam = new Set();
   fams = fams.filter(f=>{ if(_seenFam.has(f.id))return false; _seenFam.add(f.id); return true; });
-  // Attach personas y planes
+  // Personas: una sola lectura agrupada por familia (antes: una consulta por familia)
+  const perByFam = new Map();
+  for (const p of await idb.getAll('personas')) {
+    if (p.deleted_at) continue;
+    if (!perByFam.has(p.familia_id)) perByFam.set(p.familia_id, []);
+    perByFam.get(p.familia_id).push({id:p.id, d3:p.d3, created_by:p.created_by, created_at:p.created_at, ebs_code:p.ebs_code});
+  }
   const allPlanes = await idb.getAll('planes_familiar');
   for (const f of fams) {
-    const ps = await idb.getAllByIndex('personas','familia_id',f.id);
-    f.personas = ps.filter(p=>!p.deleted_at).map(p=>({id:p.id, d3:p.d3, created_by:p.created_by, created_at:p.created_at, ebs_code:p.ebs_code}));
+    f.personas = perByFam.get(f.id) || [];
     f.plan = allPlanes.find(pl=>pl.familia_id===f.id && !pl.deleted_at) || null;
   }
   STATE.planesFamiliar = allPlanes.filter(pl=>!pl.deleted_at);
@@ -1296,11 +1578,7 @@ async function rebuildAppState() {
   if (cfg?.value) STATE.config = cfg.value;
   // Load field configuration (dropdown options + defaults for any field)
   const fcfg = await idb.get('config','field_cfg');
-  if (fcfg?.value) {
-    STATE.fieldConfig = {t2:{}, t3:{}, ...fcfg.value};
-  } else {
-    STATE.fieldConfig = {t2:{}, t3:{}};
-  }
+  STATE.fieldConfig = fcfg?.value ? {t2:{}, t3:{}, ...fcfg.value} : {t2:{}, t3:{}};
   // Load EBS list
   const ebsRec = await idb.get('config','ebs_list');
   STATE.ebsList = ebsRec?.value||[];
@@ -1314,56 +1592,138 @@ function setSyncDot(state) {
 }
 
 async function updateSyncUI() {
-  const pending = await idb.getAll('sync_pending');
+  const mine = await _misPendientes();
+  const err  = mine.filter(p=>p.lastError).length;
   const badge = document.getElementById('pending-badge');
   if (badge) {
-    badge.style.display = pending.length>0 ? '' : 'none';
-    badge.textContent = `${pending.length} pendiente${pending.length!==1?'s':''}`;
+    badge.style.display = mine.length>0 ? '' : 'none';
+    badge.textContent = `⏳ ${mine.length} sin enviar` + (err ? ` · ⚠ ${err} con error` : '');
+    badge.style.background = err ? 'var(--red)' : '';
+    badge.style.color = err ? '#fff' : '';
+  }
+}
+
+// Banner superior único: sesión expirada > sin conexión > mensaje temporal
+function _renderConnBanner(msg) {
+  const b = document.getElementById('conn-banner');
+  if (!b) return;
+  b.onclick = null; b.style.cursor = '';
+  if (STATE.auth && _authDead) {
+    b.className = 'conn-banner offline';
+    b.textContent = '⚠ Sesión expirada — tus datos están guardados en este equipo. Toca aquí para volver a iniciar sesión y enviarlos.';
+    b.onclick = reautenticar; b.style.cursor = 'pointer';
+  } else if (!STATE.isOnline) {
+    b.className = 'conn-banner offline';
+    b.textContent = '⚠ Sin conexión — los datos se guardan en el equipo y se enviarán al recuperar señal';
+  } else if (msg) {
+    b.className = 'conn-banner syncing'; b.textContent = msg;
+  } else {
+    b.className = 'conn-banner'; b.textContent = '';
   }
 }
 
 async function writeRecord(table, data) {
-  await idb.put(table, data);
-  if (STATE.isOnline && STATE.auth) {
-    try {
-      await sbFetch(`/rest/v1/${table}`, {
-        method:'POST',
-        headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
-        body: JSON.stringify(data)
-      });
-    } catch(e){ await addPending('upsert', table, data); }
-  } else {
-    await addPending('upsert', table, data);
-  }
+  // Fusiona con lo que ya hay en el equipo para no perder columnas omitidas (p.ej. ebs_code)
+  const prev = SYNC_COLS[table] ? await idb.get(table, data.id) : null;
+  const full = prev ? {...prev, ...data} : data;
+  await idb.put(table, full);
+  await addPending('upsert', table, full);     // primero a la cola: sobrevive a cierres de la app
+  _programarSync();
 }
 
 async function softDeleteRecord(table, id) {
   const rec = await idb.get(table, id);
-  if (rec) { rec.deleted_at = new Date().toISOString(); await idb.put(table, rec); }
-  if (STATE.isOnline && STATE.auth) {
-    try {
-      await sbFetch(`/rest/v1/${table}?id=eq.${id}`, {
-        method:'PATCH', headers:{'Prefer':'return=minimal'},
-        body: JSON.stringify({deleted_at: new Date().toISOString()})
-      });
-    } catch(e){ await addPending('soft-delete', table, {id}); }
-  } else { await addPending('soft-delete', table, {id}); }
+  const now = new Date().toISOString();
+  if (rec) {
+    rec.deleted_at = now; rec.updated_at = now;
+    await idb.put(table, rec);
+    await addPending('upsert', table, rec);    // el borrado viaja como el registro con deleted_at
+  } else {
+    await addPending('soft-delete', table, {id});
+  }
+  _programarSync();
+}
+
+// Panel de estado de sincronización (visible para todos los usuarios, no solo admin)
+async function abrirEstadoSync() {
+  const mine = (await _misPendientes()).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const otros = (await idb.getAll('sync_pending')).length - mine.length;
+  const nRespaldoV6 = (await _respaldosV6()).length;
+  const nombreDe = p => {
+    const d = p.data||{};
+    if (p.table==='familias') return 'Familia · '+(d.d2?.['3']||d.d2?.['2']||String(d.id||'').slice(-6));
+    if (p.table==='personas') return 'Persona · '+([d.d3?.['3'],d.d3?.['5']].filter(Boolean).join(' ')||String(d.id||'').slice(-6));
+    if (p.table==='planes_familiar') return 'Plan de cuidado · '+String(d.familia_id||'').slice(-6);
+    return p.table+' · '+(d.key||d.id||'');
+  };
+  const rows = mine.slice(0,100).map(p=>`<tr>
+      <td style="font-size:11px;padding:3px 4px">${esc(nombreDe(p))}${p.data?.deleted_at?' <span style="color:var(--red)">(eliminación)</span>':''}</td>
+      <td style="font-size:10px;padding:3px 4px;color:var(--muted)">${new Date(p.ts||0).toLocaleString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+      <td style="font-size:10px;padding:3px 4px;color:${p.lastError?'var(--red)':'var(--muted)'}">${p.lastError?esc(p.lastError.slice(0,90)):'En espera'}</td>
+    </tr>`).join('');
+  const estado = _authDead ? '🔴 Sesión expirada' : !STATE.isOnline ? '🔴 Sin conexión' : '🟢 En línea';
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-height:85vh;overflow:auto">
+      <div class="modal-title">🔄 Estado de sincronización</div>
+      <div style="font-size:12px;margin-bottom:8px">${estado} · Última sincronización: ${_lastSyncTs?new Date(_lastSyncTs).toLocaleString('es-CO'):'nunca'}</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">${mine.length} registro(s) guardados en este equipo y aún no enviados</div>
+      ${otros>0?`<div style="font-size:11px;color:var(--yellow);margin-bottom:6px">Además hay ${otros} registro(s) de OTRO usuario en este equipo: se enviarán cuando ese usuario inicie sesión aquí.</div>`:''}
+      ${mine.length?`<table style="width:100%;border-collapse:collapse;margin-bottom:8px"><tbody>${rows}</tbody></table>
+        ${mine.length>100?`<div style="font-size:10px;color:var(--muted)">… y ${mine.length-100} más</div>`:''}`
+        :'<div style="color:var(--green);font-size:12px;margin-bottom:8px">✓ Todo lo capturado en este equipo ya está en el servidor.</div>'}
+      ${nRespaldoV6>0?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🛟 ${nRespaldoV6} copia(s) de seguridad de la actualización a v6 guardadas en este equipo (versiones que no quedaron como definitivas). Se incluyen al tocar Respaldo.</div>`:''}
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Los registros pendientes NO se pierden al cerrar la app ni al quedarse sin señal. No borres los datos del navegador ni desinstales la app mientras haya pendientes.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${_authDead?`<button class="btn btn-primary" style="flex:1" onclick="closeModal();reautenticar()">🔑 Iniciar sesión</button>`
+                   :`<button class="btn btn-primary" style="flex:1" onclick="closeModal();syncToCloud(true)">📤 Enviar ahora</button>`}
+        <button class="btn btn-secondary" style="flex:1" onclick="descargarRespaldoLocal()">💾 Respaldo</button>
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Versiones descartadas durante la transición a v6 (ver _aplicarFilas)
+async function _respaldosV6() {
+  return (await idb.getAll('config')).filter(c => String(c.key).startsWith('respaldo_v6:')).map(c => c.value);
+}
+
+// Respaldo de emergencia: exporta a un archivo lo pendiente + lo creado por este usuario en el equipo.
+// Útil si el equipo no logra sincronizar (daño, pérdida de sesión, cambio de celular).
+async function descargarRespaldoLocal() {
+  const myUid = STATE.auth?.user?.id;
+  const pend = await _misPendientes();
+  const propias = async t => (await idb.getAll(t)).filter(r=>r.created_by===myUid);
+  const data = {
+    app: 'SI-APS CCFP', version: APP_VERSION, generado: new Date().toISOString(), usuario: myUid,
+    pendientes: pend,
+    familias: await propias('familias'), personas: await propias('personas'), planes_familiar: await propias('planes_familiar'),
+    respaldo_transicion_v6: await _respaldosV6()
+  };
+  const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `respaldo_siaps_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  toast('Respaldo descargado. Contiene datos de pacientes: guárdalo de forma segura y entrégalo solo al coordinador.','warn',8000);
 }
 
 // ── Connectivity ──────────────────────────────────────────────
 function initConnectivity() {
-  const banner = document.getElementById('conn-banner');
   function update() {
     STATE.isOnline = navigator.onLine;
     setSyncDot(STATE.isOnline ? 'online' : 'offline');
-    if (banner) {
-      banner.className = STATE.isOnline ? 'conn-banner' : 'conn-banner offline';
-      banner.textContent = STATE.isOnline ? '' : '⚠ Sin conexión — los datos se guardan localmente y se sincronizarán al recuperar señal';
-    }
-    if (STATE.isOnline) syncToCloud();
+    _renderConnBanner();
+    if (STATE.isOnline) _programarSync(500);
   }
   window.addEventListener('online',  update);
   window.addEventListener('offline', update);
+  // iOS/Android congelan la PWA en segundo plano: al volver a primer plano, sincronizar
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState==='visible') _programarSync(800);
+  });
   update();
 }
 
@@ -1656,7 +2016,7 @@ async function loginSubmit() {
     btn.textContent='Creando cuenta...'; btn.disabled=true;
     try {
       await doSignup(email, pass, nombre);
-      await pullFromCloud();
+      await syncToCloud(false);
       _loginMode = 'login';
       navigate('home');
     } catch(e) {
@@ -1669,8 +2029,9 @@ async function loginSubmit() {
     btn.textContent='Ingresando...'; btn.disabled=true;
     try {
       await doLogin(email, pass);
-      await pullFromCloud();
       navigate('home');
+      // Sube primero lo que quedó pendiente en este equipo y luego descarga (incremental)
+      syncToCloud(false);
     } catch(e) {
       showErr(err, e.message.includes('Invalid')||e.message.includes('invalid')
         ? 'Correo o contraseña incorrectos' : 'Error de conexión. Verifica tu internet.');
@@ -1847,7 +2208,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v5.4</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v6.0</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -1887,6 +2248,7 @@ function renderHome() {
       style="background:#dbeafe;color:#1e40af;border:1.5px solid #2563eb;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:10px">
       🔄 Cargar / Sincronizar datos
     </button>
+    <button class="btn btn-secondary btn-block" style="margin-top:6px;font-size:12px" onclick="abrirEstadoSync()">📋 Estado de sincronización de este equipo</button>
     <div style="text-align:center;margin-top:5px;font-size:11px;color:var(--muted)">
       Última sincronización: <span id="last-sync-label" style="color:#1e40af">${_lastSyncTs ? new Date(_lastSyncTs).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : 'Nunca (presiona el botón)'}</span>
     </div>
@@ -2277,9 +2639,15 @@ async function renderDiagTab() {
     const lbl  = fmtEBSCode(code);
     byEBS[lbl] = (byEBS[lbl]||0)+1;
   }
-  // 3. Familias en Supabase (via RPC get_all_familias — solo admin)
+  // 3. Familias en Supabase — paginado (la API devuelve máximo 1000 filas por respuesta)
   let serverFams = [];
-  try { serverFams = await sbFetch('/rest/v1/rpc/get_all_familias',{method:'POST',body:'{}'})||[]; } catch(e){}
+  try {
+    for (let off=0; off<200000; off+=1000) {
+      const page = await sbFetch(`/rest/v1/familias?select=ebs_code&deleted_at=is.null&order=id&limit=1000&offset=${off}`)||[];
+      serverFams.push(...page);
+      if (page.length < 1000) break;
+    }
+  } catch(e){}
   const serverByEBS = {};
   for (const f of serverFams) {
     const lbl = fmtEBSCode(f.ebs_code||'SIN_EBS');
@@ -6433,7 +6801,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v5.4 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v6.0 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -8606,7 +8974,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v5.4</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v6.0</div>
   </div>
 </div>
 
@@ -9213,7 +9581,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v5.4</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v6.0</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
@@ -9293,6 +9661,10 @@ function toast(msg,type='ok',ms=null){
 // ============================================================
 async function init() {
   await openDB();
+  try { await _migrarColaLegacy(); } catch(e){ console.warn('[sync] migración de cola:', e.message); }
+  // Pedir almacenamiento persistente: evita que el navegador (sobre todo Safari/iOS) borre
+  // IndexedDB por falta de espacio o inactividad, lo que eliminaría encuestas no enviadas.
+  try { if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch(e){}
   // ── Detectar token de recuperación en el hash de la URL ──────
   // Supabase redirige con #access_token=...&type=recovery
   const hashParams = new URLSearchParams(location.hash.replace(/^#/,''));
@@ -9309,6 +9681,7 @@ async function init() {
   if (sess?.access_token) {
     STATE.auth = {access_token:sess.access_token, refresh_token:sess.refresh_token, user:sess.user};
     STATE.profile = sess.profile||null;
+    _authDead = !!sess.authDead;
     document.getElementById('btn-admin').style.display = STATE.profile?.rol==='admin' ? '' : 'none';
     document.getElementById('btn-analytics').style.display = '';
     // Load data from IDB while trying to refresh online
@@ -9321,6 +9694,7 @@ async function init() {
   startAutoSync();
   render();
   updateSyncUI();
+  _renderConnBanner();
   // Actualizar label de "última sincronización" cada minuto
   setInterval(_updateSyncTimestamp, 60000);
   // Service Worker
