@@ -473,7 +473,7 @@ const REF_EAPB=[{"v":"CCF002","l":"COMFAMA CAJA DE COMPENSACIÓN FAMILIAR DE ANT
 const SB_URL  = 'https://wttljozqyaxlzilomnef.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0dGxqb3pxeWF4bHppbG9tbmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDg5NTEsImV4cCI6MjA5NDg4NDk1MX0.kAQkgGq7RmZxTM9KlwI6KI7BjhEBy-8w6OdHVkOPBDM';
 const SB_FUNC = SB_URL + '/functions/v1';
-const APP_VERSION = '6.0';
+const APP_VERSION = '6.2';
 
 // ── REF TABLES ───────────────────────────────────────────────
 const REF = {
@@ -948,6 +948,12 @@ function flagSessionExpired() {
 
 // Vuelve a pedir usuario/contraseña conservando la cola de pendientes y los datos locales
 async function reautenticar() {
+  // Sin internet no se puede iniciar sesión: no sacar al usuario a la pantalla de ingreso
+  // (quedaría bloqueado sin poder capturar). La captura sigue funcionando con la sesión caída.
+  if (!navigator.onLine) {
+    toast('Para volver a iniciar sesión necesitas internet. Mientras tanto puedes seguir registrando: todo queda guardado en este equipo.', 'warn', 9000);
+    return;
+  }
   const email = STATE.auth?.user?.email || '';
   await doLogout(true);
   setTimeout(()=>{ const el=document.getElementById('li-email'); if(el && email) el.value=email; }, 0);
@@ -965,6 +971,7 @@ async function doLogout(force=false) {
   _authDead = false; _sessionExpiredWarned = false;
   _lastSyncTs = 0; localStorage.removeItem('lastSyncTs');
   await idb.clear('auth');
+  if (!force) await _descartarBorradorFormulario();   // al reautenticar se conserva
   _renderConnBanner();
   render();
 }
@@ -1092,6 +1099,10 @@ const idb = {
 //     el servidor): sin tope de 1000 filas y sin bajar toda la base cada 2 minutos.
 //  5. La descarga nunca pisa un registro con cambios locales aún sin subir.
 let _syncing = false;
+
+// Pantallas de captura: se autoguardan y la sincronización en segundo plano no las redibuja
+const _FORM_SCREENS = new Set(['familia_t2','persona']);
+const _SIN_RENDER_SYNC = new Set(['familia_t2','persona','pcf_visita','compl_v7','config']);
 
 const SYNC_COLS = {
   familias:        ['id','ebs_code','d2','created_by','created_at','updated_at','deleted_at'],
@@ -1485,9 +1496,10 @@ async function pullFromCloud(opts={}) {
       if (c.key==='field_cfg' && c.value) STATE.fieldConfig = {t2:{}, t3:{}, ...c.value};
     }
   } catch(e) { console.warn('[sync] error config:', e.message); }
-  // rebuildAppState y render siempre se ejecutan, independiente de errores parciales
+  // rebuildAppState y render siempre se ejecutan, independiente de errores parciales.
+  // En un formulario NO se redibuja: cerraría el teclado y movería el cursor mientras se digita.
   await rebuildAppState();
-  render();
+  if (!_SIN_RENDER_SYNC.has(STATE.screen)) render();
   updateSyncUI();
   console.log(`[sync] ${total} fila(s) recibidas · ${STATE.familias.length} familia(s) visibles`);
   if (err) throw err;
@@ -1626,9 +1638,79 @@ async function writeRecord(table, data) {
   // Fusiona con lo que ya hay en el equipo para no perder columnas omitidas (p.ej. ebs_code)
   const prev = SYNC_COLS[table] ? await idb.get(table, data.id) : null;
   const full = prev ? {...prev, ...data} : data;
-  await idb.put(table, full);
-  await addPending('upsert', table, full);     // primero a la cola: sobrevive a cierres de la app
+  try {
+    await idb.put(table, full);
+    await addPending('upsert', table, full);   // primero a la cola: sobrevive a cierres de la app
+  } catch(e) {
+    // Sin esto el error quedaba silencioso y el botón Guardar se bloqueaba
+    if (typeof _savingFam !== 'undefined') _savingFam = false;
+    const lleno = e?.name === 'QuotaExceededError' || /quota/i.test(e?.message||'');
+    toast(lleno ? '⛔ NO se guardó: el almacenamiento del celular está lleno. Libera espacio (fotos, videos, apps) y vuelve a tocar Guardar; el formulario sigue abierto.'
+                : '⛔ NO se guardó en el equipo: '+(e?.message||e)+'. El formulario sigue abierto: intenta de nuevo.', 'err', 12000);
+    throw e;
+  }
   _programarSync();
+}
+
+// ── Autoguardado del formulario en curso ──────────────────────
+// En campo el sistema operativo cierra la app en segundo plano (llamada, cámara, batería) y
+// el formulario a medio llenar solo existía en memoria. Se guarda en IndexedDB cada pocos
+// segundos y al pasar a segundo plano; al reabrir la app se recupera.
+let _ultimoBorrador = '';
+// Cómo estaba el formulario al abrirlo: si no se ha tocado, no hay nada que recuperar
+let _baseDraftRef = null, _baseDraftSig = '';
+function _marcarBaseFormulario() {
+  const d = STATE.screen==='familia_t2' ? STATE.draft2 : STATE.screen==='persona' ? STATE.draft3 : null;
+  if (d && d !== _baseDraftRef) { _baseDraftRef = d; _baseDraftSig = JSON.stringify(d); }
+}
+function _snapshotFormulario() {
+  if (!STATE.auth || !_FORM_SCREENS.has(STATE.screen)) return null;
+  return {screen: STATE.screen, uid: STATE.auth.user.id, editFamId: STATE.editFamId||null,
+          editPerId: STATE.editPerId||null, t2step: STATE.t2step||1,
+          draft: STATE.screen==='familia_t2' ? STATE.draft2 : STATE.draft3};
+}
+async function _autoguardarFormulario() {
+  try {
+    const s = _snapshotFormulario();
+    if (!s) return;
+    if (s.draft === _baseDraftRef && JSON.stringify(s.draft) === _baseDraftSig) {   // sin cambios aún
+      if (_ultimoBorrador) await _descartarBorradorFormulario();
+      return;
+    }
+    const sig = JSON.stringify(s);
+    if (sig === _ultimoBorrador) return;
+    await idb.put('config', {key:'borrador_formulario', value:{...s, ts: Date.now()}});
+    _ultimoBorrador = sig;
+  } catch(e) {}
+}
+async function _descartarBorradorFormulario() {
+  _ultimoBorrador = '';
+  try { await idb.delete('config', 'borrador_formulario'); } catch(e) {}
+}
+// Firma para detectar si el borrador ya quedó guardado (campos que el guardado modifica, fuera)
+function _firmaDraft(d, ignorar) {
+  const o = {...(d||{})};
+  for (const k of ignorar) delete o[k];
+  return _jsonEstable(o);
+}
+// Devuelve true si dejó el estado listo para abrir el formulario recuperado
+function _restaurarFormulario(b) {
+  if (!b?.draft || !_FORM_SCREENS.has(b.screen)) return false;
+  if (b.screen === 'persona') {
+    const fam = STATE.familias.find(f=>f.id===b.editFamId);
+    if (!fam) return false;
+    const per = b.editPerId ? (fam.personas||[]).find(p=>p.id===b.editPerId) : null;
+    const sig = _firmaDraft(b.draft, ['_draft']);
+    if ((fam.personas||[]).some(p => _firmaDraft(p.d3, ['_draft']) === sig)) return false;  // ya guardado
+    STATE.editFamId = fam.id; STATE.editPerId = per ? per.id : null; STATE.draft3 = b.draft;
+  } else {
+    const fam = b.editFamId ? STATE.familias.find(f=>f.id===b.editFamId) : null;
+    const sig = _firmaDraft(b.draft, ['_draft','15','16']);
+    if (STATE.familias.some(f => _firmaDraft(f.d2, ['_draft','15','16']) === sig)) return false;
+    STATE.editFamId = fam ? fam.id : null; STATE.t2step = b.t2step||1; STATE.draft2 = b.draft;
+  }
+  STATE.screen = b.screen;
+  return true;
 }
 
 async function softDeleteRecord(table, id) {
@@ -1649,6 +1731,7 @@ async function abrirEstadoSync() {
   const mine = (await _misPendientes()).sort((a,b)=>(a.ts||0)-(b.ts||0));
   const otros = (await idb.getAll('sync_pending')).length - mine.length;
   const nRespaldoV6 = (await _respaldosV6()).length;
+  const alm = await _estadoAlmacenamiento();
   const nombreDe = p => {
     const d = p.data||{};
     if (p.table==='familias') return 'Familia · '+(d.d2?.['3']||d.d2?.['2']||String(d.id||'').slice(-6));
@@ -1672,6 +1755,7 @@ async function abrirEstadoSync() {
       ${mine.length?`<table style="width:100%;border-collapse:collapse;margin-bottom:8px"><tbody>${rows}</tbody></table>
         ${mine.length>100?`<div style="font-size:10px;color:var(--muted)">… y ${mine.length-100} más</div>`:''}`
         :'<div style="color:var(--green);font-size:12px;margin-bottom:8px">✓ Todo lo capturado en este equipo ya está en el servidor.</div>'}
+      <div style="font-size:11px;margin-bottom:6px;color:${alm.alerta?'var(--red)':'var(--muted)'}">${alm.texto}</div>
       ${nRespaldoV6>0?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🛟 ${nRespaldoV6} copia(s) de seguridad de la actualización a v6 guardadas en este equipo (versiones que no quedaron como definitivas). Se incluyen al tocar Respaldo.</div>`:''}
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Los registros pendientes NO se pierden al cerrar la app ni al quedarse sin señal. No borres los datos del navegador ni desinstales la app mientras haya pendientes.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1682,6 +1766,32 @@ async function abrirEstadoSync() {
       </div>
     </div>
   </div>`;
+}
+
+// Estado del almacenamiento local: si no es persistente o está casi lleno, el navegador
+// puede borrar los datos (incluidos los no enviados).
+async function _estadoAlmacenamiento() {
+  const partes = []; let alerta = false;
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone;
+  if (!standalone) {
+    partes.push('⚠ Abierta en el navegador, no como app instalada: instálala ("Agregar a pantalla de inicio") para que el equipo no borre los datos');
+    alerta = true;
+  }
+  try {
+    if (navigator.storage?.persisted) {
+      const p = await navigator.storage.persisted();
+      partes.push(p ? '💾 Almacenamiento protegido' : '💾 Almacenamiento no protegido (el equipo podría liberarlo si se queda sin espacio)');
+    }
+    if (navigator.storage?.estimate) {
+      const {usage=0, quota=0} = await navigator.storage.estimate();
+      const mb = n => (n/1048576).toFixed(n < 10485760 ? 1 : 0);
+      if (quota) {
+        partes.push(`usados ${mb(usage)} MB de ${mb(quota)} MB disponibles`);
+        if (quota - usage < 50*1048576) { alerta = true; partes.push('⚠ queda poco espacio: libera espacio en el celular'); }
+      }
+    }
+  } catch(e) {}
+  return {texto: partes.join(' · '), alerta};
 }
 
 // Versiones descartadas durante la transición a v6 (ver _aplicarFilas)
@@ -1723,7 +1833,10 @@ function initConnectivity() {
   // iOS/Android congelan la PWA en segundo plano: al volver a primer plano, sincronizar
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState==='visible') _programarSync(800);
+    else _autoguardarFormulario();      // al pasar a segundo plano el sistema puede cerrar la app
   });
+  window.addEventListener('pagehide', _autoguardarFormulario);
+  setInterval(_autoguardarFormulario, 3000);
   update();
 }
 
@@ -1828,8 +1941,12 @@ const SCREEN_META = {
 };
 
 function navigate(screen, extra={}) {
+  const prev = STATE.screen;
   Object.assign(STATE, extra);
   STATE.screen = screen;
+  // Salir del formulario (guardado o descartado a propósito): ya no hay nada que recuperar
+  if (_FORM_SCREENS.has(prev) && !_FORM_SCREENS.has(screen)) _descartarBorradorFormulario();
+  if (_FORM_SCREENS.has(screen)) _marcarBaseFormulario();
   render();
   window.scrollTo(0,0);
   document.getElementById('main').scrollTop=0;
@@ -2208,7 +2325,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v6.0</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v6.2</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -2780,19 +2897,40 @@ function fmtEBS(e){ return `EBS${e.num}-EBS-${e.label}`; }
 // ── Helpers crear/editar usuario — generación automática EBS ──
 const EBS_MUNI_MAP = {
   '001':'54003','002':'54003','003':'54003','004':'54003',
-  '005':'54128','006':'54128','007':'54128','008':'54128','009':'54128',
+  '005':'54206','006':'54206','007':'54206','008':'54206','009':'54206',
   '010':'54245','011':'54245','012':'54245','013':'54245',
-  '014':'54660','015':'54660','016':'54660','017':'54660',
-  '090':'54003','091':'54245','092':'54128',
+  '014':'54800','015':'54800','016':'54800','017':'54800',
+  '090':'54003','091':'54245','092':'54206',
   // Equipos departamentales PIC
-  '022':'54128','023':'54245','024':'54003','025':'54245','026':'54128','027':'54128','028':'54245'
+  '022':'54206','023':'54245','024':'54003','025':'54245','026':'54206','027':'54206','028':'54245'
 };
 const MUNI_HRNO = [
   {v:'54003',l:'Ábrego'},
-  {v:'54128',l:'Convención'},
+  {v:'54206',l:'Convención'},
   {v:'54245',l:'El Carmen'},
-  {v:'54660',l:'Teorama'}
+  {v:'54800',l:'Teorama'}
 ];
+// Territorialización OFICIAL de SI-APS (cuadros de parametrización del Ministerio, oct-2026).
+// app ebs_num → {ebs: código equipo SI-APS, ter: territorio, mun: municipio DANE, resp: CC responsable del EBS}.
+// Solo EBS regulares CON territorialización creada. Se EXCLUYEN del archivo PISIS (aún sin parametrizar):
+// JEP (90-92), PIC (22-28), Guamalito (11) y Tierra Azul (13). Microterritorio = MT001 (la vereda).
+const SIAPS_TERR = {
+  '1': {ebs:'ESE-EBS001', ter:'T002', mun:'54003', resp:'1100965208'}, // Capitanlargo · Ábrego · Sergio Solano
+  '2': {ebs:'ESE-EBS003', ter:'T001', mun:'54003', resp:'37393615'},   // Hoyo Pilón · Ingrid Botello
+  '3': {ebs:'ESE-EBS002', ter:'T003', mun:'54003', resp:'1094577013'}, // La Estrella · Andrea Ascanio Palacio
+  '4': {ebs:'ESE-EBS004', ter:'T004', mun:'54003', resp:'1094581394'}, // La Sierra · Adriana Gómez
+  '5': {ebs:'ESE-EBS017', ter:'T005', mun:'54206', resp:'1091163270'}, // Bridikayra · Convención · Jennifer Bohórquez
+  '6': {ebs:'ESE-EBS007', ter:'T004', mun:'54206', resp:'1091653021'}, // Campo Alegre · Didier Arévalo
+  '7': {ebs:'ESE-EBS008', ter:'T002', mun:'54206', resp:'1063481230'}, // Casa Blanca · Karen Ramírez
+  '8': {ebs:'ESE-EBS005', ter:'T001', mun:'54206', resp:'1066062880'}, // Cartagenita · Yurleidy Lozano
+  '9': {ebs:'ESE-EBS006', ter:'T003', mun:'54206', resp:'26774918'},   // La Laguna · Dorys Osorio
+  '10':{ebs:'ESE-EBS013', ter:'T002', mun:'54245', resp:'1091666157'}, // Corrongkayra · El Carmen · Jefersson Pérez
+  '12':{ebs:'ESE-EBS016', ter:'T001', mun:'54245', resp:'1003257688'}, // Santa Inés · Andrea Ascanio Navarro
+  '14':{ebs:'ESE-EBS010', ter:'T011', mun:'54800', resp:'1003379122'}, // Aserrío · Teorama · Wandy Amaya
+  '15':{ebs:'ESE-EBS011', ter:'T012', mun:'54800', resp:'1091673118'}, // La Cecilia · Nayeiry Bohórquez
+  '16':{ebs:'ESE-EBS012', ter:'T013', mun:'54800', resp:'1093778836'}, // San Juancito · Diana Sánchez
+  '17':{ebs:'ESE-EBS009', ter:'T010', mun:'54800', resp:'1005000893'}, // San Pablo · Andrea Rojas
+};
 // Equipos especiales Jóvenes en Paz — aparecen en formulario T2 y asignación de usuarios
 const JEP_EBS = [
   {num:'090', label:'JPA001: JOVENES EN PAZ ABREGO'},
@@ -4441,8 +4579,22 @@ function openGeopunto(){
 }
 function gpsCapture(){
   const st=document.getElementById('geo-status');
-  if(st)st.textContent='Obteniendo ubicación GPS…';
-  navigator.geolocation.getCurrentPosition(pos=>{
+  if(st)st.textContent='Obteniendo ubicación GPS… (sin internet puede tardar hasta 1 minuto; busca cielo abierto)';
+  // Sin datos móviles el GPS no tiene ayuda de red (A-GPS) y el primer punto tarda más:
+  // 45 s en alta precisión y, si no alcanza, un segundo intento con precisión normal.
+  const onErr = err => {
+    if (err.code === err.TIMEOUT && !gpsCapture._reintento) {
+      gpsCapture._reintento = true;
+      if(st)st.textContent='GPS lento, reintentando con precisión normal…';
+      navigator.geolocation.getCurrentPosition(onPos, onErr, {enableHighAccuracy:false, timeout:30000, maximumAge:120000});
+      return;
+    }
+    gpsCapture._reintento = false;
+    if(st)st.textContent='Error GPS: '+err.message+'. Mueve el marcador o escribe las coordenadas manualmente.';
+  };
+  const onPos = pos => {
+    gpsCapture._reintento = false;
+    if (!document.getElementById('g-lat')) return;   // el usuario cerró el mapa mientras esperaba
     const lat=pos.coords.latitude,lon=pos.coords.longitude;
     if(st)st.textContent=`GPS obtenido (precisión ±${Math.round(pos.coords.accuracy)}m). Puedes mover el marcador para ajustar.`;
     document.getElementById('g-lat').textContent=lat.toFixed(6);
@@ -4451,9 +4603,8 @@ function gpsCapture(){
       _geoMarker.setLatLng([lat,lon]);
       _geoMap.setView([lat,lon],17);
     }
-  },err=>{
-    if(st)st.textContent='Error GPS: '+err.message+'. Mueve el marcador manualmente.';
-  },{enableHighAccuracy:true,timeout:15000});
+  };
+  navigator.geolocation.getCurrentPosition(onPos, onErr, {enableHighAccuracy:true, timeout:45000, maximumAge:60000});
 }
 function confirmGeopunto(){
   const latEl=document.getElementById('g-lat');
@@ -6801,7 +6952,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v6.0 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v6.2 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -6970,7 +7121,7 @@ function pisisFileName(){
 // ============================================================
 // [no, longitudMax, tipo(N/A/D/F/T), requerido(1/0)] por registro (anexo v7 Jun-2026)
 const _SPEC_LEN={
-T2:[[0,1,"N",1],[1,10,"N",1],[2,1,"N",1],[3,2,"A",1],[4,3,"A",1],[5,5,"A",1],[6,3,"A",1],[7,4,"A",1],[8,1,"N",1],[9,200,"T",1],[10,1,"N",1],[11,200,"T",1],[12,10,"D",1],[13,10,"D",1],[14,200,"T",1],[15,10,"N",0],[16,1,"N",1],[17,2,"N",1],[18,3,"N",1],[19,2,"N",1],[20,3,"N",1],[21,1,"N",1],[22,2,"N",1],[23,5,"A",1],[24,200,"T",1],[25,10,"A",1],[26,9,"N",1],[27,2,"A",1],[28,20,"A",1],[29,200,"T",1],[30,10,"F",1],[31,2,"N",1],[32,20,"A",1],[33,56,"A",1],[34,11,"N",1],[35,11,"N",1],[36,5,"N",1],[37,1,"N",1],[38,1,"N",1],[39,200,"T",0],[40,2,"N",1],[41,1,"N",1],[42,1,"N",1],[43,1,"N",1],[44,20,"N",1],[45,200,"T",0],[46,13,"A",1],[47,200,"T",0],[48,11,"N",1],[49,200,"T",0],[50,1,"N",1],[51,1,"N",1],[52,1,"N",1],[53,32,"A",1],[54,1,"N",1],[55,1,"N",1],[56,1,"N",1],[57,1,"N",1],[58,13,"A",1],[59,11,"A",1],[60,9,"A",1],[61,200,"T",0],[62,9,"A",1],[63,1,"N",1],[64,1,"N",1],[65,11,"A",1],[66,200,"T",0],[67,1,"N",1],[68,200,"T",0],[69,17,"A",1],[70,200,"T",0],[71,1,"N",1],[72,9,"N",1],[73,200,"T",0],[74,7,"A",1],[75,200,"T",0],[76,1,"N",1],[77,200,"T",0],[78,15,"N",1],[79,200,"T",0],[80,13,"N",1],[81,200,"T",0],[82,9,"N",1],[83,7,"N",1],[84,1,"N",1],[85,23,"A",1],[86,200,"T",0],[87,32,"A",1],[88,200,"T",0],[89,13,"A",1],[90,200,"T",0],[91,20,"A",1],[92,26,"A",1],[93,3,"N",1],[94,3,"N",1],[95,3,"N",1],[96,3,"N",1],[97,7,"A",1],[98,5,"A",1],[99,1,"N",1],[100,1,"N",1],[101,1,"N",1],[102,1,"N",1],[103,1,"N",1],[104,1,"N",1],[105,15,"A",1],[106,200,"T",0],[107,1,"N",1],[108,1,"N",1],[109,1,"N",1],[110,2,"N",1],[111,200,"T",1],[112,1,"N",1],[113,1,"N",1],[114,1,"N",1],[115,3,"N",1],[116,50,"A",1],[117,11,"A",1],[118,1,"N",1],[119,15,"A",1],[120,1,"N",1],[121,200,"T",0],[122,1,"N",1],[123,26,"A",1],[124,31,"A",1]],
+T2:[[0,1,"N",1],[1,10,"N",1],[2,1,"N",1],[3,2,"A",1],[4,3,"A",1],[5,5,"A",1],[6,4,"A",1],[7,5,"A",1],[8,1,"N",1],[9,200,"T",1],[10,1,"N",1],[11,200,"T",1],[12,10,"D",1],[13,10,"D",1],[14,200,"T",1],[15,10,"N",0],[16,1,"N",1],[17,2,"N",1],[18,3,"N",1],[19,2,"N",1],[20,3,"N",1],[21,1,"N",1],[22,2,"N",1],[23,5,"A",1],[24,200,"T",1],[25,10,"A",1],[26,9,"N",1],[27,2,"A",1],[28,20,"A",1],[29,200,"T",1],[30,10,"F",1],[31,2,"N",1],[32,20,"A",1],[33,56,"A",1],[34,11,"N",1],[35,11,"N",1],[36,5,"N",1],[37,1,"N",1],[38,1,"N",1],[39,200,"T",0],[40,2,"N",1],[41,1,"N",1],[42,1,"N",1],[43,1,"N",1],[44,20,"N",1],[45,200,"T",0],[46,13,"A",1],[47,200,"T",0],[48,11,"N",1],[49,200,"T",0],[50,1,"N",1],[51,1,"N",1],[52,1,"N",1],[53,32,"A",1],[54,1,"N",1],[55,1,"N",1],[56,1,"N",1],[57,1,"N",1],[58,13,"A",1],[59,11,"A",1],[60,9,"A",1],[61,200,"T",0],[62,9,"A",1],[63,1,"N",1],[64,1,"N",1],[65,11,"A",1],[66,200,"T",0],[67,1,"N",1],[68,200,"T",0],[69,17,"A",1],[70,200,"T",0],[71,1,"N",1],[72,9,"N",1],[73,200,"T",0],[74,7,"A",1],[75,200,"T",0],[76,1,"N",1],[77,200,"T",0],[78,15,"N",1],[79,200,"T",0],[80,13,"N",1],[81,200,"T",0],[82,9,"N",1],[83,7,"N",1],[84,1,"N",1],[85,23,"A",1],[86,200,"T",0],[87,32,"A",1],[88,200,"T",0],[89,13,"A",1],[90,200,"T",0],[91,20,"A",1],[92,26,"A",1],[93,3,"N",1],[94,3,"N",1],[95,3,"N",1],[96,3,"N",1],[97,7,"A",1],[98,5,"A",1],[99,1,"N",1],[100,1,"N",1],[101,1,"N",1],[102,1,"N",1],[103,1,"N",1],[104,1,"N",1],[105,15,"A",1],[106,200,"T",0],[107,1,"N",1],[108,1,"N",1],[109,1,"N",1],[110,2,"N",1],[111,200,"T",1],[112,1,"N",1],[113,1,"N",1],[114,1,"N",1],[115,3,"N",1],[116,50,"A",1],[117,11,"A",1],[118,1,"N",1],[119,15,"A",1],[120,1,"N",1],[121,200,"T",0],[122,1,"N",1],[123,26,"A",1],[124,31,"A",1]],
 T3:[[0,1,"N",1],[1,10,"N",1],[2,60,"T",1],[3,60,"T",0],[4,60,"T",1],[5,60,"T",0],[6,2,"A",1],[7,20,"A",1],[8,10,"F",1],[9,3,"N",1],[10,1,"N",1],[11,1,"N",1],[12,1,"N",1],[13,1,"N",1],[14,1,"N",1],[15,20,"N",0],[16,20,"N",0],[17,1,"N",1],[18,4,"N",1],[19,2,"N",1],[20,1,"N",1],[21,8,"A",0],[22,32,"A",1],[23,200,"T",0],[24,2,"A",1],[25,60,"T",0],[26,11,"A",1],[27,7,"A",1],[28,15,"A",1],[29,81,"A",1],[30,13,"A",1],[31,1,"N",0],[32,1,"N",1],[33,1,"N",1],[34,15,"A",1],[35,32,"A",1],[36,1,"N",1],[37,5,"D",1],[38,5,"D",1],[39,4,"D",1],[40,3,"N",1],[41,13,"A",1],[42,2,"N",1],[43,1,"N",1],[44,3,"N",1],[45,3,"N",1],[46,1,"N",1],[47,20,"A",1],[48,47,"A",1],[49,200,"T",0],[50,1,"N",1],[51,200,"T",0],[52,5,"A",1],[53,1,"N",1],[54,50,"A",1],[55,1,"N",1],[56,1,"N",1],[57,1,"N",1],[58,32,"A",1],[59,35,"A",1],[60,1,"N",1],[61,1,"N",1],[62,32,"A",1],[63,1,"N",1],[64,1,"N",1],[65,2,"N",1],[66,2,"N",1],[67,2,"N",1],[68,2,"N",1],[69,2,"N",1],[70,10,"F",0],[71,1,"N",0],[72,1,"N",0],[73,1,"N",0],[74,1,"N",0],[75,1,"N",0],[76,1,"N",0],[77,1,"N",0],[78,1,"N",0],[79,1,"N",0],[80,2,"N",0],[81,1,"N",0],[82,1,"N",0],[83,2,"N",0],[84,10,"F",0],[85,1,"N",0],[86,1,"N",0],[87,1,"N",0],[88,1,"N",0],[89,1,"N",0],[90,1,"N",0],[91,2,"N",0],[92,1,"N",0],[93,200,"T",0],[94,200,"T",0],[95,2,"N",0],[96,1,"N",0],[97,200,"T",0],[98,200,"T",0],[99,2,"N",0],[100,200,"T",0],[101,200,"T",0],[102,2,"N",0],[103,1,"N",0],[104,1,"N",0],[105,135,"A",0],[106,1,"N",0],[107,5,"A",0],[108,1,"N",0],[109,1,"N",0],[110,20,"A",0],[111,1,"N",0],[112,1,"N",0],[113,1,"N",0],[114,1,"N",0],[115,1,"N",0],[116,1,"N",0],[117,31,"A",1],[118,53,"A",1]]
 };
 // Nombre oficial de cada campo (para el informe de validación descargable)
@@ -7249,13 +7400,20 @@ function buildFile(){
   fams.forEach((fam,fi)=>{
     const d=fam.d2||{};
     const idx=fi;
+    // ── Territorialización oficial SI-APS ──
+    // Solo se exportan EBS con territorialización parametrizada; se excluyen JEP/PIC/Guamalito/Tierra Azul (sin SIAPS_TERR).
+    const _st=SIAPS_TERR[String(parseInt(d['16'],10)||'')];
+    if(!_st){ _dupLog.ebsExcl=(_dupLog.ebsExcl||0)+1; return; }
+    // Familia sin integrantes → PISIS la rechaza como huérfana → se excluye.
+    if(!(fam.personas||[]).filter(p=>!p.d3?.['_draft']).length){ _dupLog.vacia=(_dupLog.vacia||0)+1; return; }
     const _co=TERRIT_COORD[_ebsNumDe(fam,d)]||null;   // coordenadas por defecto del territorio (si falta geopunto)
-    const numViv=calcPisisViv(d,idx);   // formato PISIS max 26 chars
-    const numFam=calcPisisFam(d,idx);   // formato PISIS max 31 chars
+    // Llave PISIS con códigos SI-APS: dpto(54)+subregión(041)+municipio+territorio(T00N)+microterritorio(MT001)
+    const _keyPref='54'+'041'+_st.mun+_st.ter+'MT001';
+    const numViv=_keyPref+'H'+String(d.hogar_num||idx+1).padStart(4,'0');   // ≤26 chars
+    const numFam=numViv+'F'+String(d.familia_num||'1').padStart(4,'0');     // ≤31 chars
     if(_seenFam.has(numFam)){ _dupLog.fam++; return; }   // familia con identificador repetido → omitir (PISIS lo rechaza)
     _seenFam.add(numFam);
-    const ebsCode=calcEBS(d);
-    const ebsPisis=(_pisMap[fam.created_by]||_myPisis||ebsCode).slice(0,10);
+    const ebsPisis=_st.ebs;   // código EBS oficial SI-APS (ESE-EBS0NN)
     // ── T2: Registro de caracterización familiar (125 campos) ──
     const t2=[
       '2',            // [0]  tipo registro
@@ -7263,9 +7421,9 @@ function buildFile(){
       d['2']||'',     // [2]  consentimiento
       d['3']||'',     // [3]  departamento
       String(c.subregion||'041').replace(/\D/g,'').slice(0,3),  // [4] subregión: 3 díg oficiales SISPRO (default 041 = Regional Occidente SR00254)
-      d['5']||'',     // [5]  municipio
-      d['6']||'',     // [6]  territorio
-      d['7']||'',     // [7]  microterritorio
+      _st.mun,        // [5]  municipio (DANE oficial SI-APS)
+      _st.ter,        // [6]  territorio (T00N parametrizado SI-APS)
+      'MT001',        // [7]  microterritorio (MT001 = la vereda; default único parametrizado)
       c.tipoUbicacion||'3',  // [8]  tipo_ubicacion (Vereda=3 default EBS rural)
       d['8']||'',     // [9]  nombre tipo ubicacion (barrio/vereda)
       '2',            // [10] area_ubicacion (Rural=2 default EBS)
@@ -7284,9 +7442,9 @@ function buildFile(){
       '4',                         // [23] tipo situacion (No aplica)
       'SIN NOVEDAD',               // [24] observacion situacion (default)
       ebsPisis,                    // [25] codigo EBS registrado PISIS (max 10, por usuario)
-      d['20']||'',    // [26] NIT prestador
-      d['21']||'',    // [27] tipo ID responsable
-      String(d['22']||'').replace(/\s+/g,''),    // [28] N° ID responsable (sin espacios)
+      nitPad,         // [26] NIT prestador primario (= NIT de la entidad HRNO)
+      'CC',           // [27] tipo ID responsable del EBS
+      _st.resp,       // [28] N° ID responsable del EBS (registrado en SI-APS)
       d['23']||'',    // [29] perfil visita
       d['25']||'',    // [30] fecha diligenciamiento
       remapCod('tipoVivienda',d['26']),    // [31] tipo vivienda (remap app→oficial)
@@ -8974,7 +9132,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v6.0</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v6.2</div>
   </div>
 </div>
 
@@ -9581,7 +9739,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v6.0</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v6.2</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
@@ -9606,7 +9764,7 @@ async function downloadExcelPCFTodos() {
     toast('Cargando librería Excel…','warn');
     await new Promise((res,rej)=>{
       const s=document.createElement('script');
-      s.src='https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+      s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
       s.onload=res; s.onerror=rej;
       document.head.appendChild(s);
     });
@@ -9659,6 +9817,7 @@ function toast(msg,type='ok',ms=null){
 // ============================================================
 // INIT
 // ============================================================
+let _borradorRecuperado = false;
 async function init() {
   await openDB();
   try { await _migrarColaLegacy(); } catch(e){ console.warn('[sync] migración de cola:', e.message); }
@@ -9685,14 +9844,24 @@ async function init() {
     document.getElementById('btn-admin').style.display = STATE.profile?.rol==='admin' ? '' : 'none';
     document.getElementById('btn-analytics').style.display = '';
     // Load data from IDB while trying to refresh online
-    await rebuildAppState();
+    try { await rebuildAppState(); }
+    catch(e) { console.error('[init] no se pudieron cargar los datos locales', e); }
     STATE.screen = 'home';
+    // Formulario que quedó a medias porque el sistema cerró la app
+    try {
+      const b = (await idb.get('config','borrador_formulario'))?.value;
+      if (b && b.uid === STATE.auth.user?.id && Date.now() - (b.ts||0) < 30*24*3600*1000 && _restaurarFormulario(b)) {
+        _borradorRecuperado = true;
+        _ultimoBorrador = '';
+      } else if (b) await _descartarBorradorFormulario();
+    } catch(e) { console.warn('[init] borrador:', e.message); }
     // Load admin users if admin (await so data is ready before render)
     if (isAdmin()) await loadAdminUsers();
   }
   initConnectivity();
   startAutoSync();
   render();
+  if (_borradorRecuperado) toast('📝 Se recuperó el formulario que estabas diligenciando. Revísalo y toca Guardar.', 'info', 9000);
   updateSyncUI();
   _renderConnBanner();
   // Actualizar label de "última sincronización" cada minuto
@@ -9702,19 +9871,36 @@ async function init() {
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 
+// Antes borraba el service worker y TODA la caché y luego recargaba: sin señal (o si la señal
+// caía en ese momento) la app dejaba de abrir hasta volver a tener internet. Ahora primero
+// descarga la versión nueva completa y solo entonces la deja en caché y recarga.
 async function forzarActualizacion() {
-  toast('Limpiando caché y recargando…', 'info');
+  if (!navigator.onLine) {
+    toast('Sin conexión: la app sigue funcionando con la versión guardada en el equipo. Actualiza cuando tengas internet.', 'warn', 7000);
+    return;
+  }
+  await _autoguardarFormulario();
+  toast('Descargando la última versión…', 'info');
+  let html;
   try {
-    if ('serviceWorker' in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) await r.unregister();
-    }
+    const r = await _fetchTimeout('./SI-APS-CCFP.html?t=' + Date.now(), {cache:'no-store'}, 20000);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    html = await r.text();
+    if (!html.includes('</html>')) throw new Error('descarga incompleta');
+  } catch(e) {
+    toast('No se pudo descargar la nueva versión (señal débil). La app sigue funcionando sin cambios.', 'warn', 7000);
+    return;
+  }
+  try {
     if ('caches' in window) {
-      const keys = await caches.keys();
-      for (const k of keys) await caches.delete(k);
+      for (const k of (await caches.keys()).filter(k => k.startsWith('siaps-ccfp-'))) {
+        await (await caches.open(k)).put('./SI-APS-CCFP.html',
+          new Response(html, {headers: {'Content-Type': 'text/html; charset=utf-8'}}));
+      }
     }
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) await reg.update();
   } catch(_) {}
-  // Forzar recarga sin caché añadiendo timestamp a la URL
   location.href = location.pathname + '?t=' + Date.now();
 }
 

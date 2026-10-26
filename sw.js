@@ -1,5 +1,5 @@
-/* Service Worker — SI-APS CCFP v6.0 — Anexo Técnico v7 Junio 2026 */
-const CACHE = 'siaps-ccfp-v63';
+/* Service Worker — SI-APS CCFP v6.2 — Anexo Técnico v7 Junio 2026 */
+const CACHE = 'siaps-ccfp-v65';
 const HTML = './SI-APS-CCFP.html';
 const ASSETS = [
   HTML,
@@ -11,8 +11,11 @@ const ASSETS = [
   './icon-512.png',
   // Leaflet para mapa geopunto (disponible offline después de primera carga)
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-  // Chart.js y SheetJS se cargan dinámicamente; se cachean en el primer uso online
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  // Gráficas e indicadores, y exportación a Excel: precargadas para que funcionen sin
+  // internet aunque el profesional nunca las haya abierto con señal.
+  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
+  'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
 ];
 
 self.addEventListener('install', e => {
