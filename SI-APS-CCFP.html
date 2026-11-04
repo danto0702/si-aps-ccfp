@@ -473,7 +473,7 @@ const REF_EAPB=[{"v":"CCF002","l":"COMFAMA CAJA DE COMPENSACIÓN FAMILIAR DE ANT
 const SB_URL  = 'https://wttljozqyaxlzilomnef.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0dGxqb3pxeWF4bHppbG9tbmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDg5NTEsImV4cCI6MjA5NDg4NDk1MX0.kAQkgGq7RmZxTM9KlwI6KI7BjhEBy-8w6OdHVkOPBDM';
 const SB_FUNC = SB_URL + '/functions/v1';
-const APP_VERSION = '6.3';
+const APP_VERSION = '6.4';
 
 // ── REF TABLES ───────────────────────────────────────────────
 const REF = {
@@ -2325,7 +2325,7 @@ function renderHome() {
           ${!isAdmin()&&myEBS().length?'· EBS: '+myEBS().map(esc).join(', '):''}</div>
       </div>
       <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;align-items:center">
-        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v6.3</span>
+        <span style="font-size:10px;color:var(--muted);background:var(--border);padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.3px">v6.4</span>
         <button class="btn btn-secondary btn-sm" onclick="openChangePassword()" title="Cambiar contraseña">🔑</button>
         <button class="btn btn-secondary btn-sm" onclick="forzarActualizacion()" title="Descargar la última versión de la app">↻ Actualizar</button>
         ${isAdmin()?`<button class="btn btn-secondary btn-sm" onclick="navigate('admin')">⚙ Admin</button>`:''}
@@ -6952,7 +6952,7 @@ function descargarValidacion(){
     });
     // Encabezado informativo
     const meta=[
-      ['INFORME DE VALIDACIÓN — SI-APS CCFP v6.3 (anexo v7)'],
+      ['INFORME DE VALIDACIÓN — SI-APS CCFP v6.4 (anexo v7)'],
       ['Generado', new Date().toLocaleString('es-CO')],
       ['Entidad', (c.tipoEntidad||'')+' '+(c.nit||'')],
       ['Período', (c.fechaInicio||'')+' a '+(c.fechaFin||'')],
@@ -7223,6 +7223,7 @@ const PISIS_SAFE={
   'T3.65':'0','T3.66':'0','T3.67':'0','T3.68':'0','T3.69':'0', // tabaco: cigarrillos/años/ASSIST/AUDIT/CRAFFT = 0 (no fumador)
   'T3.10':'3',   // estatus migratorio: No aplica
   'T3.17':'6',   // rol dentro de la familia: Otros
+  'T3.24':'07',  // pertenencia étnica: Ninguno (default cuando falta)
   'T3.20':'5',   // régimen de afiliación: No afiliado
   // ── Texto requerido → marcador (sin dato real) ──
   'T2.11':'NO REGISTRA','T2.14':'NO REGISTRA','T2.29':'NO REGISTRA','T2.111':'NO REGISTRA','T2.28':'NOREGISTRA',
@@ -7437,7 +7438,7 @@ function buildFile(){
       d['85']||'',    // [16] estrato
       (d['86']||'').replace(/^0+/,'')||d['86']||'',  // [17] N hogares vivienda (sin ceros)
       d['87']||'',    // [18] N° personas en vivienda
-      d['34']||'',    // [19] N° habitaciones
+      (()=>{const h=String(d['34']||'').replace(/\D/g,'');return (h.length>=1&&h.length<=2)?h:'';})(),    // [19] N° habitaciones (1-2 díg; valor con typo >2 díg → vacío → SAFE '1')
       (parseFloat(d['87'])>0&&parseFloat(d['34'])>0)?String(Math.min(999,Math.max(1,Math.round(parseFloat(d['87'])/parseFloat(d['34']))))):''  ,// [20] personas/habitacion (calculado, sin div/0, máx 3 díg)
       d['35']||'',    // [21] hacinamiento
       d['v7_dormir']||'',          // [22] elementos para dormir
@@ -7585,11 +7586,11 @@ function buildFile(){
         pd['7']||'',                  // [6]   tipo identificación
         pd['8']||'',                  // [7]   número identificación
         pd['9']||'',                  // [8]   fecha nacimiento (AAAA-MM-DD)
-        pd['t3_pais']||'',            // [9]   país de origen
+        (()=>{const p=String(pd['t3_pais']||'').trim();return /^\d{3}$/.test(p)?p:'170';})(), // [9] país origen (DIVIPOLA 3 díg; inválido/vacío → 170 Colombia; conserva código real válido)
         pd['t3_mig']||'',             // [10]  estatus migratorio
         pd['10']||'',                 // [11]  sexo al nacer
-        pd['t3_genero']||'',          // [12]  género
-        pd['t3_identidad']||'',       // [13]  género con que se identifica
+        (pd['t3_genero']||(pd['10']==='1'?'2':pd['10']==='2'?'1':'')),           // [12] género (vacío → desde sexo: Hombre→Masculino, Mujer→Femenino)
+        (pd['t3_identidad']||pd['t3_genero']||(pd['10']==='1'?'2':pd['10']==='2'?'1':'')), // [13] identidad de género (vacío → = género/sexo, cisgénero)
         pd['t3_orientacion']||'',     // [14]  orientación sexual
         String(pd['_tel']||'').replace(/\D/g,'').slice(0,20),      // [15]  teléfono principal (sólo dígitos)
         String(pd['t3_tel2']||'').replace(/\D/g,'').slice(0,20),   // [16]  teléfono secundario (sólo dígitos)
@@ -9134,7 +9135,7 @@ async function imprimirCaracterizacion(famId) {
     <div class="ficha-num">Ficha: ${codFicha}</div>
     <div>EBS: ${ebsCode}</div>
     <div>Fecha: ${d2['25']||new Date().toLocaleDateString('es-CO')}</div>
-    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v6.3</div>
+    <div style="margin-top:4px;font-size:9px;color:#aaa">SI-APS CCFP v6.4</div>
   </div>
 </div>
 
@@ -9741,7 +9742,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </div>
 
 <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:9px;color:#888;display:flex;justify-content:space-between">
-  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v6.3</span>
+  <span>Generado: ${new Date().toLocaleString('es-CO')} · SI-APS CCFP v6.4</span>
   <span>ESE Hospital Regional Noroccidental · Salud Pública</span>
 </div>
 
