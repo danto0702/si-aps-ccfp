@@ -2400,6 +2400,10 @@ function renderHome() {
        🤖 Completar datos v7 automáticamente
      </button>
      <button class="btn btn-success btn-block" onclick="navigate('export')">⬇ Generar archivo plano PISIS</button>
+     <button class="btn btn-block" onclick="abrirDescargeMasivo()"
+       style="background:#f5f0ff;color:#7c1d6f;border:1.5px solid var(--purple);font-size:13px;font-weight:700;margin-bottom:8px">
+       📄 Descargue masivo por EBS
+     </button>
      <button class="btn btn-primary btn-block" onclick="navigate('analytics')">📊 Ver análisis e indicadores</button>
      ${isAdmin()?`<button class="btn btn-secondary btn-block" onclick="navigate('config')">⚙ Configuración del reporte</button>`:''}
      <button class="fab" onclick="nuevaFamilia()">+</button>`;
@@ -8757,14 +8761,17 @@ async function downloadExcelPCI() {
 // ============================================================
 // IMPRIMIR CARACTERIZACIÓN COMPLETA (PDF)
 // ============================================================
-async function imprimirCaracterizacion(famId) {
+async function imprimirCaracterizacion(famId, {batch=false}={}) {
   const fam = STATE.familias.find(f => f.id === famId);
-  if (!fam) { toast('Familia no encontrada','err'); return; }
+  if (!fam) { if (!batch) toast('Familia no encontrada','err'); return null; }
 
   // Abrir ventana ANTES del primer await para no romper el gesto del usuario
-  const win = window.open('', '_blank');
-  if (!win) { toast('Permite ventanas emergentes para este sitio y vuelve a intentar','warn'); return; }
-  win.document.write('<html><body style="font-family:sans-serif;padding:20px;color:#333">Generando documento…</body></html>');
+  let win;
+  if (!batch) {
+    win = window.open('', '_blank');
+    if (!win) { toast('Permite ventanas emergentes para este sitio y vuelve a intentar','warn'); return null; }
+    win.document.write('<html><body style="font-family:sans-serif;padding:20px;color:#333">Generando documento…</body></html>');
+  }
 
   let bannerSrc = './banner.png';
   try {
@@ -9207,6 +9214,7 @@ ${personas.length>0 ? `<h2 style="font-size:13px;color:#4a6fa5;margin:16px 0 6px
 </body>
 </html>`;
 
+  if (batch) return html;
   win.document.open();
   win.document.write(html);
   win.document.close();
@@ -9620,15 +9628,18 @@ async function eliminarVisitaPCF(famId, idx) {
 
 
 // ── imprimirPCF ─────────────────────────────────────────────
-async function imprimirPCF(famId) {
+async function imprimirPCF(famId, {batch=false}={}) {
   const fam  = STATE.familias.find(f=>f.id===famId);
   const plan = fam?.plan;
-  if (!plan) { toast('Sin plan para imprimir','warn'); return; }
+  if (!plan) { if (!batch) toast('Sin plan para imprimir','warn'); return null; }
 
   // Abrir ventana ANTES del primer await para no romper el gesto del usuario
-  const win = window.open('', '_blank');
-  if (!win) { toast('Permite ventanas emergentes para este sitio y vuelve a intentar','warn'); return; }
-  win.document.write('<html><body style="font-family:sans-serif;padding:20px;color:#333">Generando documento…</body></html>');
+  let win;
+  if (!batch) {
+    win = window.open('', '_blank');
+    if (!win) { toast('Permite ventanas emergentes para este sitio y vuelve a intentar','warn'); return null; }
+    win.document.write('<html><body style="font-family:sans-serif;padding:20px;color:#333">Generando documento…</body></html>');
+  }
 
   const d2   = fam.d2||{};
   const lugar= d2['8']||d2['5']||'(sin ubicación)';
@@ -9774,6 +9785,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;backgr
 </body>
 </html>`;
 
+  if (batch) return html;
   win.document.open();
   win.document.write(html);
   win.document.close();
@@ -9823,6 +9835,164 @@ async function downloadExcelPCFTodos() {
   XLSX.utils.book_append_sheet(wb,ws,'Planes Cuidado Familiar');
   XLSX.writeFile(wb,`Planes_Cuidado_Familiar_${today()}.xlsx`);
   toast('Excel descargado','ok');
+}
+
+// ============================================================
+// DESCARGUE MASIVO POR EBS
+// ============================================================
+function abrirDescargeMasivo() {
+  const famsActivas = STATE.familias.filter(f=>!f.deleted_at && f.ebs_code);
+  const ebsMap = new Map();
+  for (const f of famsActivas) {
+    const num = f.ebs_code.slice(-3);
+    if (!ebsMap.has(num)) ebsMap.set(num, {count:0, withPlan:0, label: fmtEBSCode(f.ebs_code)});
+    ebsMap.get(num).count++;
+    if (f.plan) ebsMap.get(num).withPlan++;
+  }
+  const ebsNums = [...ebsMap.keys()].sort();
+  if (!ebsNums.length) { toast('Sin familias con EBS asignado','warn'); return; }
+  const opts = ebsNums.map(n=>`<option value="${n}">${ebsMap.get(n).label} (${ebsMap.get(n).count})</option>`).join('');
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-title">📄 Descargue masivo por EBS</div>
+      <div class="field">
+        <div class="field-label">EBS</div>
+        <select class="field-input" id="dm-ebs" onchange="dmActInfo()">${opts}</select>
+      </div>
+      <div class="field">
+        <div class="field-label">Tipo de documento</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="dm-caract" checked style="accent-color:var(--purple);width:16px;height:16px">
+            🏠 Caracterizaciones familiares
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="dm-pcf" style="accent-color:var(--purple);width:16px;height:16px">
+            📋 Planes de Cuidado Familiar (PCF)
+          </label>
+        </div>
+      </div>
+      <div id="dm-info" style="font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:8px 10px;margin:6px 0 2px"></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Se genera un único documento PDF con todos los registros del EBS seleccionado. Permite ventanas emergentes antes de continuar.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" id="dm-btn" onclick="ejecutarDescargeMasivo()">📄 Generar documento</button>
+      </div>
+    </div>
+  </div>`;
+  dmActInfo();
+}
+
+function dmActInfo() {
+  const ebsNum = document.getElementById('dm-ebs')?.value;
+  if (!ebsNum) return;
+  const fams = STATE.familias.filter(f=>!f.deleted_at && f.ebs_code?.endsWith(ebsNum));
+  const withPlan = fams.filter(f=>f.plan).length;
+  const el = document.getElementById('dm-info');
+  if (el) el.textContent = `${fams.length} familia(s) · ${withPlan} con Plan de Cuidado Familiar`;
+}
+
+async function ejecutarDescargeMasivo() {
+  const ebsNum = document.getElementById('dm-ebs')?.value;
+  const tipos = [];
+  if (document.getElementById('dm-caract')?.checked) tipos.push('caract');
+  if (document.getElementById('dm-pcf')?.checked) tipos.push('pcf');
+  if (!tipos.length) { toast('Selecciona al menos un tipo de documento','warn'); return; }
+  if (!ebsNum) return;
+  const btn = document.getElementById('dm-btn');
+  if (btn) { btn.disabled=true; btn.textContent='Generando…'; }
+  closeModal();
+  await generarDescargeMasivo(ebsNum, tipos);
+}
+
+async function generarDescargeMasivo(ebsNum, tipos) {
+  const fams = STATE.familias.filter(f=>!f.deleted_at && f.ebs_code?.endsWith(ebsNum));
+  if (!fams.length) { toast('Sin familias para EBS '+ebsNum,'warn'); return; }
+
+  const win = window.open('', '_blank');
+  if (!win) { toast('Permite ventanas emergentes para este sitio y vuelve a intentar','warn'); return; }
+  win.document.write('<html><body style="font-family:sans-serif;padding:20px">⏳ Generando documento masivo, por favor espera…</body></html>');
+
+  // Extrae el bloque <style> del primer documento generado (mismas reglas CSS)
+  const extractCss  = html => { const m = (html||'').match(/<style>([\s\S]*?)<\/style>/i); return m?m[1]:''; };
+  // Extrae el cuerpo imprimible (entre <body> y la sección no-print / </body>)
+  const extractBody = html => (html||'')
+    .replace(/^[\s\S]*?<body[^>]*>/i,'')
+    .replace(/<div[^>]*class="no-print"[\s\S]*?<\/div>\s*<\/body>[\s\S]*$/i,'')
+    .replace(/<\/body>[\s\S]*$/i,'');
+
+  let css = '';
+  const partes = [];
+  const ebsLabel = fmtEBSCode(fams[0]?.ebs_code||'');
+  const hoy = new Date().toLocaleString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
+
+  if (tipos.includes('caract')) {
+    for (const fam of fams) {
+      const html = await imprimirCaracterizacion(fam.id, {batch:true});
+      if (!html) continue;
+      if (!css) css = extractCss(html);
+      partes.push(extractBody(html));
+    }
+  }
+
+  if (tipos.includes('pcf')) {
+    for (const fam of fams.filter(f=>f.plan)) {
+      const html = await imprimirPCF(fam.id, {batch:true});
+      if (!html) continue;
+      if (!css) css = extractCss(html);
+      partes.push(extractBody(html));
+    }
+  }
+
+  if (!partes.length) {
+    win.close();
+    toast('Sin documentos para generar','warn'); return;
+  }
+
+  const combined = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Descargue masivo — ${ebsLabel}</title>
+<style>
+${css}
+.pagina { page-break-after: always; padding-bottom: 24px; border-bottom: 2px dashed #ddd; margin-bottom: 20px; }
+.pagina:last-child { page-break-after: auto; border-bottom: none; }
+.portada { text-align:center; padding: 60px 20px; }
+.portada h1 { font-size: 22px; color: #7c1d6f; margin-bottom: 12px; }
+.portada h2 { font-size: 15px; color: #4a6fa5; margin-bottom: 20px; font-weight: 400; }
+.portada .stat { font-size: 32px; font-weight: 700; color: #7c1d6f; }
+.portada .stat-lbl { font-size: 12px; color: #888; }
+@media print { .no-print { display: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="pagina portada no-print" style="page-break-after:always">
+  <h1>📄 Descargue Masivo</h1>
+  <h2>${ebsLabel}</h2>
+  <div class="stat">${partes.length}</div>
+  <div class="stat-lbl">documento(s) generado(s)</div>
+  <div style="margin-top:16px;font-size:12px;color:#888">Generado: ${hoy} · SI-APS CCFP · ESE HRNO</div>
+</div>
+
+<div class="no-print" style="position:sticky;top:0;z-index:999;background:#fff;border-bottom:2px solid #7c1d6f;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
+  <span style="font-size:13px;font-weight:700;color:#7c1d6f">${ebsLabel} · ${partes.length} documentos</span>
+  <div style="display:flex;gap:8px">
+    <button onclick="window.print()" style="background:#7c1d6f;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🖨 Imprimir / Guardar PDF</button>
+    <button onclick="window.close()" style="background:#444;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px">✕ Cerrar</button>
+  </div>
+</div>
+
+${partes.map(b=>`<div class="pagina">${b}</div>`).join('\n')}
+
+</body>
+</html>`;
+
+  win.document.open();
+  win.document.write(combined);
+  win.document.close();
 }
 
 // ============================================================
