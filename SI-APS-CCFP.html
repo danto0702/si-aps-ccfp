@@ -1197,7 +1197,28 @@ async function execSyncOp(item) {
   }
 }
 
+// Antes de enviar un lote, corrige ebs_code=null mirando la familia en IDB.
+// Persiste la corrección en sync_pending para que futuros intentos no fallen igual.
+async function _completarEbsCode(items) {
+  for (const item of items) {
+    if (!item.data || item.data.ebs_code || item.op !== 'upsert') continue;
+    let code = null;
+    if (item.table === 'personas' && item.data.familia_id) {
+      const fam = await idb.get('familias', item.data.familia_id);
+      code = fam?.ebs_code || (fam?.d2 ? calcEBS(fam.d2) : null);
+    } else if (item.table === 'familias' && item.data.d2) {
+      code = calcEBS(item.data.d2);
+    }
+    if (code) {
+      item.data = {...item.data, ebs_code: code};
+      // Persiste en IDB para que no falle en el próximo intento si este también falla
+      try { await idb.put('sync_pending', item); } catch(e) {}
+    }
+  }
+}
+
 async function _subirLote(table, chunk) {
+  await _completarEbsCode(chunk);
   try {
     await sbFetch(`/rest/v1/${table}`, {
       method:'POST', headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
@@ -1329,7 +1350,7 @@ function startAutoSync() {
 }
 
 // ── Descarga ──────────────────────────────────────────────────
-// Transición desde v5.4: allí un cambio podía quedar guardado en el equipo pero ni en el
+// Transición desde v5.5: allí un cambio podía quedar guardado en el equipo pero ni en el
 // servidor ni en la cola (app cerrada a mitad de envío). En la primera descarga completa de
 // cada usuario se compara cada registro local con el del servidor antes de reemplazarlo.
 const _CAMPO_DATOS = {familias:'d2', personas:'d3', planes_familiar:'data'};
